@@ -12,12 +12,36 @@ import {
   Calendar,
   Mail,
   Phone,
-  X, // Added for close icon in modal
+  X,
 } from "lucide-react";
-import { Menu, MenuButton, MenuItem } from "@headlessui/react";
+import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
+
+// Define interfaces for your data structures
+interface JobListing {
+  id: number;
+  title: string;
+  department: string;
+  status: "Open" | "Closed";
+  postedDate: string;
+  applicants: number;
+  description: string;
+  requirements: string;
+  location: string;
+  salaryRange: string;
+}
+
+interface Candidate {
+  id: number;
+  name: string;
+  job: string;
+  status: "Interview" | "Hired" | "Pending" | "Rejected" | "Shortlisted";
+  email: string;
+  phone: string;
+  appliedDate: string;
+}
 
 // PostJobModal Component
-const PostJobModal = ({ isOpen, onClose, onSave }) => {
+const PostJobModal = ({ isOpen, onClose, onSave }: { isOpen: boolean; onClose: () => void; onSave: (job: Omit<JobListing, 'id' | 'applicants' | 'postedDate' | 'status'>) => void }) => {
   const [jobTitle, setJobTitle] = useState("");
   const [department, setDepartment] = useState("");
   const [description, setDescription] = useState("");
@@ -25,21 +49,16 @@ const PostJobModal = ({ isOpen, onClose, onSave }) => {
   const [location, setLocation] = useState("");
   const [salaryRange, setSalaryRange] = useState("");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSave({
-      id: Date.now(), // Simple unique ID generation
       title: jobTitle,
       department,
       description,
       requirements,
       location,
       salaryRange,
-      status: "Open",
-      postedDate: new Date().toISOString().slice(0, 10),
-      applicants: 0,
     });
-    // Clear form fields
     setJobTitle("");
     setDepartment("");
     setDescription("");
@@ -124,7 +143,7 @@ const PostJobModal = ({ isOpen, onClose, onSave }) => {
             </label>
             <textarea
               id="description"
-              rows="4"
+              rows={4}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -139,7 +158,7 @@ const PostJobModal = ({ isOpen, onClose, onSave }) => {
             </label>
             <textarea
               id="requirements"
-              rows="4"
+              rows={4}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
               value={requirements}
               onChange={(e) => setRequirements(e.target.value)}
@@ -168,19 +187,136 @@ const PostJobModal = ({ isOpen, onClose, onSave }) => {
   );
 };
 
+// JobDetailsModal Component
+const JobDetailsModal = ({ isOpen, job, onClose }: {
+  isOpen: boolean;
+  job: JobListing | null;
+  onClose: () => void;
+}) => {
+  if (!isOpen || !job) return null;
+
+  const detailRow = (label: string, value: string | number) => (
+    <div className="flex justify-between py-1">
+      <span className="font-medium text-gray-700">{label}</span>
+      <span className="text-gray-900 text-right max-w-[60%]">{value}</span>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
+        <div className="flex justify-between items-center p-5 border-b border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-800">Job Details</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+        <div className="p-5 space-y-2 text-sm">
+          {detailRow('Title', job.title)}
+          {detailRow('Department', job.department)}
+          {detailRow('Status', job.status)}
+          {detailRow('Posted Date', job.postedDate)}
+          {detailRow('Applicants', job.applicants)}
+          {detailRow('Location', job.location)}
+          {detailRow('Salary Range', job.salaryRange)}
+          <div>
+            <h3 className="font-medium text-gray-700">Description</h3>
+            <p className="text-gray-900 whitespace-pre-line mt-1">{job.description}</p>
+          </div>
+          <div>
+            <h3 className="font-medium text-gray-700">Requirements</h3>
+            <p className="text-gray-900 whitespace-pre-line mt-1">{job.requirements}</p>
+          </div>
+        </div>
+        <div className="flex justify-end p-4 border-t">
+          <button onClick={onClose} className="px-4 py-2 border rounded">Close</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// EditJobModal Component
+const EditJobModal = ({ isOpen, job, onClose, onSave }: {
+  isOpen: boolean;
+  job: JobListing | null;
+  onClose: () => void;
+  onSave: (updated: JobListing) => void;
+}) => {
+  const [formData, setFormData] = useState<JobListing | null>(job);
+
+  // keep form data in sync when a different job is selected
+  useEffect(() => setFormData(job), [job]);
+
+  if (!isOpen || !formData) return null;
+
+  const handleChange = (field: keyof JobListing, value: string) => {
+    setFormData(prev => prev ? { ...prev, [field]: value } : prev);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (formData) onSave(formData);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center p-5 border-b border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-800">Edit Job</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <input type="text" value={formData.title} onChange={e=>handleChange('title',e.target.value)}
+           className="w-full px-3 py-2 border rounded" required />
+          <input type="text" value={formData.department} onChange={e=>handleChange('department',e.target.value)}
+           className="w-full px-3 py-2 border rounded" required />
+          <textarea rows={4} value={formData.description} onChange={e=>handleChange('description',e.target.value)}
+            className="w-full px-3 py-2 border rounded" required />
+          <textarea rows={4} value={formData.requirements} onChange={e=>handleChange('requirements',e.target.value)}
+            className="w-full px-3 py-2 border rounded" required />
+          <input type="text" value={formData.location} onChange={e=>handleChange('location',e.target.value)}
+           className="w-full px-3 py-2 border rounded" />
+          <input type="text" value={formData.salaryRange} onChange={e=>handleChange('salaryRange',e.target.value)}
+           className="w-full px-3 py-2 border rounded" />
+          <div className="flex justify-end space-x-3 pt-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 border rounded">Cancel</button>
+            <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 const Recruitment = () => {
+  // Modal state
+  const [showEditJobModal, setShowEditJobModal] = useState(false);
+  const [jobBeingEdited, setJobBeingEdited] = useState<JobListing | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [jobDetails, setJobDetails] = useState<JobListing | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
-  const [jobListings, setJobListings] = useState([]);
-  const [candidates, setCandidates] = useState([]);
+  const [jobListings, setJobListings] = useState<JobListing[]>([]);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [activeTab, setActiveTab] = useState("jobs");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
-  const [departments, setDepartments] = useState(["All Departments"]);
+  const [departments, setDepartments] = useState<string[]>(["All Departments"]);
   const [selectedDepartment, setSelectedDepartment] = useState("All Departments");
   const [selectedStatus, setSelectedStatus] = useState("All Statuses");
-  const [showJobEditOptions, setShowJobEditOptions] = useState(false);
-  const [showPostJobModal, setShowPostJobModal] = useState(false); // New state for modal
+  const [showPostJobModal, setShowPostJobModal] = useState(false);
+  // Local notification message (e.g., "Job closed")
+  const [notification, setNotification] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
 
   useEffect(() => {
     fetchJobListings();
@@ -191,8 +327,7 @@ const Recruitment = () => {
   const fetchJobListings = async () => {
     setLoading(true);
     try {
-      // Simulated API call with more realistic data
-      const response = await new Promise((resolve) =>
+      const response = await new Promise<{ data: JobListing[] }>((resolve) =>
         setTimeout(
           () =>
             resolve({
@@ -204,8 +339,8 @@ const Recruitment = () => {
                   status: "Open",
                   postedDate: "2023-05-15",
                   applicants: 12,
-                  description: "Develop and maintain software applications.",
-                  requirements: "Proficiency in React, Node.js, and databases.",
+                  description: "Develop and maintain software applications. This includes designing, coding, testing, and debugging.",
+                  requirements: "Proficiency in React, Node.js, and databases (e.g., PostgreSQL). Strong problem-solving skills and 3+ years of experience.",
                   location: "Harare, Zimbabwe",
                   salaryRange: "$30,000 - $50,000",
                 },
@@ -216,8 +351,8 @@ const Recruitment = () => {
                   status: "Closed",
                   postedDate: "2023-04-10",
                   applicants: 8,
-                  description: "Manage human resources operations.",
-                  requirements: "5+ years of HR experience, strong communication skills.",
+                  description: "Manage human resources operations, including recruitment, onboarding, employee relations, and compliance.",
+                  requirements: "5+ years of HR experience, strong communication skills, knowledge of labor laws.",
                   location: "Bulawayo, Zimbabwe",
                   salaryRange: "$40,000 - $60,000",
                 },
@@ -228,8 +363,8 @@ const Recruitment = () => {
                   status: "Open",
                   postedDate: "2023-06-01",
                   applicants: 5,
-                  description: "Plan and execute marketing campaigns.",
-                  requirements: "Experience with digital marketing, creative thinking.",
+                  description: "Plan and execute marketing campaigns across various channels, analyze market trends, and report on campaign performance.",
+                  requirements: "Experience with digital marketing, creative thinking, excellent written and verbal communication.",
                   location: "Harare, Zimbabwe",
                   salaryRange: "$25,000 - $40,000",
                 },
@@ -240,8 +375,8 @@ const Recruitment = () => {
                   status: "Open",
                   postedDate: "2023-06-15",
                   applicants: 7,
-                  description: "Analyze financial data and prepare reports.",
-                  requirements: "CFA or ACCA qualification, strong analytical skills.",
+                  description: "Analyze financial data, prepare reports, develop financial models, and assist with budgeting and forecasting.",
+                  requirements: "CFA or ACCA qualification, strong analytical skills, proficiency in Excel and financial software.",
                   location: "Harare, Zimbabwe",
                   salaryRange: "$35,000 - $55,000",
                 },
@@ -252,8 +387,8 @@ const Recruitment = () => {
                   status: "Open",
                   postedDate: "2023-06-20",
                   applicants: 15,
-                  description: "Provide excellent customer service.",
-                  requirements: "Good communication skills, problem-solving abilities.",
+                  description: "Provide excellent customer service through various channels, resolve customer inquiries and complaints.",
+                  requirements: "Good communication skills, problem-solving abilities, patience, and a positive attitude.",
                   location: "Harare, Zimbabwe",
                   salaryRange: "$18,000 - $25,000",
                 },
@@ -273,8 +408,7 @@ const Recruitment = () => {
   const fetchCandidates = async () => {
     setLoading(true);
     try {
-      // Simulated API call with more realistic data
-      const response = await new Promise((resolve) =>
+      const response = await new Promise<{ data: Candidate[] }>((resolve) =>
         setTimeout(
           () =>
             resolve({
@@ -338,7 +472,6 @@ const Recruitment = () => {
   };
 
   const fetchDepartments = async () => {
-    // Simulated department fetch
     setDepartments([
       "All Departments",
       "IT",
@@ -349,13 +482,72 @@ const Recruitment = () => {
     ]);
   };
 
-  const handleSaveNewJob = (newJob) => {
+  const handleSaveNewJob = (newJobData: Omit<JobListing, 'id' | 'applicants' | 'postedDate' | 'status'>) => {
+    const newJob: JobListing = {
+      ...newJobData,
+      id: Date.now(),
+      applicants: 0,
+      postedDate: new Date().toISOString().slice(0, 10),
+      status: "Open",
+    };
     setJobListings((prevJobs) => [newJob, ...prevJobs]);
-    // Also update departments if the new job's department is not already in the list
     if (!departments.includes(newJob.department)) {
       setDepartments((prevDepartments) => [...prevDepartments, newJob.department]);
     }
   };
+
+  // Save edited job
+  const handleSaveEditedJob = (updatedJob: JobListing) => {
+    setJobListings(prev => prev.map(j => j.id === updatedJob.id ? updatedJob : j));
+    setShowEditJobModal(false);
+    setJobBeingEdited(null);
+  };
+
+  const handleEditJob = (jobId: number) => {
+  const job = jobListings.find(j => j.id === jobId);
+  if (job) {
+    setJobBeingEdited(job);
+    setShowEditJobModal(true);
+  } else {
+    alert(`Job with ID ${jobId} not found.`);
+  }
+};
+
+  const handleViewJobDetails = (jobId: number) => {
+    const job = jobListings.find(j => j.id === jobId);
+    if (job) {
+      setJobDetails(job);
+      setShowDetailsModal(true);
+    } else {
+      alert(`Job with ID ${jobId} not found.`);
+    }
+  };
+
+
+
+  const handleViewApplicants = (jobId: number) => {
+    const job = jobListings.find(job => job.id === jobId);
+    if (job) {
+      setActiveTab("candidates");
+      setSearchTerm(job.title); // Auto-filter candidates by job title
+      setCurrentPage(1); // Reset pagination
+    } else {
+      alert(`Job with ID ${jobId} not found.`);
+    }
+  };
+
+  const handleToggleJobStatus = (jobId: number, currentStatus: JobListing['status']) => {
+    setJobListings((prevJobs) =>
+      prevJobs.map((job) =>
+        job.id === jobId
+          ? { ...job, status: currentStatus === "Open" ? "Closed" : "Open" }
+          : job
+      )
+    );
+    setNotification(`Job ${currentStatus === "Open" ? "closed" : "opened"}`);
+  };
+
+  // --- End of activated functions ---
 
   const filteredJobs = jobListings.filter((job) => {
     const matchesSearch = job.title
@@ -378,7 +570,6 @@ const Recruitment = () => {
     return matchesSearch && matchesStatus;
   });
 
-  // Pagination logic
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentJobs = filteredJobs.slice(indexOfFirstItem, indexOfLastItem);
@@ -392,7 +583,7 @@ const Recruitment = () => {
       : filteredCandidates.length / itemsPerPage
   );
 
-  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+  const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
 
   const exportToCSV = () => {
     const headers =
@@ -411,10 +602,15 @@ const Recruitment = () => {
 
     const csvContent = [
       headers.join(","),
-      ...data.map((item) =>
-        activeTab === "jobs"
-          ? `"${item.title}","${item.department}","${item.status}","${item.postedDate}","${item.applicants}","${item.description}","${item.requirements}","${item.location}","${item.salaryRange}"`
-          : `"${item.name}","${item.job}","${item.status}","${item.email}","${item.phone}","${item.appliedDate}"`
+      ...data.map((item) => {
+        if (activeTab === "jobs") {
+          const job = item as JobListing;
+          return `"${job.title}","${job.department}","${job.status}","${job.postedDate}","${job.applicants}","${job.description.replace(/"/g, '""')}","${job.requirements.replace(/"/g, '""')}","${job.location}","${job.salaryRange}"`;
+        } else {
+          const candidate = item as Candidate;
+          return `"${candidate.name}","${candidate.job}","${candidate.status}","${candidate.email}","${candidate.phone}","${candidate.appliedDate}"`;
+        }
+      }
       ),
     ].join("\n");
 
@@ -429,9 +625,10 @@ const Recruitment = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
-  const getStatusBadge = (status) => {
+  const getStatusBadge = (status: JobListing['status'] | Candidate['status']) => {
     switch (status) {
       case "Open":
       case "Hired":
@@ -470,12 +667,10 @@ const Recruitment = () => {
   };
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">
-            Recruitment Dashboard
-          </h1>
+    <div className="p-6">
+      {notification && (
+        <div className="mb-4 rounded-md bg-green-100 px-4 py-2 text-sm text-green-800 shadow">
+          {notification}
           <p className="text-sm text-gray-500">
             {activeTab === "jobs"
               ? `${filteredJobs.length} ${
@@ -486,7 +681,9 @@ const Recruitment = () => {
                 } found`}
           </p>
         </div>
-        <div className="flex gap-3">
+      )}
+
+      <div className="flex gap-3">
           <button
             onClick={exportToCSV}
             className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
@@ -498,9 +695,9 @@ const Recruitment = () => {
             className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-colors"
             onClick={() => {
               if (activeTab === "jobs") {
-                setShowPostJobModal(true); // Open the modal for posting a job
+                setShowPostJobModal(true);
               } else {
-                console.log("Add Candidate functionality goes here."); // Placeholder for adding candidate
+                alert("Add Candidate functionality goes here."); // Activated placeholder
               }
             }}
           >
@@ -508,7 +705,6 @@ const Recruitment = () => {
             {activeTab === "jobs" ? "Post a Job" : "Add Candidate"}
           </button>
         </div>
-      </div>
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200 mb-6">
@@ -655,7 +851,7 @@ const Recruitment = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {loading ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-8 text-center">
+                    <td colSpan={6} className="px-6 py-8 text-center">
                       <Loader className="h-8 w-8 animate-spin mx-auto text-blue-600" />
                       <p className="mt-2 text-sm text-gray-500">
                         Loading job listings...
@@ -697,13 +893,14 @@ const Recruitment = () => {
                               <MoreVertical className="h-5 w-5 text-gray-400" />
                             </MenuButton>
                           </div>
-                          <Menu.Items
+                          <MenuItems
                             as="div"
                             className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10"
                           >
                             <MenuItem>
                               {({ active }) => (
                                 <button
+                                  onClick={() => handleViewJobDetails(job.id)}
                                   className={`${
                                     active
                                       ? "bg-gray-100 text-gray-900"
@@ -717,6 +914,7 @@ const Recruitment = () => {
                             <MenuItem>
                               {({ active }) => (
                                 <button
+                                  onClick={() => handleEditJob(job.id)}
                                   className={`${
                                     active
                                       ? "bg-gray-100 text-gray-900"
@@ -730,6 +928,7 @@ const Recruitment = () => {
                             <MenuItem>
                               {({ active }) => (
                                 <button
+                                  onClick={() => handleViewApplicants(job.id)}
                                   className={`${
                                     active
                                       ? "bg-gray-100 text-gray-900"
@@ -743,6 +942,7 @@ const Recruitment = () => {
                             <MenuItem>
                               {({ active }) => (
                                 <button
+                                  onClick={() => handleToggleJobStatus(job.id, job.status)}
                                   className={`${
                                     active
                                       ? "bg-gray-100 text-gray-900"
@@ -755,14 +955,14 @@ const Recruitment = () => {
                                 </button>
                               )}
                             </MenuItem>
-                          </Menu.Items>
+                          </MenuItems>
                         </Menu>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="6" className="px-6 py-8 text-center">
+                    <td colSpan={6} className="px-6 py-8 text-center">
                       <div className="flex flex-col items-center justify-center">
                         <Briefcase className="h-12 w-12 text-gray-400" />
                         <h3 className="mt-2 text-sm font-medium text-gray-900">
@@ -855,7 +1055,7 @@ const Recruitment = () => {
                     scope="col"
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                   >
-                    Candidate
+                    Candidate Name
                   </th>
                   <th
                     scope="col"
@@ -867,19 +1067,25 @@ const Recruitment = () => {
                     scope="col"
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                   >
-                    Contact
+                    Status
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    Email
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    Phone
                   </th>
                   <th
                     scope="col"
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                   >
                     Applied Date
-                  </th>
-                  <th
-                    scope="col"
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                  >
-                    Status
                   </th>
                   <th
                     scope="col"
@@ -892,7 +1098,7 @@ const Recruitment = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {loading ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-8 text-center">
+                    <td colSpan={7} className="px-6 py-8 text-center">
                       <Loader className="h-8 w-8 animate-spin mx-auto text-blue-600" />
                       <p className="mt-2 text-sm text-gray-500">
                         Loading candidates...
@@ -903,43 +1109,28 @@ const Recruitment = () => {
                   currentCandidates.map((candidate) => (
                     <tr key={candidate.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">
-                            {candidate.name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">
-                              {candidate.name}
-                            </div>
-                          </div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {candidate.name}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {candidate.job}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900 flex items-center gap-1">
-                          <Mail className="h-4 w-4" /> {candidate.email}
-                        </div>
-                        <div className="text-sm text-gray-500 flex items-center gap-1">
-                          <Phone className="h-4 w-4" /> {candidate.phone}
-                        </div>
+                        {getStatusBadge(candidate.status)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(candidate.appliedDate).toLocaleDateString(
-                          "en-US",
-                          {
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                          }
-                        )}
+                        {candidate.email}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(candidate.status)}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {candidate.phone}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(candidate.appliedDate).toLocaleDateString("en-US", {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                        })}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <Menu
@@ -951,13 +1142,14 @@ const Recruitment = () => {
                               <MoreVertical className="h-5 w-5 text-gray-400" />
                             </MenuButton>
                           </div>
-                          <Menu.Items
+                          <MenuItems
                             as="div"
                             className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10"
                           >
                             <MenuItem>
                               {({ active }) => (
                                 <button
+                                  onClick={() => alert(`Viewing profile for candidate: ${candidate.name} (ID: ${candidate.id})`)}
                                   className={`${
                                     active
                                       ? "bg-gray-100 text-gray-900"
@@ -971,6 +1163,7 @@ const Recruitment = () => {
                             <MenuItem>
                               {({ active }) => (
                                 <button
+                                  onClick={() => alert(`Updating status for candidate: ${candidate.name} (ID: ${candidate.id})`)}
                                   className={`${
                                     active
                                       ? "bg-gray-100 text-gray-900"
@@ -984,6 +1177,7 @@ const Recruitment = () => {
                             <MenuItem>
                               {({ active }) => (
                                 <button
+                                  onClick={() => alert(`Scheduling interview for candidate: ${candidate.name} (ID: ${candidate.id})`)}
                                   className={`${
                                     active
                                       ? "bg-gray-100 text-gray-900"
@@ -994,14 +1188,14 @@ const Recruitment = () => {
                                 </button>
                               )}
                             </MenuItem>
-                          </Menu.Items>
+                          </MenuItems>
                         </Menu>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="6" className="px-6 py-8 text-center">
+                    <td colSpan={7} className="px-6 py-8 text-center">
                       <div className="flex flex-col items-center justify-center">
                         <User className="h-12 w-12 text-gray-400" />
                         <h3 className="mt-2 text-sm font-medium text-gray-900">
@@ -1010,18 +1204,8 @@ const Recruitment = () => {
                         <p className="mt-1 text-sm text-gray-500">
                           {searchTerm
                             ? "Try adjusting your search or filter"
-                            : "Add new candidates or wait for applications"}
+                            : "Add new candidates or they will appear after applying for jobs"}
                         </p>
-                        {!searchTerm && (
-                          <button
-                            type="button"
-                            className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none"
-                            onClick={() => console.log("Add Candidate")}
-                          >
-                            <Plus className="-ml-1 mr-2 h-5 w-5" />
-                            Add Candidate
-                          </button>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -1039,8 +1223,7 @@ const Recruitment = () => {
                 <span className="font-medium">
                   {Math.min(indexOfLastItem, filteredCandidates.length)}
                 </span>{" "}
-                of{" "}
-                <span className="font-medium">{filteredCandidates.length}</span>{" "}
+                of <span className="font-medium">{filteredCandidates.length}</span>{" "}
                 results
               </div>
               <div className="flex space-x-2">
@@ -1086,6 +1269,24 @@ const Recruitment = () => {
           )}
         </div>
       )}
+
+      {/* Job Details Modal */}
+      <JobDetailsModal
+        isOpen={showDetailsModal}
+        job={jobDetails}
+        onClose={() => setShowDetailsModal(false)}
+      />
+
+      {/* Edit Job Modal */}
+      <EditJobModal
+        isOpen={showEditJobModal}
+        job={jobBeingEdited}
+        onClose={() => {
+          setShowEditJobModal(false);
+          setJobBeingEdited(null);
+        }}
+        onSave={handleSaveEditedJob}
+      />
 
       {/* Post Job Modal */}
       <PostJobModal
