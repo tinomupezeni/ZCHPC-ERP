@@ -435,3 +435,68 @@ class PayrollPeriod(models.Model):
         verbose_name = "Payroll Period Type"
         verbose_name_plural = "Payroll Period Types"
         ordering = ['name']
+        
+class TrainingProgram(models.Model):
+    title = models.CharField(max_length=200)
+    category = models.CharField(max_length=100, blank=True, null=True)
+    duration = models.CharField(max_length=50, blank=True, null=True)
+    mandatory = models.BooleanField(default=False)
+    
+    def __str__(self):
+        return self.title
+
+
+class TrainingSession(models.Model):
+    STATUS_CHOICES = [
+        ('Scheduled', 'Scheduled'),
+        ('Ongoing', 'Ongoing'),
+        ('Completed', 'Completed'),
+    ]
+    
+    program = models.CharField(max_length=200)
+    trainer = models.CharField(max_length=200)
+    date = models.DateField()
+    venue = models.CharField(max_length=200)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Scheduled')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.program} - {self.date}"
+    
+    
+class TrainingEnrollment(models.Model):
+    STATUS_CHOICES = [
+        ('Enrolled', 'Enrolled'),
+        ('In Progress', 'In Progress'),
+        ('Completed', 'Completed'),
+    ]
+    
+    employee = models.CharField(max_length=200)
+    program = models.CharField(max_length=200)
+    session_date = models.DateField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Enrolled')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.employee} - {self.program}"
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+class TrainingCertification(models.Model):
+    STATUS_CHOICES = [
+        ('Valid', 'Valid'),
+        ('Expired', 'Expired'),
+        ('Pending', 'Pending'),
+    ]
+    
+    employee = models.CharField(max_length=100)
+    program = models.CharField(max_length=100)
+    issue_date = models.DateField()
+    expiry_date = models.DateField()
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='Valid')
+    
+    def __str__(self):
+        return f"{self.employee} - {self.program}"

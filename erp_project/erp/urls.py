@@ -30,6 +30,23 @@ urlpatterns = [
     # hr module
     path('register/employee/', hr_view.register_employee, name='register_employee'),
     path('all/employees/', hr_view.get_all_employees, name='get_all_users'),
+    path('register/training/program/', hr_view.training_program_list, name='register_training_program'),
+    path('all/training/programs/', hr_view.training_program_list, name='get_all_training_programs'),
+    path('update/training/program/<int:pk>/', hr_view.training_program_detail, name='update_training_program'),
+    path('delete/training/program/<int:pk>/', hr_view.training_program_detail, name='delete_training_program'),
+    
+    #training sessions for CRUD operations
+    path('training/sessions/', hr_view.training_session_list, name='training-session-list'),
+    path('training/sessions/<int:pk>/', hr_view.training_session_detail, name='training-session-detail'),
+    
+    #training enrollments for CRUD operations
+    path('training/enrollments/', hr_view.training_enrollment_list, name='training-enrollment-list'),
+    path('training/enrollments/<int:pk>/', hr_view.training_enrollment_detail, name='training-enrollment-detail'),
+    
+    # training certifications for CRUD operations
+    path('training/certifications/', hr_view.certification_list, name='certification-list'),
+    path('training/certifications/<int:pk>/', hr_view.certification_detail, name='certification-detail'),
+    path('training/certifications/search/', hr_view.certification_search, name='certification-search'),
     
     # payroll module
     path('all/payslips/', payroll_view.payroll_list, name='payslip_list'),

@@ -11,6 +11,13 @@ const getAuthHeaders = () => {
   return {}; // For now, empty if no auth
 };
 
+  interface TrainingProgramUpdateData {
+    title: "",
+    category: "",
+    duration: "",
+    mandatory: false,
+  }
+
 class Server {
   // add system user in settings view
   static addSystemUSer = (data) => {
@@ -59,6 +66,85 @@ class Server {
       `${api_url}/delete/payslip/?employee=${id}&period=${period}`
     );
   };
+
+  // API's for hr training and development
+
+  //adding  training program
+  static addTrainingProgram = (data) => { 
+    return axios.post(`${api_url}register/training/program/`, data);
+  }
+
+  // fetching all training programs 
+  static getTrainingPrograms= () => {
+    return axios.get(`${api_url}all/training/programs/`);
+  }
+
+  //delete training program
+  static deleteTrainingProgram = (id) => {
+    return axios.delete(`${api_url}delete/training/program/${id}/`);
+  }
+
+  //update training program
+  static updateTrainingProgram = (id: number, data: TrainingProgramUpdateData) => {
+    return axios.put(`${api_url}update/training/program/${id}/`, data);
+  }
+
+  // add training session
+  static addTrainingSession = (data) => {
+    return axios.post(`${api_url}training/sessions/`, data);
+  }
+  // fetch all training sessions
+  static getTrainingSessions = () => {
+    return axios.get(`${api_url}training/sessions/`);
+  }
+  // delete training session
+  static deleteTrainingSession = (id) => {
+    return axios.delete(`${api_url}training/sessions/${id}/`);
+  }
+  // update training session
+  static updateTrainingSession = (id, data) => {
+    return axios.put(`${api_url}training/sessions/${id}/`, data);
+  }
+
+  // add training enrollment
+  static addTrainingEnrollment = (data) => {
+    return axios.post(`${api_url}training/enrollments/`, data);
+  }
+  // fetch all training enrollments
+  static getTrainingEnrollments = () => {
+    return axios.get(`${api_url}training/enrollments/`);
+  }
+  // delete training enrollment
+  static deleteTrainingEnrollment = (id) => {
+    return axios.delete(`${api_url}training/enrollments/${id}/`);
+  }
+  // update training enrollment
+  static updateTrainingEnrollment = (id, data) => {
+    return axios.put(`${api_url}training/enrollments/${id}/`, data);
+  }
+
+  // add training certification
+  static addTrainingCertification = (data) => {
+    return axios.post(`${api_url}training/certifications/`, data);
+  }
+  // fetch all training certifications
+  static getTrainingCertifications = () => {
+    return axios.get(`${api_url}training/certifications/`);
+  }
+  // delete training certification
+  static deleteTrainingCertification = (id) => {
+    return axios.delete(`${api_url}training/certifications/${id}/`);
+  }
+  // update training certification
+  static updateTrainingCertification = (id, data) => {
+    return axios.put(`${api_url}training/certifications/${id}/`, data);
+  }
+  // search training certifications
+  static searchTrainingCertifications = (searchTerm) => {
+    return axios.get(`${api_url}training/certifications/search/?search=${searchTerm}`);
+  }
+
+
 }
 
 export default Server;

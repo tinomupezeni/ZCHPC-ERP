@@ -18,6 +18,10 @@ import {
   Package,
   FileText,
   ShoppingCart,
+  BookOpen,
+  CalendarCheck,
+  ClipboardList,
+  Award,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -34,11 +38,7 @@ interface SidebarItem {
   icon: React.ElementType;
   path: string;
   permission: string;
-  subItems?: {
-    title: string;
-    path: string;
-    permission: string;
-  }[];
+  subItems?: SidebarItem[];
 }
 
 // Navigation items with permissions and subitems
@@ -67,6 +67,12 @@ const navItems: SidebarItem[] = [
         title: "Training & Development",
         path: "#hr-training",
         permission: "hr",
+        subItems: [
+        { title: "Programs", path: "#hr-training-programs", permission: "hr" },
+        { title: "Sessions", path: "#hr-training-sessions", permission: "hr" },
+        { title: "Enrollments", path: "#hr-training-enrollments", permission: "hr" },
+        { title: "Certifications", path: "#hr-training-certifications", permission: "hr" },
+      ],
       },
     ],
   },
@@ -195,8 +201,70 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, setOpenTab }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const toggleSidebar = () => {
-    setCollapsed(!collapsed);
+    const toggleSidebar = () => {
+    const newCollapsed = !collapsed;
+    setCollapsed(newCollapsed);
+
+    if (newCollapsed) {
+      // Close all submenus when sidebar is collapsed
+      setExpandedItems({});
+    }
+  };
+
+  //helper function to toggle sub-item expansion
+  const renderNavItems = (items: SidebarItem[], level = 0) => {
+    return items.map((item) => {
+      if (!checkPermission(item.permission)) return null;
+
+      const isExpanded = expandedItems[item.path || ""] || false;
+      const hasSubItems = !!item.subItems?.length;
+
+      return (
+        <div key={item.path || item.title} style={{ paddingLeft: `${level * 16}px` }}>
+          <Button
+            variant={isActivePath(item.path || "") ? "secondary" : "ghost"}
+            className={cn(
+              "justify-start w-full transition-colors duration-200 hover:bg-muted rounded-md",
+              level === 0 ? "h-10" : "h-8",
+              isActivePath(item.path || "") && "bg-muted font-semibold"
+            )}
+            onClick={() => {
+              if (hasSubItems) {
+                if (item.path) {
+                  // Navigate regardless if subItems exist
+                  setOpenTab(item.path);
+                  setMobileMenuOpen(false);
+                  navigate(item.path);
+                }
+                if (!collapsed) {
+                  // Also toggle expand if sidebar is not collapsed
+                  setExpandedItems((prev) => ({
+                    ...prev,
+                    [item.path || item.title]: !prev[item.path || item.title],
+                  }));
+                }
+              } else if (item.path) {
+                setOpenTab(item.path);
+                setMobileMenuOpen(false);
+                navigate(item.path);
+              }
+            }}
+
+          >
+            {item.icon && <item.icon className={cn("h-4 w-4", !collapsed && "mr-2")} />}
+            {!collapsed && <span className="flex-1 text-left">{item.title}</span>}
+            {hasSubItems && !collapsed &&
+              (isExpanded ? (
+                <ChevronUp className="h-4 w-4 ml-2" />
+              ) : (
+                <ChevronDown className="h-4 w-4 ml-2" />
+              ))}
+          </Button>
+
+          {hasSubItems && isExpanded && !collapsed && renderNavItems(item.subItems!, level + 1)}
+        </div>
+      );
+    });
   };
 
   const toggleItemExpand = (path: string) => {
@@ -216,8 +284,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, setOpenTab }) => {
   };
 
   const isActivePath = (path: string) => {
+    if (!path) return false;
     return location.pathname === path || location.hash === path;
   };
+
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -265,74 +335,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, setOpenTab }) => {
         </div>
         <div className="flex-1 overflow-auto py-2">
           <nav className="grid gap-1 px-2">
-            {navItems.map(
-              (item) =>
-                checkPermission(item.permission) && (
-                  <div key={item.path}>
-                    <Button
-                     variant={isActivePath(item.path) ? "secondary" : "ghost"}
-                     className={cn(
-                       "justify-start h-10 w-full transition-colors duration-200 hover:bg-muted rounded-md",
-                       collapsed && "justify-center px-2",
-                       isActivePath(item.path) && "bg-muted font-semibold"
-                     )}
-                      onClick={() => {
-                        if (
-                          (item.subItems && !collapsed) ||
-                          item.title == "Dashboard"
-                        ) {
-                          toggleItemExpand(item.path);
-                        } else {
-                          handleNavigation(item.path);
-                        }
-                      }}
-                    >
-                      <item.icon
-                        className={cn("h-4 w-4", !collapsed && "mr-2")}
-                      />
-                      {!collapsed && (
-                        <>
-                          <span className="flex-1 text-left">{item.title}</span>
-                          {item.subItems &&
-                            (expandedItems[item.path] ? (
-                              <ChevronUp className="h-4 w-4 ml-2" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4 ml-2" />
-                            ))}
-                        </>
-                      )}
-                    </Button>
-
-                    {!collapsed &&
-                      item.subItems &&
-                      expandedItems[item.path] && (
-                        <div className="ml-2 mt-1 mb-2 space-y-1">
-                          {item.subItems.map(
-                            (subItem) =>
-                              checkPermission(subItem.permission) && (
-                                <Button
-                                  key={subItem.path}
-                                  variant={
-                                    isActivePath(subItem.path)
-                                      ? "secondary"
-                                      : "ghost"
-                                  }
-                                  className={cn(
-                                    "justify-start h-8 w-full text-sm pl-8 transition-colors duration-200 hover:bg-muted rounded-md",
-                                    isActivePath(subItem.path) &&
-                                      "bg-muted font-medium"
-                                  )}
-                                  onClick={() => handleNavigation(subItem.path)}
-                                >
-                                  {subItem.title}
-                                </Button>
-                              )
-                          )}
-                        </div>
-                      )}
-                  </div>
-                )
-            )}
+            {renderNavItems(navItems)}
           </nav>
         </div>
         <div className="mt-auto border-t p-4">

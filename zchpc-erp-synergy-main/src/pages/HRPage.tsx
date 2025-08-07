@@ -6,6 +6,10 @@ import Payroll from "@/components/Payroll/PayrollDashboard";
 import Employees from "@/components/HR/employees/Employees";
 import Attendance from "@/components/HR/Attendence";
 import Recruitment from "@/components/HR/Recruitment";
+import TrainingProgramsPage from "@/components/HR/training_development/TrainingPrograms";
+import TrainingSessionsPage from "@/components/HR/training_development/TrainingSessions";
+import TrainingEnrollmentsPage from "@/components/HR/training_development/TrainingEnrollments";
+import TrainingCertificationsPage from "@/components/HR/training_development/TrainingCertifications";
 
 // HRPage.tsx
 interface HRPageProps {
@@ -23,6 +27,14 @@ const HRPage = ({ openTab }: HRPageProps) => {
         return <Attendance />;
       case "#hr-recruitment":
         return <Recruitment />;
+      case "#hr-training-programs":
+        return <TrainingProgramsPage />;
+      case "#hr-training-sessions":
+        return  <TrainingSessionsPage />;
+      case "#hr-training-enrollments":
+        return <TrainingEnrollmentsPage />;
+      case "#hr-training-certifications":
+        return <TrainingCertificationsPage />;
       default:
         return <HrDashboard />;
     }
