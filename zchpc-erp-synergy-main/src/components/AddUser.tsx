@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import Server from "../server/Server"
+import Server from "../server/Server";
 
 export default function AddUser({ setShowModal, onSuccess }) {
   const [employee, setEmployee] = useState({
@@ -8,10 +8,37 @@ export default function AddUser({ setShowModal, onSuccess }) {
     surname: "",
     role: "",
     email: "",
-    department: '',
+    department: "", // Ensure this is initialized to a default value for the dropdown
     password: "erp@1234",
   });
   const [loading, setLoading] = useState(false);
+  const [departments, setDepartments] = useState([]);
+  const [departmentsLoading, setDepartmentsLoading] = useState(true);
+
+  // Define a list of meaningful ERP roles
+  const roles = [
+    { value: "Administrator", label: "Administrator" },
+    { value: "HR Manager", label: "HR Manager" },
+    { value: "Finance Manager", label: "Finance Manager" },
+    { value: "Sales Manager", label: "Sales Manager" },
+    { value: "Procurement Officer", label: "Procurement Officer" },
+    { value: "General User", label: "General User" },
+  ];
+
+  // Fetch departments when the component loads
+  useEffect(() => {
+    Server.fetchDepartments()
+      .then((response) => {
+        setDepartments(response.data);
+      })
+      .catch((error) => {
+        console.error("Failed to fetch departments:", error);
+        toast.error("Failed to load departments.");
+      })
+      .finally(() => {
+        setDepartmentsLoading(false);
+      });
+  }, []);
 
   const handleChange = (e) => {
     setEmployee({ ...employee, [e.target.name]: e.target.value });
@@ -26,17 +53,18 @@ export default function AddUser({ setShowModal, onSuccess }) {
         toast.success("New user successfully added");
         setLoading(false);
         onSuccess();
-        setShowModal()
+        setShowModal(false);
       })
       .catch((error) => {
-        console.error("Error registering user:", error);
-        toast.error("Failed to add new user");
+        console.error("Error registering user:", error.response.data);
+        const errorMessage = error.response?.data?.email?.[0] || "Failed to add new user. Please check your inputs.";
+        toast.error(errorMessage);
         setLoading(false);
       });
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50  flex items-center justify-center ">
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center">
       <div className="bg-white rounded-lg w-full max-w-lg shadow-lg">
         {/* Header */}
         <div className="p-4 border-b flex justify-between items-center">
@@ -53,7 +81,7 @@ export default function AddUser({ setShowModal, onSuccess }) {
         <form className="p-6 space-y-4" onSubmit={handleSubmit}>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-sm text-gray-600">Name</label>
+              <label className="text-sm text-gray-600">First Name</label>
               <input
                 type="text"
                 name="firstname"
@@ -80,37 +108,38 @@ export default function AddUser({ setShowModal, onSuccess }) {
             <div>
               <label className="text-sm text-gray-600">Role</label>
               <select
-                name="role" // Ensure it matches your state structure
-                value={employee.role} // This should correspond to how role is stored in state
+                name="role"
+                value={employee.role}
                 onChange={handleChange}
                 required
                 className="w-full p-2 border rounded"
               >
-                <option value="" disabled>
-                  Select a role
-                </option>
-                <option value="administrator">Administrator</option>
-                <option value="guest">Guest</option>
-                <option value="general user">General User</option>
+                <option value="" disabled>Select a role</option>
+                {roles.map((role) => (
+                  <option key={role.value} value={role.value}>
+                    {role.label}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
               <label className="text-sm text-gray-600">Department</label>
               <select
-                name="department" // Ensure it matches your state structure
-                value={employee.department} // This should correspond to how role is stored in state
+                name="department"
+                value={employee.department}
                 onChange={handleChange}
                 required
                 className="w-full p-2 border rounded"
+                disabled={departmentsLoading}
               >
                 <option value="" disabled>
-                  Select Department
+                  {departmentsLoading ? "Loading..." : "Select Department"}
                 </option>
-                <option value="management">Management</option>
-                <option value="guest">Sales</option>
-                <option value="operations">Operations</option>
-                <option value="operations">Finance</option>
-                <option value="operations">Purchasing</option>
+                {departments.map((dept) => (
+                  <option key={dept.id} value={dept.id}>
+                    {dept.name}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -138,10 +167,10 @@ export default function AddUser({ setShowModal, onSuccess }) {
             </button>
             <button
               type="submit"
-              disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              disabled={loading || departmentsLoading}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
             >
-              {loading ? "Adding new user..." : "Add User"}
+              {loading ? "Adding user..." : "Add User"}
             </button>
           </div>
         </form>

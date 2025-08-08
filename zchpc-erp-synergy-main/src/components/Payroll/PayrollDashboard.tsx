@@ -37,7 +37,7 @@ const PayrollDashboard = () => {
   // const [showProcessModal, setShowProcessModal] = useState(false);
   const [editPayslip, setEditPayslip] = useState(false);
   const [openMenuId, setOpenMenuId] = useState(null); // Track which row's menu is open
-  const navigate = useNavigate()
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchPayrollRecords();
@@ -96,14 +96,15 @@ const PayrollDashboard = () => {
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
   const deletePayslip = (id, period) => {
-    Server.deleteEmployeeSlip(id, period).then(() => {
-      toast.success("Payslip successfully deleted")
-    }).catch((error) => {
-      toast.error('Error deleting payslip', error)
-      console.log(error);
-      
-    })
-  }
+    Server.deleteEmployeeSlip(id, period)
+      .then(() => {
+        toast.success("Payslip successfully deleted");
+      })
+      .catch((error) => {
+        toast.error("Error deleting payslip", error);
+        console.log(error);
+      });
+  };
 
   // const processPayroll = async () => {
   //   setLoading(true);
@@ -213,7 +214,7 @@ const PayrollDashboard = () => {
           </button>
           <button
             // onClick={processPayroll}
-            onClick={() => navigate('/payroll#process-payroll')}
+            onClick={() => navigate("/payroll#process-payroll")}
             // onClick={() => setShowProcessModal(true)}
             disabled={loading}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-colors disabled:opacity-70"
@@ -263,11 +264,13 @@ const PayrollDashboard = () => {
                     setCurrentPage(1);
                   }}
                 >
-                  {departments.map((dept) => (
-                    <option key={dept} value={dept}>
-                      {dept}
-                    </option>
-                  ))}
+                  {departments
+                    .filter((dept) => dept !== "All Departments") // Filter out the initial string
+                    .map((dept) => (
+                      <option key={dept.id} value={dept.name}>
+                        {dept.name}
+                      </option>
+                    ))}
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               </div>
@@ -475,7 +478,9 @@ const PayrollDashboard = () => {
                                       ? "bg-red-100 text-red-900"
                                       : "text-red-700"
                                   } group flex items-center w-full px-4 py-2 text-sm`}
-                                  onClick={() => deletePayslip(record.id, record.period)}
+                                  onClick={() =>
+                                    deletePayslip(record.id, record.period)
+                                  }
                                 >
                                   <Trash2 className="mr-2 h-4 w-4" />
                                   Delete Payslip

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -11,17 +12,107 @@ import {
   Briefcase,
   Award,
   Users,
-  UserPlus,
   FileText,
   GraduationCap,
-  DollarSign,
+  ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import Server from "../../server/Server"; // Make sure to import your Server utility
+import { useNavigate } from "react-router-dom";
+
+// Define a type or interface for the data to ensure consistency and help with autocompletion
+interface HrDashboardData {
+  metrics: {
+    totalEmployees: number;
+    totalDepartments: number;
+    openPositions: number;
+    inInterviewStage: number;
+    timeOffRequests: number;
+    pendingTimeOff: number;
+  };
+  newEmployees: {
+    id: number;
+    name: string;
+    role: string;
+    department: string;
+    joinDate: string;
+    avatarUrl?: string; // Optional avatar URL
+  }[];
+  trainingPrograms: {
+    id: number;
+    title: string;
+    date: string;
+    participants: number;
+  }[];
+  upcomingReviews: {
+    id: number;
+    name: string;
+    date: string;
+    type: string;
+  }[];
+}
+
 export default function HrDashboard() {
+  const [data, setData] = useState<HrDashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [today, setToday] = useState("");
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Set the current date when the component mounts
+    const todayDate = new Date();
+    const options: Intl.DateTimeFormatOptions = {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    };
+    setToday(todayDate.toLocaleDateString("en-US", options));
+
+    // Fetch data from the server
+    const fetchData = async () => {
+      try {
+        const response = await Server.fetchHrDashboardData(); // Assuming this is your API call
+        setData(response.data);
+      } catch (error) {
+        console.error("Failed to fetch HR dashboard data:", error);
+        // Handle error, e.g., show a toast notification
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-[80vh]">
+        <div className="animate-pulse-light">
+          <Users className="h-10 w-10 text-blue-700" />
+        </div>
+      </div>
+    );
+  }
+
+  // Handle case where data is not available after loading
+  if (!data) {
+    return (
+      <div className="text-center p-8">
+        <h2 className="text-2xl font-bold">No HR data available.</h2>
+        <p className="text-muted-foreground mt-2">
+          Please check your server connection.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <>
+    <div className="space-y-6 animate-fade-in">
+    
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Employees Card */}
         <Card className="subtle-shadow">
           <CardHeader className="pb-2">
             <div className="flex items-center space-x-2">
@@ -32,11 +123,16 @@ export default function HrDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">11</div>
-            <p className="text-sm text-muted-foreground">6 departments</p>
+            <div className="text-3xl font-bold">
+              {data.metrics.totalEmployees}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {data.metrics.totalDepartments} departments
+            </p>
           </CardContent>
         </Card>
 
+        {/* Open Positions Card */}
         <Card className="subtle-shadow">
           <CardHeader className="pb-2">
             <div className="flex items-center space-x-2">
@@ -47,13 +143,16 @@ export default function HrDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">8</div>
+            <div className="text-3xl font-bold">
+              {data.metrics.openPositions}
+            </div>
             <p className="text-sm text-muted-foreground">
-              4 in interview stage
+              {data.metrics.inInterviewStage} in interview stage
             </p>
           </CardContent>
         </Card>
 
+        {/* Time Off Requests Card */}
         <Card className="subtle-shadow">
           <CardHeader className="pb-2">
             <div className="flex items-center space-x-2">
@@ -64,13 +163,19 @@ export default function HrDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">6</div>
-            <p className="text-sm text-muted-foreground">3 pending approval</p>
+            <div className="text-3xl font-bold">
+              {data.metrics.timeOffRequests}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {data.metrics.pendingTimeOff} pending approval
+            </p>
           </CardContent>
         </Card>
       </div>
+   
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* New Employees List */}
         <Card className="subtle-shadow">
           <CardHeader>
             <CardTitle>New Employees</CardTitle>
@@ -78,46 +183,18 @@ export default function HrDashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {[
-                {
-                  name: "Maxwell Marara",
-                  role: "Marketing Manager",
-                  department: "Marketing",
-                  joinDate: "2023-10-15",
-                },
-                {
-                  name: "David Dube",
-                  role: "Software Engineer",
-                  department: "Engineering",
-                  joinDate: "2023-10-12",
-                },
-                {
-                  name: "Lisa Marwei",
-                  role: "Sales Representative",
-                  department: "Sales",
-                  joinDate: "2023-10-10",
-                },
-                {
-                  name: "Michael Muramba",
-                  role: "Financial Analyst",
-                  department: "Finance",
-                  joinDate: "2023-10-05",
-                },
-                {
-                  name: "Sarah Moyo",
-                  role: "Customer Support",
-                  department: "Operations",
-                  joinDate: "2023-10-02",
-                },
-              ].map((employee, i) => (
+              {data.newEmployees.map((employee) => (
                 <div
-                  key={i}
+                  key={employee.id}
                   className="flex justify-between items-center p-3 rounded-md hover:bg-muted hover-scale"
                 >
                   <div className="flex items-center space-x-3">
                     <Avatar className="h-10 w-10">
                       <AvatarImage
-                        src={`https://api.dicebear.com/7.x/initials/svg?seed=${employee.name}`}
+                        src={
+                          employee.avatarUrl ||
+                          `https://api.dicebear.com/7.x/initials/svg?seed=${employee.name}`
+                        }
                         alt={employee.name}
                       />
                       <AvatarFallback>{employee.name.charAt(0)}</AvatarFallback>
@@ -141,14 +218,20 @@ export default function HrDashboard() {
               ))}
             </div>
             <div className="mt-4 flex justify-end">
-              <Button variant="outline" size="sm">
-                View All Employees
+              <Button
+                variant="ghost"
+                size="sm"
+                className="p-0 h-auto text-xs text-primary flex items-center"
+                onClick={() => navigate("/hr/employees")}
+              >
+                View All Employees <ArrowRight className="ml-1 h-3 w-3" />
               </Button>
             </div>
           </CardContent>
         </Card>
 
         <div className="space-y-6">
+          {/* Training Programs List */}
           <Card className="subtle-shadow">
             <CardHeader>
               <CardTitle>Training Programs</CardTitle>
@@ -156,25 +239,9 @@ export default function HrDashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {[
-                  {
-                    title: "Leadership Skills",
-                    date: "2023-11-10",
-                    participants: 12,
-                  },
-                  {
-                    title: "Technical Workshop",
-                    date: "2023-11-15",
-                    participants: 18,
-                  },
-                  {
-                    title: "Safety Training",
-                    date: "2023-11-20",
-                    participants: 25,
-                  },
-                ].map((training, i) => (
+                {data.trainingPrograms.map((training) => (
                   <div
-                    key={i}
+                    key={training.id}
                     className="flex justify-between items-center p-3 rounded-md hover:bg-muted hover-scale"
                   >
                     <div className="flex items-center space-x-3">
@@ -197,6 +264,7 @@ export default function HrDashboard() {
             </CardContent>
           </Card>
 
+          {/* Upcoming Reviews List */}
           <Card className="subtle-shadow">
             <CardHeader>
               <CardTitle>Upcoming Reviews</CardTitle>
@@ -206,17 +274,9 @@ export default function HrDashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {[
-                  { name: "Robert Mapepi", date: "2023-11-05", type: "Annual" },
-                  {
-                    name: "Emily Dangamvura",
-                    date: "2023-11-08",
-                    type: "Quarterly",
-                  },
-                  { name: "James Marawa", date: "2023-11-12", type: "Project" },
-                ].map((review, i) => (
+                {data.upcomingReviews.map((review) => (
                   <div
-                    key={i}
+                    key={review.id}
                     className="flex justify-between items-center p-3 rounded-md hover:bg-muted hover-scale"
                   >
                     <div className="flex items-center space-x-3">
@@ -237,15 +297,20 @@ export default function HrDashboard() {
                 ))}
               </div>
               <div className="mt-4 flex justify-end">
-                <Button variant="outline" size="sm">
-                  <FileText className="mr-2 h-4 w-4" />
-                  View Schedule
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="p-0 h-auto text-xs text-primary flex items-center"
+                  onClick={() => navigate("/hr/reviews")}
+                >
+                  <FileText className="mr-1 h-3 w-3" />
+                  View Schedule <ArrowRight className="ml-1 h-3 w-3" />
                 </Button>
               </div>
             </CardContent>
           </Card>
         </div>
       </div>
-    </>
+    </div>
   );
 }

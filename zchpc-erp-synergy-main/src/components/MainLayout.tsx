@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -18,10 +18,6 @@ import {
   Package,
   FileText,
   ShoppingCart,
-  BookOpen,
-  CalendarCheck,
-  ClipboardList,
-  Award,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -37,7 +33,8 @@ interface SidebarItem {
   title: string;
   icon: React.ElementType;
   path: string;
-  permission: string;
+  // Change permission to be an array of strings
+  permission: string[];
   subItems?: SidebarItem[];
 }
 
@@ -47,32 +44,56 @@ const navItems: SidebarItem[] = [
     title: "Dashboard",
     icon: LayoutDashboard,
     path: "/dashboard",
-    permission: "admin",
+    permission: ["admin"], // Now an array
   },
   {
     title: "HR",
     icon: Users,
     path: "/hr",
-    permission: "hr",
+    permission: ["hr manager", "admin"], // Now an array
     subItems: [
-      { title: "Employees", path: "#hr-employees", permission: "hr" },
-      { title: "Attendance", path: "#hr-attendance", permission: "hr" },
-      { title: "Recruitment", path: "#hr-recruitment", permission: "hr" },
+      { title: "Employees", path: "#hr-employees", permission: ["hr manager",] },
+      {
+        title: "Attendance",
+        path: "#hr-attendance",
+        permission: ["hr manager",],
+      },
+      {
+        title: "Recruitment",
+        path: "#hr-recruitment",
+        permission: ["hr manager", ],
+      },
       {
         title: "Performance Management",
         path: "#hr-performance",
-        permission: "hr",
+        permission: ["hr manager"],
       },
       {
         title: "Training & Development",
         path: "#hr-training",
-        permission: "hr",
+        permission: ["hr manager"],
         subItems: [
-        { title: "Programs", path: "#hr-training-programs", permission: "hr" },
-        { title: "Sessions", path: "#hr-training-sessions", permission: "hr" },
-        { title: "Enrollments", path: "#hr-training-enrollments", permission: "hr" },
-        { title: "Certifications", path: "#hr-training-certifications", permission: "hr" },
-      ],
+          {
+            title: "Programs",
+            path: "#hr-training-programs",
+            permission: ["hr manager"],
+          },
+          {
+            title: "Sessions",
+            path: "#hr-training-sessions",
+            permission: ["hr manager"],
+          },
+          {
+            title: "Enrollments",
+            path: "#hr-training-enrollments",
+            permission: ["hr manager"],
+          },
+          {
+            title: "Certifications",
+            path: "#hr-training-certifications",
+            permission: ["hr manager"],
+          },
+        ],
       },
     ],
   },
@@ -80,54 +101,86 @@ const navItems: SidebarItem[] = [
     title: "Payroll",
     icon: CreditCard,
     path: "/payroll",
-    permission: "hr",
+    permission: ["hr manager", "accounting", "admin"], // Now an array with both permissions
     subItems: [
-      { title: "Employees", path: "#employees", permission: "hr" },
-      { title: "Salary Setup", path: "#salary-setup", permission: "hr" },
-      { title: "Deductions", path: "#deductions", permission: "hr" },
-      { title: "Tax Tables", path: "#tax-tables", permission: "hr" },
-      { title: "Payroll Period", path: "#payroll-period", permission: "hr" },
-      { title: "Process Payroll", path: "#process-payroll", permission: "hr" },
-      { title: "Payslips", path: "#payslips", permission: "hr" },
-      { title: "Compliance Reports", path: "#reports", permission: "hr" },
+      {
+        title: "Employees",
+        path: "#employees",
+        permission: ["hr manager", "accounting"],
+      },
+      {
+        title: "Salary Setup",
+        path: "#salary-setup",
+        permission: ["hr manager", "accounting"],
+      },
+      {
+        title: "Deductions",
+        path: "#deductions",
+        permission: ["hr manager", "accounting"],
+      },
+      {
+        title: "Tax Tables",
+        path: "#tax-tables",
+        permission: ["hr manager", "accounting"],
+      },
+      {
+        title: "Payroll Period",
+        path: "#payroll-period",
+        permission: ["hr manager", "accounting"],
+      },
+      {
+        title: "Process Payroll",
+        path: "#process-payroll",
+        permission: ["hr manager", "accounting"],
+      },
+      {
+        title: "Payslips",
+        path: "#payslips",
+        permission: ["hr manager", "accounting"],
+      },
+      {
+        title: "Compliance Reports",
+        path: "#reports",
+        permission: ["hr manager", "accounting"],
+      },
     ],
   },
-  { title: "Sales", icon: ShoppingCart, path: "/sales", permission: "sales" },
+  { title: "Sales", icon: ShoppingCart, path: "/sales", permission: ["sales", "admin"] },
   {
     title: "Accounting",
     icon: DollarSign,
     path: "/accounting",
-    permission: "accounting",
+    permission: ["accounting", "admin"],
     subItems: [
       {
         title: "General Ledger",
         path: "#accounting-general-ledger",
-        permission: "accounting",
+        permission: ["accounting", ],
       },
       {
         title: "Currencies",
         path: "#accounting-currencies",
-        permission: "accounting",
+        permission: ["accounting"],
       },
       {
         title: "Accounts Payable",
         path: "#accounting-payable",
-        permission: "accounting",
+        permission: ["accounting"],
       },
       {
         title: "Accounts Receivable",
         path: "#accounting-receivable",
-        permission: "accounting",
+        permission: ["accounting"],
       },
       {
         title: "Financial Reports",
         path: "#accounting-reports",
-        permission: "accounting",
+        permission: ["accounting"],
       },
       {
         title: "Tax Management",
         path: "#accounting-tax",
-        permission: "accounting",
+        permission: ["accounting"],
       },
     ],
   },
@@ -135,22 +188,22 @@ const navItems: SidebarItem[] = [
     title: "Procurement",
     icon: FileText,
     path: "/procurement",
-    permission: "procurement",
+    permission: ["procurement", "admin"],
     subItems: [
       {
         title: "Orders",
         path: "#procurement/orders",
-        permission: "procurement",
+        permission: ["procurement"],
       },
       {
         title: "Suppliers",
         path: "#procurement/suppliers",
-        permission: "procurement",
+        permission: ["procurement"],
       },
       {
         title: "Reports",
         path: "#procurement/reports",
-        permission: "procurement",
+        permission: ["procurement"],
       },
     ],
   },
@@ -158,36 +211,26 @@ const navItems: SidebarItem[] = [
     title: "Inventory",
     icon: Package,
     path: "/inventory",
-    permission: "inventory",
+    permission: ["inventory", "admin"],
     subItems: [
-      { title: "Stock", path: "/inventory/stock", permission: "inventory" },
+      { title: "Stock", path: "/inventory/stock", permission: ["inventory"] },
       {
         title: "Categories",
         path: "#inventory/categories",
-        permission: "inventory",
+        permission: ["inventory"],
       },
       {
         title: "Movements",
         path: "#inventory/movements",
-        permission: "inventory",
+        permission: ["inventory"],
       },
     ],
   },
-
   {
     title: "Settings",
     icon: Settings,
     path: "/settings",
-    permission: "admin",
-    subItems: [
-      { title: "General", path: "#settings/general", permission: "admin" },
-      { title: "Users", path: "#settings/users", permission: "admin" },
-      {
-        title: "Permissions",
-        path: "#settings/permissions",
-        permission: "admin",
-      },
-    ],
+    permission: ["admin"],
   },
 ];
 
@@ -201,26 +244,39 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, setOpenTab }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
-    const toggleSidebar = () => {
+  const toggleSidebar = () => {
     const newCollapsed = !collapsed;
     setCollapsed(newCollapsed);
-
     if (newCollapsed) {
-      // Close all submenus when sidebar is collapsed
       setExpandedItems({});
     }
   };
 
-  //helper function to toggle sub-item expansion
+  const filterNavItemsByPermission = (items: SidebarItem[]): SidebarItem[] => {
+    return items
+      .filter((item) => checkPermission(item.permission))
+      .map((item) => ({
+        ...item,
+        subItems: item.subItems
+          ? filterNavItemsByPermission(item.subItems)
+          : undefined,
+      }));
+  };
+
+  const filteredNavItems = useMemo(() => {
+    return filterNavItemsByPermission(navItems);
+  }, [checkPermission, navItems]); // Added navItems to dependency array
+
   const renderNavItems = (items: SidebarItem[], level = 0) => {
     return items.map((item) => {
-      if (!checkPermission(item.permission)) return null;
-
       const isExpanded = expandedItems[item.path || ""] || false;
       const hasSubItems = !!item.subItems?.length;
 
       return (
-        <div key={item.path || item.title} style={{ paddingLeft: `${level * 16}px` }}>
+        <div
+          key={item.path || item.title}
+          style={{ paddingLeft: `${level * 16}px` }}
+        >
           <Button
             variant={isActivePath(item.path || "") ? "secondary" : "ghost"}
             className={cn(
@@ -231,13 +287,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, setOpenTab }) => {
             onClick={() => {
               if (hasSubItems) {
                 if (item.path) {
-                  // Navigate regardless if subItems exist
                   setOpenTab(item.path);
                   setMobileMenuOpen(false);
                   navigate(item.path);
                 }
                 if (!collapsed) {
-                  // Also toggle expand if sidebar is not collapsed
                   setExpandedItems((prev) => ({
                     ...prev,
                     [item.path || item.title]: !prev[item.path || item.title],
@@ -249,11 +303,15 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, setOpenTab }) => {
                 navigate(item.path);
               }
             }}
-
           >
-            {item.icon && <item.icon className={cn("h-4 w-4", !collapsed && "mr-2")} />}
-            {!collapsed && <span className="flex-1 text-left">{item.title}</span>}
-            {hasSubItems && !collapsed &&
+            {item.icon && (
+              <item.icon className={cn("h-4 w-4", !collapsed && "mr-2")} />
+            )}
+            {!collapsed && (
+              <span className="flex-1 text-left">{item.title}</span>
+            )}
+            {hasSubItems &&
+              !collapsed &&
               (isExpanded ? (
                 <ChevronUp className="h-4 w-4 ml-2" />
               ) : (
@@ -261,7 +319,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, setOpenTab }) => {
               ))}
           </Button>
 
-          {hasSubItems && isExpanded && !collapsed && renderNavItems(item.subItems!, level + 1)}
+          {hasSubItems &&
+            isExpanded &&
+            !collapsed &&
+            renderNavItems(item.subItems!, level + 1)}
         </div>
       );
     });
@@ -287,7 +348,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, setOpenTab }) => {
     if (!path) return false;
     return location.pathname === path || location.hash === path;
   };
-
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -335,7 +395,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, setOpenTab }) => {
         </div>
         <div className="flex-1 overflow-auto py-2">
           <nav className="grid gap-1 px-2">
-            {renderNavItems(navItems)}
+            {renderNavItems(filteredNavItems)}
           </nav>
         </div>
         <div className="mt-auto border-t p-4">
@@ -343,12 +403,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, setOpenTab }) => {
             className={cn("flex items-center", collapsed && "justify-center")}
           >
             <Avatar className="h-8 w-8">
-              <AvatarImage src={user?.avatar} alt={user?.name} />
-              <AvatarFallback>{user?.name?.charAt(0) || "U"}</AvatarFallback>
+              <AvatarImage
+                src={`https://api.dicebear.com/7.x/initials/svg?seed=${user?.firstname} ${user?.surname}`}
+              />
+              <AvatarFallback>
+                {user?.firstname?.charAt(0) || "U"}
+              </AvatarFallback>
             </Avatar>
             {!collapsed && (
               <div className="ml-2">
-                <p className="text-sm font-medium">{user?.name}</p>
+                <p className="text-sm font-medium">
+                  {user?.firstname + " " + user?.surname}{" "}
+                </p>
                 <p className="text-xs text-muted-foreground">{user?.role}</p>
               </div>
             )}
@@ -400,68 +466,62 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, setOpenTab }) => {
               </Button>
             </div>
             <nav className="grid gap-1 p-4">
-              {navItems.map(
-                (item) =>
-                  checkPermission(item.permission) && (
-                    <div key={item.path}>
-                      <Button
-                        variant={
-                          isActivePath(item.path) ? "secondary" : "ghost"
-                        }
-                        className="justify-start h-10 w-full"
-                        onClick={() => {
-                          if (item.subItems) {
-                            toggleItemExpand(item.path);
-                          } else {
-                            // handleNavigation(item.path);
-                            navigate(`#${item.path}`);
-                          }
-                        }}
-                      >
-                        <item.icon className="h-4 w-4 mr-2" />
-                        <span className="flex-1 text-left">{item.title}</span>
-                        {item.subItems &&
-                          (expandedItems[item.path] ? (
-                            <ChevronUp className="h-4 w-4 ml-2" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4 ml-2" />
-                          ))}
-                      </Button>
+              {filteredNavItems.map((item) => (
+                <div key={item.path}>
+                  <Button
+                    variant={isActivePath(item.path) ? "secondary" : "ghost"}
+                    className="justify-start h-10 w-full"
+                    onClick={() => {
+                      if (item.subItems) {
+                        toggleItemExpand(item.path);
+                      } else {
+                        navigate(item.path);
+                        setMobileMenuOpen(false);
+                      }
+                    }}
+                  >
+                    {item.icon && <item.icon className="h-4 w-4 mr-2" />}
+                    <span className="flex-1 text-left">{item.title}</span>
+                    {item.subItems &&
+                      (expandedItems[item.path] ? (
+                        <ChevronUp className="h-4 w-4 ml-2" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 ml-2" />
+                      ))}
+                  </Button>
 
-                      {item.subItems && expandedItems[item.path] && (
-                        <div className="ml-6 mt-1 mb-2 space-y-1">
-                          {item.subItems.map(
-                            (subItem) =>
-                              checkPermission(subItem.permission) && (
-                                <Button
-                                  key={subItem.path}
-                                  variant={
-                                    location.pathname === subItem.path
-                                      ? "secondary"
-                                      : "ghost"
-                                  }
-                                  className="justify-start h-8 w-full text-sm pl-4"
-                                  onClick={() => handleNavigation(subItem.path)}
-                                >
-                                  {subItem.title}
-                                </Button>
-                              )
-                          )}
-                        </div>
-                      )}
+                  {item.subItems && expandedItems[item.path] && (
+                    <div className="ml-6 mt-1 mb-2 space-y-1">
+                      {item.subItems.map((subItem) => (
+                        <Button
+                          key={subItem.path}
+                          variant={
+                            location.pathname === subItem.path
+                              ? "secondary"
+                              : "ghost"
+                          }
+                          className="justify-start h-8 w-full text-sm pl-4"
+                          onClick={() => {
+                            handleNavigation(subItem.path);
+                          }}
+                        >
+                          {subItem.title}
+                        </Button>
+                      ))}
                     </div>
-                  )
-              )}
+                  )}
+                </div>
+              ))}
               <Separator className="my-2" />
               <div className="flex items-center p-2">
                 <Avatar className="h-8 w-8">
                   <AvatarImage src={user?.avatar} alt={user?.name} />
                   <AvatarFallback>
-                    {user?.name?.charAt(0) || "U"}
+                    {user?.firstname?.charAt(0) || "U"}
                   </AvatarFallback>
                 </Avatar>
                 <div className="ml-2">
-                  <p className="text-sm font-medium">{user?.name}</p>
+                  <p className="text-sm font-medium">{user?.firstname}</p>
                   <p className="text-xs text-muted-foreground">{user?.role}</p>
                 </div>
               </div>

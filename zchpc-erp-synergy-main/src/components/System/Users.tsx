@@ -24,8 +24,7 @@ import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UserPlus, Search, Edit, Trash2, User, Badge } from "lucide-react";
 
-export default function Users({setAddUser}) {
-  const [users, setUsers] = useState([]);
+export default function Users({setAddUser, users}) {
   const [searchTerm, setSearchTerm] = useState("");
   
    const getStatusBadge = (status: boolean) => {

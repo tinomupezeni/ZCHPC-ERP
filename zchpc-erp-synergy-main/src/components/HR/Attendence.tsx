@@ -137,7 +137,7 @@ const Attendance = () => {
                     setCurrentPage(1);
                   }}
                 >
-                  {departments.map((dept) => (
+                  {departments?.map((dept) => (
                     <option key={dept} value={dept}>{dept}</option>
                   ))}
                 </select>
@@ -192,8 +192,8 @@ const Attendance = () => {
                     <p className="mt-2 text-sm text-gray-500">Loading attendance records...</p>
                   </td>
                 </tr>
-              ) : currentItems.length > 0 ? (
-                currentItems.map((record) => (
+              ) : currentItems?.length > 0 ? (
+                currentItems?.map((record) => (
                   <tr key={`${record.employeeId}-${record.date}`} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">

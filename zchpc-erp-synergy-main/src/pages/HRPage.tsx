@@ -1,7 +1,7 @@
 import { UserPlus, DollarSign, SkipBack } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import HrDashboard from "@/components/HR/HrDashboard";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Payroll from "@/components/Payroll/PayrollDashboard";
 import Employees from "@/components/HR/employees/Employees";
 import Attendance from "@/components/HR/Attendence";
@@ -10,6 +10,7 @@ import TrainingProgramsPage from "@/components/HR/training_development/TrainingP
 import TrainingSessionsPage from "@/components/HR/training_development/TrainingSessions";
 import TrainingEnrollmentsPage from "@/components/HR/training_development/TrainingEnrollments";
 import TrainingCertificationsPage from "@/components/HR/training_development/TrainingCertifications";
+import { Card } from "@/components/ui/card";
 
 // HRPage.tsx
 interface HRPageProps {
@@ -17,6 +18,18 @@ interface HRPageProps {
 }
 
 const HRPage = ({ openTab }: HRPageProps) => {
+  const [today, setToday] = useState(""); // Add this state for the date
+
+  useEffect(() => {
+    const todayDate = new Date();
+    const options = {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    };
+    setToday(todayDate.toLocaleDateString("en-US", options));
+  }, []); // Initialize today with the current date
   const renderContent = () => {
     switch (openTab) {
       case "#hr-payroll":
@@ -30,7 +43,7 @@ const HRPage = ({ openTab }: HRPageProps) => {
       case "#hr-training-programs":
         return <TrainingProgramsPage />;
       case "#hr-training-sessions":
-        return  <TrainingSessionsPage />;
+        return <TrainingSessionsPage />;
       case "#hr-training-enrollments":
         return <TrainingEnrollmentsPage />;
       case "#hr-training-certifications":
@@ -41,15 +54,26 @@ const HRPage = ({ openTab }: HRPageProps) => {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Human Resources</h1>
-          <p className="text-muted-foreground">
-            Manage employees, departments and recruitment
-          </p>
+    <div className="space-y-4 animate-fade-in">
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              Human Resources
+            </h1>
+            <p className="text-muted-foreground">
+              Manage employees, departments and recruitment
+            </p>
+          </div>
         </div>
+        <Card className="subtle-shadow flex items-center p-4">
+          <div className="text-right">
+            <p className="text-xl font-semibold text-primary">{today}</p>
+            <p className="text-sm text-muted-foreground">Current Date</p>
+          </div>
+        </Card>
       </div>
+      <hr />
       {renderContent()}
     </div>
   );

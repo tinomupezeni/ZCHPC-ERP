@@ -4,37 +4,38 @@ import { useAuth } from '@/contexts/AuthContext';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredPermission?: string;
+  requiredPermission?: string[];
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
   children, 
   requiredPermission 
 }) => {
-  const { isAuthenticated, user, loading, checkPermission } = useAuth();
+  const { isAuthenticated, user, isLoading, checkPermission } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      // Redirect to login if not authenticated
-      navigate('/login', { 
-        state: { from: location.pathname },
-        replace: true
-      });
-    } else if (
-      !loading && 
-      isAuthenticated && 
-      requiredPermission && 
-      !checkPermission(requiredPermission)
-    ) {
-      // Redirect to dashboard if authenticated but doesn't have permission
-      navigate('/dashboard', { replace: true });
-    }
-  }, [loading, isAuthenticated, navigate, location, requiredPermission, checkPermission]);
+  if (isLoading) return; // wait for auth check to finish
+console.log(user);
 
-  // Show nothing while checking auth
-  if (loading) {
+  // If still no user after isLoading, redirect
+  if (!user) {
+    navigate('/login', {
+      state: { from: location.pathname },
+      replace: true,
+    });
+    return;
+  }
+
+  // If permission is required but user doesn't have it
+  if (requiredPermission && !checkPermission(requiredPermission)) {
+    user?.role === "admin" ? navigate("/dashboard") : navigate("/hr");
+  }
+}, [isLoading, user, requiredPermission, navigate, location.pathname]);
+
+  // Render a isLoading spinner while the auth status is being determined
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-pulse-light">
@@ -64,12 +65,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
-  // If we have permission requirements and user doesn't have it, show nothing
-  if (requiredPermission && !checkPermission(requiredPermission)) {
-    return null;
-  }
-
-  // Otherwise render children
+  // If authenticated and has permission (or no permission is required), render children
+  // The useEffect handles all redirect cases, so we only need to return the children here
   return <>{children}</>;
 };
 

@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'erp',
     'rest_framework',
+     'rest_framework_simplejwt',
     'corsheaders',
     'django_browser_reload',
 ]
@@ -59,6 +60,12 @@ MIDDLEWARE = [
 ]
 CORS_ALLOW_ALL_ORIGINS = True
 ROOT_URLCONF = 'erp_project.urls'
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    )
+}
 
 TEMPLATES = [
     {
@@ -182,3 +189,27 @@ STATIC_URL = '/static/'
 # ]
 
 AUTH_USER_MODEL = 'erp.CustomUser'
+AUTH_USER_MODEL = 'erp.CustomUser'
+# This is a key setting for email-based login
+ACCOUNT_AUTHENTICATION_METHOD = 'email'
+ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_UNIQUE_EMAIL = True
+ACCOUNT_USERNAME_REQUIRED = False
+
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=1),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
+    "TOKEN_TYPE_CLAIM": "token_type",
+    "JTI_CLAIM": "jti",
+}
+
+AUTHENTICATION_BACKENDS = [
+    'erp.authentication.EmailBackend',  # <-- Adjust import path
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+

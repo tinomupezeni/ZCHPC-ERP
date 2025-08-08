@@ -1,33 +1,49 @@
-
-import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3, Lock, Mail } from 'lucide-react';
+import { useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { BarChart3, Lock, Mail } from "lucide-react";
 
 const LoginPage = () => {
-  const [email, setEmail] = useState('admin@zchpc.com');
-  const [password, setPassword] = useState('admin');
+  // Use 'email' for consistency with the backend and UI labels
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  
-  // Get the route the user was trying to access
-  const from = (location.state as any)?.from || '/dashboard';
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     try {
+      // The `login` function is async, so we `await` its result.
+      // It returns a boolean indicating success or failure.
       const success = await login(email, password);
+
       if (success) {
-        navigate(from, { replace: true });
+        console.log(user);
+
+        // Redirect to the page they were trying to access or default to dashboard
+        user?.role === "admin" ? navigate("/dashboard") : navigate("/hr");
       }
+      // If login fails, `useAuth` handles the toast and returns false,
+      // so we don't need to do anything here.
+    } catch (error) {
+      // This catch block will only execute for unexpected errors, not API login failures,
+      // because the `login` function handles its own errors and returns false.
+      console.error("An unexpected error occurred during login:", error);
     } finally {
       setIsSubmitting(false);
     }
@@ -42,10 +58,14 @@ const LoginPage = () => {
               <BarChart3 className="h-8 w-8" />
             </div>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">ZCHPC ERP System</h1>
-          <p className="mt-2 text-muted-foreground">Sign in to access your dashboard</p>
+          <h1 className="text-3xl font-bold tracking-tight">
+            ZCHPC ERP System
+          </h1>
+          <p className="mt-2 text-muted-foreground">
+            Sign in to access your dashboard
+          </p>
         </div>
-        
+
         <Card className="subtle-shadow">
           <CardHeader>
             <CardTitle>Sign In</CardTitle>
@@ -61,7 +81,7 @@ const LoginPage = () => {
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="email"
-                    type="email"
+                    type="email" // Use type="email" for better browser validation and keyboard
                     placeholder="name@company.com"
                     className="pl-10"
                     value={email}
@@ -73,7 +93,14 @@ const LoginPage = () => {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password">Password</Label>
-                  <Button type="button" variant="link" className="h-auto p-0 text-xs" onClick={() => alert('Demo credentials: admin@zchpc.com / admin')}>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="h-auto p-0 text-xs"
+                    onClick={() =>
+                      alert("Demo credentials: admin@zchpc.com / admin")
+                    }
+                  >
                     Need Help?
                   </Button>
                 </div>
@@ -92,20 +119,12 @@ const LoginPage = () => {
               </div>
             </CardContent>
             <CardFooter>
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Signing in...' : 'Sign In'}
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? "Signing in..." : "Sign In"}
               </Button>
             </CardFooter>
           </form>
         </Card>
-        
-        <div className="text-center text-sm text-muted-foreground">
-          <p>For demo purposes, use: admin@zchpc.com / admin</p>
-        </div>
       </div>
     </div>
   );

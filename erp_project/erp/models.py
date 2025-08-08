@@ -4,6 +4,23 @@ from django.db import models
 from django.utils import timezone
 from django.core.validators import MinValueValidator
 
+# *******************
+# Departments
+# *******************
+
+class Department(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True, null=True)
+    department_head = models.ForeignKey('Employees', on_delete=models.SET_NULL, null=True, blank=True, related_name='department_head')
+
+    class Meta:
+        verbose_name = "Department"
+        verbose_name_plural = "Departments"
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
 
 class CustomUser(AbstractUser):
     employeeid = models.CharField(max_length=10, unique=True, blank=True)

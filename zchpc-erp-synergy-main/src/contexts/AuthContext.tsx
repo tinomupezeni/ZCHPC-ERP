@@ -1,110 +1,114 @@
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import Server from "../server/Server";
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { toast } from 'sonner';
+// Create the context
+const AuthContext = createContext(null);
 
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  avatar?: string;
-  permissions: string[];
-}
+export const useAuth = () => useContext(AuthContext);
 
-interface AuthContextType {
-  user: User | null;
-  loading: boolean;
-  isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
-  checkPermission: (permission: string) => boolean;
-}
+// The AuthProvider component
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const navigate = useNavigate();
 
-const defaultUser: User = {
-  id: '1',
-  name: 'Admin User',
-  email: 'admin@zchpc.com',
-  role: 'Administrator',
-  avatar: '/assets/avatar.png',
-  permissions: ['admin', 'sales', 'accounting', 'procurement', 'hr', 'inventory']
-};
+  // The login function
+  const login = useCallback(async (email, password) => {
+    try {
+      const response = await Server.login(email, password);
+      const { access, refresh } = response.data;
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+      // Store tokens in localStorage
+      localStorage.setItem("access_token", access);
+      localStorage.setItem("refresh_token", refresh);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Check for stored auth token
-    const storedUser = localStorage.getItem('zchpc_user');
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (error) {
-        console.error('Failed to parse stored user data:', error);
-        localStorage.removeItem('zchpc_user');
-      }
+      // Fetch the user details after successful login
+      const userResponse = await Server.fetchUserDetailsFromToken();
+      setUser(userResponse.data);
+      setIsAuthenticated(true);
+      toast.success("Login successful!");
+      return true;
+    } catch (error) {
+      console.error("Login failed:", error);
+      toast.error("Login failed. Please check your credentials.");
+      return false;
     }
-    setLoading(false);
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
-    setLoading(true);
-    try {
-      // In a real app, this would be an API call
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // For demo purposes, any email with admin@zchpc.com and password "admin" will work
-      if (email === 'admin@zchpc.com' && password === 'admin') {
-        setUser(defaultUser);
-        localStorage.setItem('zchpc_user', JSON.stringify(defaultUser));
-        toast.success('Login successful');
-        return true;
+  // The logout function
+  const logout = useCallback(() => {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    setUser(null);
+    setIsAuthenticated(false);
+    toast.info("Logged out.");
+    navigate("/login", { replace: true });
+  }, [navigate]);
+
+  // Check for stored tokens on component mount
+  useEffect(() => {
+    const access_token = localStorage.getItem("access_token");
+
+    const checkToken = async () => {
+      if (access_token) {
+        try {
+          const userResponse = await Server.fetchUserDetailsFromToken();
+          console.log("userResponse:", userResponse);
+          
+          setUser(userResponse.data);
+          setIsAuthenticated(true);
+        } catch (error) {
+          // Token is invalid or expired, log out the user
+          console.error("Token validation failed:", error);
+          logout();
+        } finally {
+          setIsLoading(false);
+        }
       } else {
-        toast.error('Invalid credentials');
+        // No token, so the user is not authenticated
+        setIsLoading(false);
+      }
+    };
+
+    checkToken();
+  }, []);
+
+  // This is the corrected checkPermission function
+  const checkPermission = useCallback(
+    (permissions) => {
+      if (!user) {
         return false;
       }
-    } catch (error) {
-      console.error('Login error:', error);
-      toast.error('Login failed. Please try again.');
+      const userRole = user.role?.toLowerCase();
+
+      if (typeof permissions === "string") {
+        return userRole === permissions.toLowerCase();
+      }
+      if (Array.isArray(permissions)) {
+        return permissions.some((p) => userRole === p.toLowerCase());
+      }
       return false;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('zchpc_user');
-    toast.success('Logged out successfully');
-  };
-
-  const checkPermission = (permission: string): boolean => {
-    if (!user) return false;
-    return user.permissions.includes(permission);
-  };
-
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        isAuthenticated: !!user,
-        login,
-        logout,
-        checkPermission
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+    },
+    [user]
   );
-};
 
-export const useAuth = (): AuthContextType => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  const value = {
+    user,
+    isAuthenticated,
+    isLoading,
+    login,
+    checkPermission,
+    logout,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

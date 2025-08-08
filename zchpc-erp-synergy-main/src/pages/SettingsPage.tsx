@@ -42,40 +42,6 @@ import Server from "@/server/Server";
 import EditUserModal from "@/components/EditUserModal";
 import Users from "@/components/System/Users";
 
-// Department data
-const departments = [
-  { id: "1", name: "Management", employees: 3, manager: "Admin User" },
-  { id: "2", name: "Sales", employees: 12, manager: "Takudzwa Nyamakanga" },
-  { id: "3", name: "Human Resources", employees: 5, manager: "Sarah Mambongo" },
-  { id: "4", name: "Operations", employees: 15, manager: "Robert Kawa" },
-  { id: "5", name: "Finance", employees: 8, manager: "Emily Munetsi" },
-  { id: "6", name: "Purchasing", employees: 6, manager: "Michael Mugadza" },
-];
-
-// Role data
-const roles = [
-  { id: "1", name: "Administrator", users: 1, permissions: "Full Access" },
-  { id: "2", name: "Sales Manager", users: 1, permissions: "Sales, Dashboard" },
-  { id: "3", name: "HR Manager", users: 1, permissions: "HR, Dashboard" },
-  {
-    id: "4",
-    name: "Inventory Manager",
-    users: 1,
-    permissions: "Inventory, Dashboard",
-  },
-  {
-    id: "5",
-    name: "Accountant",
-    users: 1,
-    permissions: "Accounting, Dashboard",
-  },
-  {
-    id: "6",
-    name: "Procurement Officer",
-    users: 1,
-    permissions: "Procurement, Dashboard",
-  },
-];
 
 const SettingsPage = () => {
   // const { user } = useAuth();
@@ -85,6 +51,8 @@ const SettingsPage = () => {
   const [editUserModal, setEditUserModal] = useState(false);
   const [addDepartment, setAddDepartment] = useState(false);
   const [editEmployeeId, setEditEmployeeId] = useState('')
+  const [departments, setDepartments] = useState([]);
+  const [roles, setRoles] = useState([]);
 
   // Settings state
   const [settings, setSettings] = useState({
@@ -103,6 +71,17 @@ const SettingsPage = () => {
     toast.success(`Setting updated successfully`);
   };
 
+  const fetchDepartments = () => {
+    Server.fetchDepartments()
+      .then((response) => {
+        setDepartments(response.data);
+      })
+      .catch((error) => {
+        console.error("Failed to fetch departments:", error);
+        toast.error("Failed to load departments.");
+      });
+  };
+
  
   const fetchUsers = () => {
     Server.fetchUser()
@@ -117,6 +96,7 @@ const SettingsPage = () => {
 
   useEffect(() => {
     fetchUsers();
+    fetchDepartments();
   }, []);
 
   return (
@@ -140,7 +120,7 @@ const SettingsPage = () => {
         </TabsList>
 
         <TabsContent value="users">
-          <Users setAddUser={setAddUser} />
+          <Users setAddUser={setAddUser} users={users} />
         </TabsContent>
 
         <TabsContent value="departments">
