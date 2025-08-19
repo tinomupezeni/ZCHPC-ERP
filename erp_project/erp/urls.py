@@ -10,6 +10,8 @@ from .view.registeruser import *
 from .view.admin_view import *
 from .view.department_view import DepartmentViewSet
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+# Correct import path for the jobs list/create view
+from .view.jobs_view import JobListCreate, JobDetail, JobToggleStatus
 
 router = DefaultRouter()
 router.register(r'zig-rates', ZiGRateToUSDViewSet)
@@ -72,6 +74,10 @@ urlpatterns = [
 
 # HR Dashboard-specific URL
     path('hr-dashboard/', HrDashboardView.as_view(), name='hr-dashboard'),
+    
+    # job detail & status
+    path('jobs/<int:pk>/', JobDetail.as_view(), name='job-detail'),
+    path('jobs/<int:pk>/toggle_status/', JobToggleStatus.as_view(), name='job-toggle-status'),
     
 
 ]

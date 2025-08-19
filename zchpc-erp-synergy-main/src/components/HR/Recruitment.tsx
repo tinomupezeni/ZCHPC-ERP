@@ -15,6 +15,8 @@ import {
   X,
 } from "lucide-react";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
+import Server from "@/server/Server";
+import { API_BASE_URL } from "@/server/api";
 
 // Define interfaces for your data structures
 interface JobListing {
@@ -291,6 +293,7 @@ const EditJobModal = ({ isOpen, job, onClose, onSave }: {
   );
 };
 
+
 const Recruitment = () => {
   // Modal state
   const [showEditJobModal, setShowEditJobModal] = useState(false);
@@ -308,8 +311,10 @@ const Recruitment = () => {
   const [selectedDepartment, setSelectedDepartment] = useState("All Departments");
   const [selectedStatus, setSelectedStatus] = useState("All Statuses");
   const [showPostJobModal, setShowPostJobModal] = useState(false);
-  // Local notification message (e.g., "Job closed")
   const [notification, setNotification] = useState<string | null>(null);
+
+  const [showApplicantsModal, setShowApplicantsModal] = useState(false);
+  const [applicantsForJob, setApplicantsForJob] = useState<Candidate[]>([]);
 
   useEffect(() => {
     if (notification) {
@@ -323,87 +328,6 @@ const Recruitment = () => {
     fetchCandidates();
     fetchDepartments();
   }, []);
-
-  const fetchJobListings = async () => {
-    setLoading(true);
-    try {
-      const response = await new Promise<{ data: JobListing[] }>((resolve) =>
-        setTimeout(
-          () =>
-            resolve({
-              data: [
-                {
-                  id: 1,
-                  title: "Software Engineer",
-                  department: "IT",
-                  status: "Open",
-                  postedDate: "2023-05-15",
-                  applicants: 12,
-                  description: "Develop and maintain software applications. This includes designing, coding, testing, and debugging.",
-                  requirements: "Proficiency in React, Node.js, and databases (e.g., PostgreSQL). Strong problem-solving skills and 3+ years of experience.",
-                  location: "Harare, Zimbabwe",
-                  salaryRange: "$30,000 - $50,000",
-                },
-                {
-                  id: 2,
-                  title: "HR Manager",
-                  department: "HR",
-                  status: "Closed",
-                  postedDate: "2023-04-10",
-                  applicants: 8,
-                  description: "Manage human resources operations, including recruitment, onboarding, employee relations, and compliance.",
-                  requirements: "5+ years of HR experience, strong communication skills, knowledge of labor laws.",
-                  location: "Bulawayo, Zimbabwe",
-                  salaryRange: "$40,000 - $60,000",
-                },
-                {
-                  id: 3,
-                  title: "Marketing Specialist",
-                  department: "Marketing",
-                  status: "Open",
-                  postedDate: "2023-06-01",
-                  applicants: 5,
-                  description: "Plan and execute marketing campaigns across various channels, analyze market trends, and report on campaign performance.",
-                  requirements: "Experience with digital marketing, creative thinking, excellent written and verbal communication.",
-                  location: "Harare, Zimbabwe",
-                  salaryRange: "$25,000 - $40,000",
-                },
-                {
-                  id: 4,
-                  title: "Finance Analyst",
-                  department: "Finance",
-                  status: "Open",
-                  postedDate: "2023-06-15",
-                  applicants: 7,
-                  description: "Analyze financial data, prepare reports, develop financial models, and assist with budgeting and forecasting.",
-                  requirements: "CFA or ACCA qualification, strong analytical skills, proficiency in Excel and financial software.",
-                  location: "Harare, Zimbabwe",
-                  salaryRange: "$35,000 - $55,000",
-                },
-                {
-                  id: 5,
-                  title: "Customer Support",
-                  department: "Operations",
-                  status: "Open",
-                  postedDate: "2023-06-20",
-                  applicants: 15,
-                  description: "Provide excellent customer service through various channels, resolve customer inquiries and complaints.",
-                  requirements: "Good communication skills, problem-solving abilities, patience, and a positive attitude.",
-                  location: "Harare, Zimbabwe",
-                  salaryRange: "$18,000 - $25,000",
-                },
-              ],
-            }),
-          1000
-        )
-      );
-      setJobListings(response.data);
-    } catch (error) {
-      console.error("Error fetching job listings:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const fetchCandidates = async () => {
     setLoading(true);
@@ -482,72 +406,154 @@ const Recruitment = () => {
     ]);
   };
 
-  const handleSaveNewJob = (newJobData: Omit<JobListing, 'id' | 'applicants' | 'postedDate' | 'status'>) => {
-    const newJob: JobListing = {
-      ...newJobData,
-      id: Date.now(),
-      applicants: 0,
-      postedDate: new Date().toISOString().slice(0, 10),
-      status: "Open",
-    };
-    setJobListings((prevJobs) => [newJob, ...prevJobs]);
-    if (!departments.includes(newJob.department)) {
-      setDepartments((prevDepartments) => [...prevDepartments, newJob.department]);
+  const handleSaveNewJob = async (newJobData: Omit<JobListing, 'id' | 'applicants' | 'postedDate' | 'status'>) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/jobs/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: newJobData.title,
+          department: newJobData.department,
+          description: newJobData.description,
+          requirements: newJobData.requirements,
+          location: newJobData.location,
+          salary_range: newJobData.salaryRange, // Use snake_case for the API
+          is_active: true, // New jobs are "Open"
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      // After successfully posting, refetch the jobs to update the list
+      fetchJobListings();
+      setNotification("Job posted successfully! 🎉");
+
+    } catch (error) {
+      console.error("Error posting new job:", error);
+      setNotification("Error posting job. Please try again.");
     }
   };
 
-  // Save edited job
-  const handleSaveEditedJob = (updatedJob: JobListing) => {
-    setJobListings(prev => prev.map(j => j.id === updatedJob.id ? updatedJob : j));
-    setShowEditJobModal(false);
-    setJobBeingEdited(null);
+  const handleSaveEditedJob = async (updatedJob: JobListing) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/jobs/${updatedJob.id}/`, {
+        method: 'PUT', // Use PUT to update the entire resource
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: updatedJob.title,
+          department: updatedJob.department,
+          description: updatedJob.description,
+          requirements: updatedJob.requirements,
+          location: updatedJob.location,
+          salary_range: updatedJob.salaryRange,
+          is_active: updatedJob.status === "Open", // Map "Open"/"Closed" to is_active
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      // Refetch the job listings to ensure the UI is in sync
+      fetchJobListings();
+      setShowEditJobModal(false);
+      setJobBeingEdited(null);
+      setNotification("Job updated successfully!");
+
+    } catch (error) {
+      console.error("Error updating job:", error);
+      setNotification("Error updating job. Please try again.");
+    }
+  };
+
+  const handleToggleJobStatus = async (jobId, currentStatus) => {
+    try {
+      const newStatus = currentStatus === "Open" ? "Closed" : "Open";
+      const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/`, {
+        method: 'PATCH', // Use PATCH for partial updates
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          is_active: newStatus === "Open",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Update the local state to reflect the change
+      setJobListings((prevJobs) =>
+        prevJobs.map((job) =>
+          job.id === jobId
+            ? { ...job, status: newStatus }
+            : job
+        )
+      );
+      setNotification(`Job status changed to ${newStatus}.`);
+
+    } catch (error) {
+      console.error("Error toggling job status:", error);
+      setNotification("Error changing job status. Please try again.");
+    }
   };
 
   const handleEditJob = (jobId: number) => {
-  const job = jobListings.find(j => j.id === jobId);
-  if (job) {
-    setJobBeingEdited(job);
-    setShowEditJobModal(true);
-  } else {
-    alert(`Job with ID ${jobId} not found.`);
-  }
-};
-
-  const handleViewJobDetails = (jobId: number) => {
     const job = jobListings.find(j => j.id === jobId);
     if (job) {
-      setJobDetails(job);
+      setJobBeingEdited(job);
+      setShowEditJobModal(true);
+    } else {
+      alert(`Job with ID ${jobId} not found.`);
+    }
+  };
+
+  const handleViewJobDetails = async (id: number) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/jobs/${id}/`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setJobDetails(data);
       setShowDetailsModal(true);
-    } else {
-      alert(`Job with ID ${jobId} not found.`);
+    } catch (err) {
+      console.error(err);
+      setNotification("Failed to load job details");
     }
   };
 
-
-
-  const handleViewApplicants = (jobId: number) => {
-    const job = jobListings.find(job => job.id === jobId);
-    if (job) {
-      setActiveTab("candidates");
-      setSearchTerm(job.title); // Auto-filter candidates by job title
-      setCurrentPage(1); // Reset pagination
-    } else {
-      alert(`Job with ID ${jobId} not found.`);
+  const handleViewApplicants = async (id: number) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/jobs/${id}/applicants/`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setApplicantsForJob(data);
+      setShowApplicantsModal(true);
+    } catch (err) {
+      console.error(err);
+      setNotification("Failed to load applicants");
     }
   };
 
-  const handleToggleJobStatus = (jobId: number, currentStatus: JobListing['status']) => {
-    setJobListings((prevJobs) =>
-      prevJobs.map((job) =>
-        job.id === jobId
-          ? { ...job, status: currentStatus === "Open" ? "Closed" : "Open" }
-          : job
-      )
-    );
-    setNotification(`Job ${currentStatus === "Open" ? "closed" : "opened"}`);
-  };
-
-  // --- End of activated functions ---
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const formatBackendJob = (job: any): JobListing => ({
+    id: job.id,
+    title: job.title,
+    department: job.department,
+    status: job.is_active ? "Open" : "Closed",
+    postedDate: job.posted_on?.slice(0, 10) ?? "",
+    applicants: job.applicants_count ?? 0,
+    description: job.description,
+    requirements: job.requirements,
+    location: job.location,
+    salaryRange: job.salary_range,
+  });
 
   const filteredJobs = jobListings.filter((job) => {
     const matchesSearch = job.title
@@ -665,6 +671,42 @@ const Recruitment = () => {
         );
     }
   };
+
+  const fetchJobListings = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/jobs/`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      const formatted: JobListing[] = data.map((job: any) => ({
+        id: job.id,
+        title: job.title,
+        department: job.department,
+        status: job.is_active ? "Open" : "Closed",
+        postedDate: job.posted_on?.slice(0, 10) ?? "",
+        applicants: job.applicants_count ?? 0,
+        description: job.description,
+        requirements: job.requirements,
+        location: job.location,
+        salaryRange: job.salary_range,
+      }));
+
+      setJobListings(formatted);
+    } catch (err) {
+      console.error("Error fetching job listings:", err);
+      setNotification("Failed to load jobs. Please refresh.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchJobListings();
+  }, []);
 
   return (
     <div className="p-6">

@@ -517,3 +517,18 @@ class TrainingCertification(models.Model):
     
     def __str__(self):
         return f"{self.employee} - {self.program}"
+    
+
+class Job(models.Model):
+    title = models.CharField(max_length=200)
+    department = models.CharField(max_length=100)
+    description = models.TextField()
+    requirements = models.TextField()
+    location = models.CharField(max_length=100, blank=True, null=True)
+    salary_range = models.CharField(max_length=100, blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    posted_on = models.DateTimeField(auto_now_add=True)
+    applicants_count = models.IntegerField(default=0)
+    
+    def __str__(self):
+        return self.title

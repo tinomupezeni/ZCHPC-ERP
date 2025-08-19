@@ -1,7 +1,7 @@
 // src/api.js
 import axios from 'axios';
 
-const API_BASE_URL = "http://127.0.0.1:8000/"; // Replace with your Django backend URL
+export const API_BASE_URL = "http://127.0.0.1:8000/"; // Replace with your Django backend URL
 
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -55,3 +55,7 @@ export const updateDeductionType = (id, data) => api.put(`deduction-types/${id}/
 export const deleteDeductionType = (id) => api.delete(`deduction-types/${id}/`);
 
 export const updateSalary = (id, data) => api.post(`update-employee-salary/${id}/`, data);
+
+// Recruitment / Job Posting APIs
+export const createJobPosting = (data) => api.post('jobs/', data);
+export const getJobPostings = () => api.get('jobs/');
