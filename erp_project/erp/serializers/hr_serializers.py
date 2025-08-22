@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ..models import TrainingCertification, TrainingEnrollment, TrainingProgram, TrainingSession
+from ..models import TrainingCertification, TrainingEnrollment, TrainingProgram, TrainingSession, AttendanceRecord
 from django.utils.timezone import now
 from django.utils import timezone
 
@@ -50,3 +50,39 @@ class CertificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = TrainingCertification
         fields = ['id', 'employee', 'program', 'issue_date', 'expiry_date', 'status']
+        
+
+class AttendanceRecordSerializer(serializers.ModelSerializer):
+    """Basic serializer matching the model fields."""
+    class Meta:
+        model = AttendanceRecord
+        fields = ['id', 'employee', 'date', 'time_in', 'time_out', 'job_number']
+
+class AttendanceRecordAPISerializer(serializers.ModelSerializer):
+    """
+    API-facing serializer that matches the frontend's expected keys.
+    - employeeName -> employee.get_full_name()
+    - employeeId -> job_number
+    - loginTime -> time_in
+    - logoutTime -> time_out
+    """
+    employeeName = serializers.SerializerMethodField()
+    employeeId = serializers.SerializerMethodField()
+    loginTime = serializers.TimeField(source='time_in', allow_null=True)
+    logoutTime = serializers.TimeField(source='time_out', allow_null=True)
+
+    class Meta:
+        model = AttendanceRecord
+        fields = ['id', 'employeeName', 'employeeId', 'date', 'loginTime', 'logoutTime']
+
+    def get_employeeName(self, obj):
+        try:
+            full_name = obj.employee.get_full_name()
+            return full_name if full_name else getattr(obj.employee, 'username', str(obj.employee_id))
+        except Exception:
+            return str(obj.employee_id)
+
+    def get_employeeId(self, obj):
+        # Frontend displays Job No under this key
+        return obj.job_number or ''
+

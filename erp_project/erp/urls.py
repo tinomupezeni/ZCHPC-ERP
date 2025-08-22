@@ -79,5 +79,10 @@ urlpatterns = [
     path('jobs/<int:pk>/', JobDetail.as_view(), name='job-detail'),
     path('jobs/<int:pk>/toggle_status/', JobToggleStatus.as_view(), name='job-toggle-status'),
     
+      # Attendance endpoints (match frontend calls)
+    path('all/attendance/', hr_view.attendance_list, name='attendance_list'),
+    path('delete/attendance/<int:pk>/', hr_view.attendance_delete, name='attendance_delete'),
+    path('upload/attendance/', hr_view.attendance_bulk_upload, name='attendance_bulk_upload'),
+    
 
 ]

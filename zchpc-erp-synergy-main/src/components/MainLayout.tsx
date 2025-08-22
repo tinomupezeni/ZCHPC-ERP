@@ -63,11 +63,11 @@ const navItems: SidebarItem[] = [
         path: "#hr-recruitment",
         permission: ["hr manager", ],
       },
-      {
-        title: "Performance Management",
-        path: "#hr-performance",
-        permission: ["hr manager"],
-      },
+    //  {
+    //     title: "Performance Management",
+    //     path: "#hr-performance",
+    //     permission: ["hr manager"],
+    //   }, 
       {
         title: "Training & Development",
         path: "#hr-training",

@@ -3,6 +3,7 @@ from django.db import models
 # In your models.py
 from django.utils import timezone
 from django.core.validators import MinValueValidator
+from django.contrib.auth import get_user_model
 
 # *******************
 # Departments
@@ -532,3 +533,23 @@ class Job(models.Model):
     
     def __str__(self):
         return self.title
+
+
+class AttendanceRecord(models.Model):
+    employee = models.ForeignKey(
+        get_user_model(), 
+        on_delete=models.CASCADE, 
+        related_name='attendance_records'
+    )
+    date = models.DateField()
+    time_in = models.TimeField(null=True, blank=True)
+    time_out = models.TimeField(null=True, blank=True)
+    job_number = models.CharField(max_length=50, blank=True)  # If you need a job number field
+    
+    class Meta:
+        unique_together = ['employee', 'date']
+        ordering = ['-date', 'employee__first_name']
+    
+    def __str__(self):
+        return f"{self.employee.get_full_name()} - {self.date}"
+

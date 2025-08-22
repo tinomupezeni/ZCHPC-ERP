@@ -22,14 +22,7 @@ interface TrainingProgramUpdateData {
 class Server {
 
   
-  static fetchAttendanceRecords() {
-    // return axios.get(`${api_url}attendance/`, {
-    //   headers: getAuthHeaders(),
-    // });
-    console.log("Fetching attendance records...");
-    
-    // throw new Error("Method not implemented.");
-  }
+  
   static login = (email, password) => {
     // This POST request should go to your login endpoint
     return axios.post(`${api_url}token/`, { username: email, password });
@@ -68,6 +61,26 @@ class Server {
   //   update user settings
   static updateSystemUSer = (data) => {
     return axios.post(`${api_url}update/user/`, data);
+  };
+
+   // fetch attendance records
+  static fetchAttendanceRecords = () => {
+    return axios.get(`${api_url}all/attendance/`);
+  };
+
+  // delete attendance record
+  static deleteAttendanceRecord = (id) => {
+    return axios.delete(`${api_url}delete/attendance/${id}/`);
+  };
+
+    // fetch biometric records
+  static fetchBiometricRecords = () => {
+    return axios.get(`${api_url}all/biometric/`);
+  };
+
+  // delete biometric record
+  static deleteBiometricRecord = (id) => {
+    return axios.delete(`${api_url}delete/biometric/${id}/`);
   };
 
   // static updatePayroll

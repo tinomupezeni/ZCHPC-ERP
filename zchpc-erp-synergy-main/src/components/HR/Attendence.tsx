@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Search, Calendar, MoreVertical, Filter, Download, ChevronDown, Clock, Check, X } from "lucide-react";
-import { Menu, MenuButton, MenuItem } from "@headlessui/react";
+import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import Server from "@/server/Server";
 
 const Attendance = () => {
@@ -60,11 +60,11 @@ const Attendance = () => {
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
   const exportToCSV = () => {
-    const headers = ["Name", "Employee ID", "Department", "Date", "Login Time", "Logout Time", "Status"];
+    const headers = ["Name", "Job No", "Date", "Time In", "Time Out"];
     const csvContent = [
       headers.join(","),
       ...filteredRecords.map(record => 
-        `"${record.employeeName}","${record.employeeId}","${record.department}","${record.date}","${record.loginTime}","${record.logoutTime}","${record.status}"`
+        `"${record.employeeName}","${record.employeeId}","${record.date}","${record.loginTime}","${record.logoutTime}"`
       )
     ].join("\n");
 
@@ -78,22 +78,9 @@ const Attendance = () => {
     document.body.removeChild(link);
   };
 
-  const getStatusBadge = (status) => {
-    switch(status) {
-      case "Present":
-        return <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 flex items-center gap-1"><Check className="h-3 w-3" /> Present</span>;
-      case "Late":
-        return <span className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800 flex items-center gap-1"><Clock className="h-3 w-3" /> Late</span>;
-      case "Absent":
-        return <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800 flex items-center gap-1"><X className="h-3 w-3" /> Absent</span>;
-      default:
-        return <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">{status}</span>;
-    }
-  };
-
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="flex justify-between items-center mb-6">
+    <div className="min-h-screen p-6 bg-gray-50">
+      <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Attendance Management</h1>
           <p className="text-sm text-gray-500">
@@ -103,23 +90,23 @@ const Attendance = () => {
         <div className="flex gap-3">
           <button
             onClick={exportToCSV}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-gray-700 transition-colors border border-gray-300 rounded-lg hover:bg-gray-100"
           >
-            <Download className="h-4 w-4" />
+            <Download className="w-4 h-4" />
             Export
           </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
+      <div className="mb-8 bg-white border border-gray-200 rounded-lg shadow-sm">
         <div className="p-4 border-b">
-          <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+          <div className="flex flex-col items-start gap-4 md:flex-row md:items-center">
             <div className="relative flex-1 w-full">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+              <Search className="absolute w-5 h-5 text-gray-400 transform -translate-y-1/2 left-3 top-1/2" />
               <input
                 type="text"
                 placeholder="Search by name or employee ID..."
-                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full py-2 pl-10 pr-4 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
@@ -130,22 +117,8 @@ const Attendance = () => {
             <div className="flex flex-wrap gap-2 w-full md:w-auto">
               <div className="relative">
                 <select 
-                  className="appearance-none border rounded-lg px-4 py-2 pr-8 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={selectedDepartment}
-                  onChange={(e) => {
-                    setSelectedDepartment(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                >
-                  {departments?.map((dept) => (
-                    <option key={dept} value={dept}>{dept}</option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              </div>
-              <div className="relative">
-                <select 
-                  className="appearance-none border rounded-lg px-4 py-2 pr-8 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                title="Time Range"
+                  className="px-4 py-2 pr-8 border rounded-lg appearance-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   value={timeRange}
                   onChange={(e) => setTimeRange(e.target.value)}
                 >
@@ -154,7 +127,7 @@ const Attendance = () => {
                   <option>This Month</option>
                   <option>Custom Range</option>
                 </select>
-                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <ChevronDown className="absolute w-4 h-4 text-gray-400 transform -translate-y-1/2 right-3 top-1/2" />
               </div>
             </div>
           </div>
@@ -164,30 +137,27 @@ const Attendance = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Employee
+                <th scope="col" className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">
+                  Name
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Department
+                <th scope="col" className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">
+                  Job No
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Date
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Time In/Out
+                <th scope="col" className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">
+                  Time In
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
+                <th scope="col" className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">
+                  Time Out
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-8 text-center">
+                  <td colSpan={5} className="px-6 py-8 text-center">
                     <Clock className="h-8 w-8 animate-spin mx-auto text-blue-600" />
                     <p className="mt-2 text-sm text-gray-500">Loading attendance records...</p>
                   </td>
@@ -197,21 +167,18 @@ const Attendance = () => {
                   <tr key={`${record.employeeId}-${record.date}`} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">
+                        <div className="flex items-center justify-center flex-shrink-0 w-10 h-10 font-medium text-blue-600 bg-blue-100 rounded-full">
                           {record.employeeName.split(' ').map(n => n[0]).join('')}
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900">
                             {record.employeeName}
                           </div>
-                          <div className="text-sm text-gray-500">
-                            ID: {record.employeeId}
-                          </div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {record.department}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {record.employeeId}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {new Date(record.date).toLocaleDateString('en-US', {
@@ -221,68 +188,19 @@ const Attendance = () => {
                         weekday: 'short'
                       })}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        <span className="font-medium">In:</span> {record.loginTime || '--:--'}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        <span className="font-medium">Out:</span> {record.logoutTime || '--:--'}
-                      </div>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {record.loginTime || '--:--'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {getStatusBadge(record.status)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <Menu as="div" className="relative inline-block text-left">
-                        <div>
-                          <MenuButton className="inline-flex justify-center w-full rounded-md px-2 py-1 text-sm font-medium text-gray-700 hover:bg-gray-100 focus:outline-none">
-                            <MoreVertical className="h-5 w-5 text-gray-400" />
-                          </MenuButton>
-                        </div>
-                        <Menu className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
-                          <MenuItem>
-                            {({ active }) => (
-                              <button
-                                className={`${
-                                  active ? 'bg-gray-100 text-gray-900' : 'text-gray-700'
-                                } group flex items-center w-full px-4 py-2 text-sm`}
-                              >
-                                View Details
-                              </button>
-                            )}
-                          </MenuItem>
-                          <MenuItem>
-                            {({ active }) => (
-                              <button
-                                className={`${
-                                  active ? 'bg-gray-100 text-gray-900' : 'text-gray-700'
-                                } group flex items-center w-full px-4 py-2 text-sm`}
-                              >
-                                Edit Record
-                              </button>
-                            )}
-                          </MenuItem>
-                          <MenuItem>
-                            {({ active }) => (
-                              <button
-                                className={`${
-                                  active ? 'bg-gray-100 text-gray-900' : 'text-gray-700'
-                                } group flex items-center w-full px-4 py-2 text-sm`}
-                              >
-                                Add Note
-                              </button>
-                            )}
-                          </MenuItem>
-                        </Menu>
-                      </Menu>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {record.logoutTime || '--:--'}
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="6" className="px-6 py-8 text-center">
+                  <td colSpan={5} className="px-6 py-8 text-center">
                     <div className="flex flex-col items-center justify-center">
-                      <Search className="h-12 w-12 text-gray-400" />
+                      <Search className="w-12 h-12 text-gray-400" />
                       <h3 className="mt-2 text-sm font-medium text-gray-900">No attendance records found</h3>
                       <p className="mt-1 text-sm text-gray-500">
                         {searchTerm ? "Try adjusting your search or filter" : "No records available for selected period"}
@@ -297,7 +215,7 @@ const Attendance = () => {
 
         {/* Pagination */}
         {filteredRecords.length > itemsPerPage && (
-          <div className="px-6 py-4 border-t flex items-center justify-between">
+          <div className="flex items-center justify-between px-6 py-4 border-t">
             <div className="text-sm text-gray-500">
               Showing <span className="font-medium">{indexOfFirstItem + 1}</span> to{" "}
               <span className="font-medium">
@@ -332,43 +250,6 @@ const Attendance = () => {
             </div>
           </div>
         )}
-      </div>
-
-      {/* Attendance Summary Section */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-6">
-        <h2 className="text-lg font-medium text-gray-800 mb-4">Attendance Summary</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-            <div className="text-sm font-medium text-blue-800">Total Present</div>
-            <div className="text-2xl font-bold text-blue-600 mt-1">
-              {filteredRecords.filter(r => r.status === "Present").length}
-            </div>
-            <div className="text-xs text-blue-500 mt-2">This period</div>
-          </div>
-          <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-100">
-            <div className="text-sm font-medium text-yellow-800">Late Arrivals</div>
-            <div className="text-2xl font-bold text-yellow-600 mt-1">
-              {filteredRecords.filter(r => r.status === "Late").length}
-            </div>
-            <div className="text-xs text-yellow-500 mt-2">This period</div>
-          </div>
-          <div className="bg-red-50 p-4 rounded-lg border border-red-100">
-            <div className="text-sm font-medium text-red-800">Absences</div>
-            <div className="text-2xl font-bold text-red-600 mt-1">
-              {filteredRecords.filter(r => r.status === "Absent").length}
-            </div>
-            <div className="text-xs text-red-500 mt-2">This period</div>
-          </div>
-          <div className="bg-green-50 p-4 rounded-lg border border-green-100">
-            <div className="text-sm font-medium text-green-800">On Time %</div>
-            <div className="text-2xl font-bold text-green-600 mt-1">
-              {filteredRecords.length > 0 
-                ? Math.round((filteredRecords.filter(r => r.status === "Present").length / filteredRecords.length) * 100)
-                : 0}%
-            </div>
-            <div className="text-xs text-green-500 mt-2">Attendance rate</div>
-          </div>
-        </div>
       </div>
     </div>
   );
