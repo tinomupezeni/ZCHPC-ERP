@@ -62,7 +62,6 @@ export const AuthProvider = ({ children }) => {
       if (access_token) {
         try {
           const userResponse = await Server.fetchUserDetailsFromToken();
-          console.log("userResponse:", userResponse);
           
           setUser(userResponse.data);
           setIsAuthenticated(true);

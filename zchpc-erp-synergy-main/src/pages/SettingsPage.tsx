@@ -41,6 +41,7 @@ import AddDepartment from "@/components/AddDepartment";
 import Server from "@/server/Server";
 import EditUserModal from "@/components/EditUserModal";
 import Users from "@/components/System/Users";
+import { Logs } from "@/components/System/Logs";
 
 
 const SettingsPage = () => {
@@ -113,6 +114,7 @@ const SettingsPage = () => {
       <Tabs defaultValue="users">
         <TabsList className="mb-4 w-full md:w-auto">
           <TabsTrigger value="users">Users</TabsTrigger>
+          <TabsTrigger value="logs">System Logs</TabsTrigger>
           <TabsTrigger value="departments">Departments</TabsTrigger>
           <TabsTrigger value="roles">Roles</TabsTrigger>
           <TabsTrigger value="preferences">Preferences</TabsTrigger>
@@ -121,6 +123,9 @@ const SettingsPage = () => {
 
         <TabsContent value="users">
           <Users setAddUser={setAddUser} users={users} />
+        </TabsContent>
+        <TabsContent value="logs">
+          <Logs fetchLogs={Server.fetchLogs()} />
         </TabsContent>
 
         <TabsContent value="departments">
@@ -447,7 +452,7 @@ const SettingsPage = () => {
       {addDepartment && (
         <AddDepartment
           setShowModal={() => setAddDepartment(false)}
-          onSuccess={undefined}
+          onSuccess={() => fetchDepartments()}
         />
       )}
     </div>

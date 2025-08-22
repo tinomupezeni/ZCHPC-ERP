@@ -15,10 +15,12 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth import get_user_model
 import csv
 from datetime import datetime
+from ..permissions import RolePermission
 
 # employee registration
 @api_view(['POST'])
 def register_employee(request):
+    permission_classes = [RolePermission(["HR"])]  # Disable permission checks for this view
     try:
         # Convert empty strings to None for optional fields
         data = request.data.copy()

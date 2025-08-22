@@ -4,9 +4,8 @@ const api_url = "http://127.0.0.1:8000/";
 // const api_url = "http://0.0.0.0:8000/";
 // const api_url = "http://192.168.80.92:8000/";
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('access_token');
-  console.log(token);
-  
+  const token = localStorage.getItem("access_token");
+
   // Implement logic to get your auth token (e.g., from localStorage or a global state)
   // const token = localStorage.getItem('authToken');
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -20,12 +19,9 @@ interface TrainingProgramUpdateData {
 }
 
 class Server {
-
-  
-  
   static login = (email, password) => {
     // This POST request should go to your login endpoint
-    return axios.post(`${api_url}token/`, { username: email, password });
+    return axios.post(`${api_url}token/`, { email, password });
   };
 
   // Optional: A method to refresh the token
@@ -63,7 +59,7 @@ class Server {
     return axios.post(`${api_url}update/user/`, data);
   };
 
-   // fetch attendance records
+  // fetch attendance records
   static fetchAttendanceRecords = () => {
     return axios.get(`${api_url}all/attendance/`);
   };
@@ -73,7 +69,7 @@ class Server {
     return axios.delete(`${api_url}delete/attendance/${id}/`);
   };
 
-    // fetch biometric records
+  // fetch biometric records
   static fetchBiometricRecords = () => {
     return axios.get(`${api_url}all/biometric/`);
   };
@@ -81,6 +77,13 @@ class Server {
   // delete biometric record
   static deleteBiometricRecord = (id) => {
     return axios.delete(`${api_url}delete/biometric/${id}/`);
+  };
+
+  // delete biometric record
+  static fetchLogs = () => {
+    return axios.get(`${api_url}logs/`, {
+      headers: getAuthHeaders(),
+    });
   };
 
   // static updatePayroll
@@ -188,6 +191,19 @@ class Server {
       `${api_url}training/certifications/search/?search=${searchTerm}`
     );
   };
+
+    // Upload attendance records from file
+  static uploadAttendance = (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    return axios.post(`${api_url}upload/attendance/`, formData, {
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  }
   // ----------------- Department CRUD -------------------
 
   /**
@@ -250,14 +266,14 @@ class Server {
     return axios.get(`${api_url}dashboard-data/`, {
       headers: getAuthHeaders(),
     });
-  }
+  };
 
   // Admin Dashboard Data
   static fetchHrDashboardData = () => {
     return axios.get(`${api_url}hr-dashboard/`, {
       headers: getAuthHeaders(),
     });
-  }
+  };
 }
 
 export default Server;

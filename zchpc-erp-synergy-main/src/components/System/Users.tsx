@@ -22,60 +22,62 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { UserPlus, Search, Edit, Trash2, User, Badge } from "lucide-react";
+import { UserPlus, Search, Edit, Trash2, User } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { format } from "date-fns"; // ✅ add this for date formatting
+import Server from "@/server/Server";
 
-export default function Users({setAddUser, users}) {
+export default function Users({ setAddUser, users }) {
   const [searchTerm, setSearchTerm] = useState("");
-  
-   const getStatusBadge = (status: boolean) => {
-      switch (status) {
-        case true:
-          return (
-            <Badge className="bg-green-100 text-green-800 hover:bg-green-200">
-              Active
-            </Badge>
-          );
-        case false:
-          return (
-            <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-200">
-              Inactive
-            </Badge>
-          );
-        case null:
-          return (
-            <Badge className="bg-red-100 text-red-800 hover:bg-red-200">
-              Suspended
-            </Badge>
-          );
-        default:
-          return <Badge>{status}</Badge>;
-      }
-    };
-  
-    const addNewUser = () => {
-      toast.success("User creation form would open here");
-      setAddUser(true);
-    };
-  
-    const Modal = (id: string) => {
-      toast.success(`Edit user ${id}`);
-      setEditEmployeeId(id)
-      setEditUserModal(true);
-    };
-  
-    const deleteUser = (id: string) => {
-      Server.deleteUser(id)
-        .then(() => {
-          toast.success(`Deleted employee ${id}`);
-          setUsers(users.filter((user) => user.employeeid !== id));
-        })
-        .catch((error) => {
-          console.log(error);
-  
-          toast.error("Error deleting user ", id);
-        });
-    };
-  
+
+  const getStatusBadge = (status: boolean) => {
+    switch (status) {
+      case true:
+        return (
+          <Badge className="bg-green-100 text-green-800 hover:bg-green-200">
+            Active
+          </Badge>
+        );
+      case false:
+        return (
+          <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-200">
+            Inactive
+          </Badge>
+        );
+      case null:
+        return (
+          <Badge className="bg-red-100 text-red-800 hover:bg-red-200">
+            Suspended
+          </Badge>
+        );
+      default:
+        return <Badge>{status}</Badge>;
+    }
+  };
+
+  const addNewUser = () => {
+    toast.success("User creation form would open here");
+    setAddUser(true);
+  };
+
+  const Modal = (id: string) => {
+    toast.success(`Edit user ${id}`);
+    setEditEmployeeId(id);
+    setEditUserModal(true);
+  };
+
+  const deleteUser = (id: string) => {
+    Server.deleteUser(id)
+      .then(() => {
+        toast.success(`Deleted employee ${id}`);
+        setUsers(users.filter((user) => user.employeeid !== id));
+      })
+      .catch((error) => {
+        console.log(error);
+
+        toast.error("Error deleting user ", id);
+      });
+  };
 
   return (
     <div>
@@ -133,15 +135,20 @@ export default function Users({setAddUser, users}) {
                           </Avatar>
                           <div>
                             <div className="font-medium">{`${user.firstname} ${user.surname}`}</div>
-                            <div className="text-sm text-muted-foreground">
+                            <div className="text-sm text-muted-foreground lowercase">
                               {user.email}
                             </div>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>{user.role}</TableCell>
-                      <TableCell>{user.department}</TableCell>
-                      <TableCell>{user.lastActive}</TableCell>
+                      <TableCell>{user.department_name}</TableCell>
+                      <TableCell>
+                        {" "}
+                        {user.last_login_at
+                          ? format(new Date(user.last_login_at), "PPpp") 
+                          : "Never"}
+                      </TableCell>
                       <TableCell>{getStatusBadge(user.isActive)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end space-x-1">

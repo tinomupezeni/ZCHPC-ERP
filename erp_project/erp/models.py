@@ -1,18 +1,26 @@
+from datetime import timedelta
+import uuid
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 # In your models.py
 from django.utils import timezone
 from django.core.validators import MinValueValidator
 from django.contrib.auth import get_user_model
+from jsonschema import ValidationError
 
 # *******************
 # Departments
 # *******************
-
 class Department(models.Model):
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True, null=True)
-    department_head = models.ForeignKey('Employees', on_delete=models.SET_NULL, null=True, blank=True, related_name='department_head')
+    department_head = models.ForeignKey(
+        'CustomUser',   # must reference CustomUser, not 'Employees'
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='headed_departments'
+    )
 
     class Meta:
         verbose_name = "Department"
@@ -21,33 +29,135 @@ class Department(models.Model):
 
     def __str__(self):
         return self.name
-
-
+    
+# ******************************
+# Custom User Model with RBAC
+# ******************************
 class CustomUser(AbstractUser):
+    ROLE_CHOICES = [
+        ("ADMIN", "Admin"),
+        ("HR", "HR"),
+        ("ACCOUNTANT", "Accountant"),
+        ("PROCUREMENT", "Procurement"),
+        ("SALES", "Sales"),
+        ("MANAGER", "Manager"),
+        ("STAFF", "Staff"),
+        ("INTERN", "Intern"),
+    ]
+
+    id = models.CharField(default=uuid.uuid4().hex, primary_key=True, editable=False, max_length=32)
     employeeid = models.CharField(max_length=10, unique=True, blank=True)
     firstname = models.CharField(max_length=100)
     surname = models.CharField(max_length=100)
-    role = models.CharField(max_length=50)
-    department = models.CharField(max_length=50, default='System')
+    role = models.CharField(max_length=50, choices=ROLE_CHOICES)
+    department = models.ForeignKey(
+    Department,
+    on_delete=models.SET_NULL,
+    null=True,
+    blank=True
+)
+
     email = models.EmailField(unique=True)
     salary = models.IntegerField(null=True, blank=True)
     contractFrom = models.DateField(null=True, blank=True)
     contractTo = models.DateField(null=True, blank=True)
     isActive = models.BooleanField(default=True)
+    
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['username', 'firstname', 'surname', 'role']
+    
+    # 🔒 Security fields
+    failed_attempts = models.IntegerField(default=0)
+    lockout_until = models.DateTimeField(null=True, blank=True)
+    # must_change_password = models.BooleanField(default=True)  # ✅ forces reset on first login
+
+    def is_locked_out(self):
+        """Check if user is currently locked out."""
+        if self.lockout_until and self.lockout_until > timezone.now():
+            return True
+        return False
+
+    def register_failed_attempt(self, max_attempts=5, lockout_minutes=15):
+        """Increase failed login attempts and lock user if needed."""
+        self.failed_attempts += 1
+        if self.failed_attempts >= max_attempts:
+            self.lockout_until = timezone.now() + timedelta(minutes=lockout_minutes)
+            self.failed_attempts = 0  # reset counter after lock
+        self.save(update_fields=["failed_attempts", "lockout_until"])
+
+    def reset_failed_attempts(self):
+        """Clear failed attempts after successful login."""
+        self.failed_attempts = 0
+        self.lockout_until = None
+        self.save(update_fields=["failed_attempts", "lockout_until"])
+
+    def clean(self):
+        # Interns → No salary
+        if self.role == "INTERN" and self.salary:
+            raise ValidationError("Interns cannot have a salary assigned.")
+
+        # Only Admins can belong to the "System" department
+        if self.department and self.department.name == "System" and self.role != "ADMIN":
+            raise ValidationError("Only Admins can belong to the System department.")
+
+        # Managers must have contracts
+        if self.role == "MANAGER" and (not self.contractFrom or not self.contractTo):
+            raise ValidationError("Managers must have contract dates defined.")
+
+        # Accountants must have salaries
+        if self.role == "ACCOUNTANT" and not self.salary:
+            raise ValidationError("Accountants must have a salary defined.")
 
     def save(self, *args, **kwargs):
+        self.full_clean()  # ✅ enforce RBAC rules
+
         if not self.employeeid:
-            last_employee = CustomUser.objects.order_by("-id").first()
-            if last_employee and last_employee.employeeid:
+            last_employee = CustomUser.objects.exclude(employeeid="").order_by("-employeeid").first()
+            if last_employee and last_employee.employeeid.startswith("SYS"):
                 last_id = int(last_employee.employeeid.replace("SYS", ""))
                 new_id = f"SYS{last_id + 1:04d}"
             else:
                 new_id = "SYS0001"
             self.employeeid = new_id
+
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.employeeid} - {self.email}"
+
+# *******************************
+# Audit log for login attempts
+# *******************************
+class AuditLog(models.Model):
+    EVENT_CHOICES = [
+        ("SUCCESS", "Login Success"),
+        ("FAILED", "Login Failed"),
+        ("LOCKOUT", "Account Locked"),
+        ("FORCE_RESET", "Forced Password Reset"),
+    ]
+
+    user = models.ForeignKey("CustomUser", on_delete=models.SET_NULL, null=True, blank=True)
+    username_attempted = models.CharField(max_length=150)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(null=True, blank=True)
+    event_type = models.CharField(max_length=20, choices=EVENT_CHOICES)
+    timestamp = models.DateTimeField(default=timezone.now, editable=False)
+
+    def save(self, *args, **kwargs):
+        if self.pk:  # prevent updates
+            raise Exception("Audit logs are immutable and cannot be updated.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise Exception("Audit logs cannot be deleted.")
+
+    class Meta:
+        verbose_name = "Login Audit Log"
+        verbose_name_plural = "Login Audit Logs"
+        ordering = ["-timestamp"]
+
+    def __str__(self):
+        return f"{self.username_attempted} - {self.event_type} at {self.timestamp}"
 
 
 class AllowanceType(models.Model):

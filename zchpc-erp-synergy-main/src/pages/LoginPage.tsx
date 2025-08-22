@@ -12,12 +12,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { BarChart3, Lock, Mail } from "lucide-react";
+import { BarChart3, Eye, EyeClosed, Lock, Mail } from "lucide-react";
 
 const LoginPage = () => {
   // Use 'email' for consistency with the backend and UI labels
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [viewPassword, setViewPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login, user } = useAuth();
   const navigate = useNavigate();
@@ -33,7 +34,6 @@ const LoginPage = () => {
       const success = await login(email, password);
 
       if (success) {
-        console.log(user);
 
         // Redirect to the page they were trying to access or default to dashboard
         user?.role === "admin" ? navigate("/dashboard") : navigate("/hr");
@@ -93,28 +93,29 @@ const LoginPage = () => {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password">Password</Label>
-                  <Button
-                    type="button"
-                    variant="link"
-                    className="h-auto p-0 text-xs"
-                    onClick={() =>
-                      alert("Demo credentials: admin@zchpc.com / admin")
-                    }
-                  >
-                    Need Help?
-                  </Button>
                 </div>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="password"
-                    type="password"
+                    type={viewPassword ? "text" : "password"}
                     placeholder="••••••••"
                     className="pl-10"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
                   />
+                  {viewPassword ? (
+                    <Eye
+                      className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground cursor-pointer"
+                      onClick={() => setViewPassword(!viewPassword)}
+                    />
+                  ) : (
+                    <EyeClosed
+                      className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground cursor-pointer"
+                      onClick={() => setViewPassword(!viewPassword)}
+                    />
+                  )}
                 </div>
               </div>
             </CardContent>

@@ -5,10 +5,17 @@ from ..models import AllowanceType, CustomUser, DeductionType, Employees
 from datetime import datetime
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
+    department_name = serializers.CharField(source="department.name", read_only=True)
+    last_login_at = serializers.SerializerMethodField()
+
     class Meta:
         model = CustomUser
-        fields = ['email', 'employeeid', 'firstname', 'isActive', 'surname', 'role', 'department', 'password', 'salary', 'contractFrom', 'contractTo']
+        fields = ['email', 'employeeid', 'firstname', 'isActive', 'surname', 'role', 'department', 'department_name', 'password', 'salary', 'contractFrom', 'contractTo', 'last_login_at']
         extra_kwargs = {'password': {'write_only': True}}
+    
+    def get_last_login_at(self, obj):
+        log = obj.auditlog_set.filter(event_type="SUCCESS").order_by("-timestamp").first()
+        return log.timestamp if log else None
 
     def validate_email(self, value):
         if CustomUser.objects.filter(email=value).exists():

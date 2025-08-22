@@ -17,13 +17,16 @@ export default function AddUser({ setShowModal, onSuccess }) {
 
   // Define a list of meaningful ERP roles
   const roles = [
-    { value: "Administrator", label: "Administrator" },
-    { value: "HR Manager", label: "HR Manager" },
-    { value: "Finance Manager", label: "Finance Manager" },
-    { value: "Sales Manager", label: "Sales Manager" },
-    { value: "Procurement Officer", label: "Procurement Officer" },
-    { value: "General User", label: "General User" },
-  ];
+  { value: "ADMIN", label: "Admin" },
+  { value: "HR", label: "HR" },
+  { value: "ACCOUNTANT", label: "Accountant" },
+  { value: "PROCUREMENT", label: "Procurement" },
+  { value: "SALES", label: "Sales" },
+  { value: "MANAGER", label: "Manager" },
+  { value: "STAFF", label: "Staff" },
+  { value: "INTERN", label: "Intern" },
+];
+
 
   // Fetch departments when the component loads
   useEffect(() => {

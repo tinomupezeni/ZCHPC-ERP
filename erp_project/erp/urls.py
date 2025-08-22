@@ -1,5 +1,7 @@
 from django.urls import path, include
 
+from .view.audit_view import AuditLogListView
+
 from .view.hr_dashboard_view import HrDashboardView
 from . import views
 from .view.payroll_view import *
@@ -12,6 +14,7 @@ from .view.department_view import DepartmentViewSet
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 # Correct import path for the jobs list/create view
 from .view.jobs_view import JobListCreate, JobDetail, JobToggleStatus
+from .view.auth_view import CustomTokenObtainPairView
 
 router = DefaultRouter()
 router.register(r'zig-rates', ZiGRateToUSDViewSet)
@@ -36,7 +39,8 @@ urlpatterns = [
     path('update/user/<str:id>/', views.get_user, name='update_user'),
 
     # Use default simplejwt views — no custom serializer needed
-    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    # path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     path('user-details/', UserDetailsView.as_view(), name='user_details'),
@@ -83,6 +87,9 @@ urlpatterns = [
     path('all/attendance/', hr_view.attendance_list, name='attendance_list'),
     path('delete/attendance/<int:pk>/', hr_view.attendance_delete, name='attendance_delete'),
     path('upload/attendance/', hr_view.attendance_bulk_upload, name='attendance_bulk_upload'),
+    
+    # System logs
+    path("logs/", AuditLogListView.as_view(), name="audit-log-list"),
     
 
 ]

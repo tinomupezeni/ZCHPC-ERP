@@ -2,6 +2,7 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from erp.models import Department  # Import your Department model
 
 class Command(BaseCommand):
     help = 'Seeds the database with an initial admin user.'
@@ -9,16 +10,19 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         CustomUser = get_user_model()
         
+        # Ensure the "System" department exists
+        system_department, created = Department.objects.get_or_create(name='System')
+
         # Check if an admin user already exists to prevent duplicates
         if not CustomUser.objects.filter(email='admin@zchpc.com').exists():
             admin_user = CustomUser.objects.create_superuser(
                 username='admin_username',  # AbstractUser still has a username field
                 email='admin@zchpc.com',
-                password='admin',  # In a production environment, use environment variables for this
+                password='admin',  # For prod, use environment variables
                 firstname='Admin',
                 surname='User',
-                role='admin',
-                department='System',
+                role='ADMIN',  # Match ROLE_CHOICES
+                department=system_department,
                 isActive=True
             )
             self.stdout.write(self.style.SUCCESS('Successfully created admin user: admin@zchpc.com'))

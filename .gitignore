@@ -64,9 +64,7 @@ Thumbs.db
 # === Python/Django ===
 __pycache__/
 *.py[cod]
-*.sqlite3
 *.log
-db.sqlite3
 
 # === Django virtual environment ===
 venv/

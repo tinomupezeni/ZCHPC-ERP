@@ -17,7 +17,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   useEffect(() => {
   if (isLoading) return; // wait for auth check to finish
-console.log(user);
 
   // If still no user after isLoading, redirect
   if (!user) {

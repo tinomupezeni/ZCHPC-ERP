@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import {toast} from "sonner";
 import Server from "../server/Server";
+import { on } from "events";
 
 export default function AddDepartment({ setShowModal, onSuccess }) {
   // Use state to manage department data
@@ -40,7 +41,7 @@ export default function AddDepartment({ setShowModal, onSuccess }) {
       .then(() => {
         toast.success("New department successfully added.");
         setLoading(false);
-        onSuccess(); // Callback to refresh the parent component's data
+        onSuccess()
       })
       .catch((error) => {
         console.error("Error adding department:", error);
@@ -101,7 +102,7 @@ export default function AddDepartment({ setShowModal, onSuccess }) {
           </div>
 
           {/* Department Head */}
-          <div>
+          {/* <div>
             <label htmlFor="head" className="text-sm text-gray-600 block mb-1">
               Department Head
             </label>
@@ -114,13 +115,13 @@ export default function AddDepartment({ setShowModal, onSuccess }) {
             >
               <option value="">-- Select a Head --</option>
               {/* Populate options from the fetched users */}
-              {users.map((user) => (
+              {/* {users.map((user) => (
                 <option key={user.id} value={user.id}>
                   {user.first_name} {user.last_name}
                 </option>
               ))}
             </select>
-          </div>
+          </div> */} 
 
           {/* Buttons */}
           <div className="flex justify-end gap-3 mt-4">

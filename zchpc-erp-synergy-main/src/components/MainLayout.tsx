@@ -50,48 +50,48 @@ const navItems: SidebarItem[] = [
     title: "HR",
     icon: Users,
     path: "/hr",
-    permission: ["hr manager", "admin"], // Now an array
+    permission: ["hr", "admin"], // Now an array
     subItems: [
-      { title: "Employees", path: "#hr-employees", permission: ["hr manager",] },
+      { title: "Employees", path: "/hr-employees", permission: ["hr",] },
       {
         title: "Attendance",
         path: "#hr-attendance",
-        permission: ["hr manager",],
+        permission: ["hr",],
       },
       {
         title: "Recruitment",
         path: "#hr-recruitment",
-        permission: ["hr manager", ],
+        permission: ["hr", ],
       },
     //  {
     //     title: "Performance Management",
     //     path: "#hr-performance",
-    //     permission: ["hr manager"],
+    //     permission: ["hr"],
     //   }, 
       {
         title: "Training & Development",
         path: "#hr-training",
-        permission: ["hr manager"],
+        permission: ["hr"],
         subItems: [
           {
             title: "Programs",
             path: "#hr-training-programs",
-            permission: ["hr manager"],
+            permission: ["hr"],
           },
           {
             title: "Sessions",
             path: "#hr-training-sessions",
-            permission: ["hr manager"],
+            permission: ["hr"],
           },
           {
             title: "Enrollments",
             path: "#hr-training-enrollments",
-            permission: ["hr manager"],
+            permission: ["hr"],
           },
           {
             title: "Certifications",
             path: "#hr-training-certifications",
-            permission: ["hr manager"],
+            permission: ["hr"],
           },
         ],
       },
@@ -101,51 +101,47 @@ const navItems: SidebarItem[] = [
     title: "Payroll",
     icon: CreditCard,
     path: "/payroll",
-    permission: ["hr manager", "accounting", "admin"], // Now an array with both permissions
+    permission: ["hr", "accounting", "admin"], // Now an array with both permissions
     subItems: [
-      {
-        title: "Employees",
-        path: "#employees",
-        permission: ["hr manager", "accounting"],
-      },
+     
       {
         title: "Salary Setup",
         path: "#salary-setup",
-        permission: ["hr manager", "accounting"],
+        permission: ["hr", "accounting"],
       },
       {
         title: "Deductions",
         path: "#deductions",
-        permission: ["hr manager", "accounting"],
+        permission: ["hr", "accounting"],
       },
       {
         title: "Tax Tables",
         path: "#tax-tables",
-        permission: ["hr manager", "accounting"],
+        permission: ["hr", "accounting"],
       },
       {
         title: "Payroll Period",
         path: "#payroll-period",
-        permission: ["hr manager", "accounting"],
+        permission: ["hr", "accounting"],
       },
-      {
-        title: "Process Payroll",
-        path: "#process-payroll",
-        permission: ["hr manager", "accounting"],
-      },
-      {
-        title: "Payslips",
-        path: "#payslips",
-        permission: ["hr manager", "accounting"],
-      },
+      // {
+      //   title: "Process Payroll",
+      //   path: "#process-payroll",
+      //   permission: ["hr", "accounting"],
+      // },
+      // {
+      //   title: "Payslips",
+      //   path: "#payslips",
+      //   permission: ["hr", "accounting"],
+      // },
       {
         title: "Compliance Reports",
         path: "#reports",
-        permission: ["hr manager", "accounting"],
+        permission: ["hr", "accounting"],
       },
     ],
   },
-  { title: "Sales", icon: ShoppingCart, path: "/sales", permission: ["sales", "admin"] },
+  { title: "Sales", icon: ShoppingCart, path: "/sales", permission: ["sales", "admin",] },
   {
     title: "Accounting",
     icon: DollarSign,

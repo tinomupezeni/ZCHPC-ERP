@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
-import { Search, Calendar, MoreVertical, Filter, Download, ChevronDown, Clock, Check, X } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Search, Calendar, MoreVertical, Filter, Download, ChevronDown, Clock, Check, X, Upload } from "lucide-react";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import Server from "@/server/Server";
+import { toast } from "sonner";
 
 const Attendance = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -59,6 +60,10 @@ const Attendance = () => {
 
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
   const exportToCSV = () => {
     const headers = ["Name", "Job No", "Date", "Time In", "Time Out"];
     const csvContent = [
@@ -78,6 +83,75 @@ const Attendance = () => {
     document.body.removeChild(link);
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check if file is an Excel or CSV file
+    const validTypes = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+      'text/csv',
+      'application/csv',
+      'application/vnd.oasis.opendocument.spreadsheet'
+    ];
+
+    if (!validTypes.includes(file.type) && !file.name.match(/\.(xlsx|xls|csv|ods)$/i)) {
+      toast.error('Please upload a valid Excel or CSV file');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    try {
+      // Simulate progress (since we can't track actual upload progress with the current Server implementation)
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return 90; // Hold at 90% until the request completes
+          }
+          return prev + 10;
+        });
+      }, 200);
+
+      const response = await Server.uploadAttendance(file);
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+      
+      // Show success message with stats
+      const { created, updated, errors } = response.data;
+      let message = `Success! ${created} records created, ${updated} updated.`;
+      if (errors && errors.length > 0) {
+        message += ` ${errors.length} records had errors.`;
+        console.error('Upload errors:', errors);
+      }
+      
+      toast.success(message);
+      
+      // Refresh the attendance data
+      fetchAttendanceRecords();
+      
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error) {
+      console.error('Upload failed:', error);
+      toast.error(error.response?.data?.detail || 'Failed to upload file. Please try again.');
+    } finally {
+      setTimeout(() => {
+        setIsUploading(false);
+        setUploadProgress(0);
+      }, 1000);
+    }
+  };
+
+  const triggerFileInput = () => {
+    fileInputRef.current?.click();
+  };
+
   return (
     <div className="min-h-screen p-6 bg-gray-50">
       <div className="flex items-center justify-between mb-6">
@@ -88,15 +162,58 @@ const Attendance = () => {
           </p>
         </div>
         <div className="flex gap-3">
-          <button
-            onClick={exportToCSV}
-            className="flex items-center gap-2 px-4 py-2 text-gray-700 transition-colors border border-gray-300 rounded-lg hover:bg-gray-100"
-          >
-            <Download className="w-4 h-4" />
-            Export
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={exportToCSV}
+              className="flex items-center gap-2 px-4 py-2 text-gray-700 transition-colors border border-gray-300 rounded-lg hover:bg-gray-100"
+              disabled={isUploading}
+            >
+              <Download className="w-4 h-4" />
+              Export
+            </button>
+            <button
+              onClick={triggerFileInput}
+              className={`flex items-center gap-2 px-4 py-2 text-white transition-colors bg-blue-600 rounded-lg hover:bg-blue-700 ${isUploading ? 'opacity-70 cursor-not-allowed' : ''}`}
+              disabled={isUploading}
+            >
+              {isUploading ? (
+                <>
+                  <Clock className="w-4 h-4 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4" />
+                  Bulk Upload
+                </>
+              )}
+            </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              accept=".xlsx, .xls, .csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, text/csv, application/csv"
+              className="hidden"
+              disabled={isUploading}
+            />
+          </div>
         </div>
       </div>
+
+      {isUploading && (
+        <div className="p-4 mb-4 bg-blue-50 rounded-lg">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-blue-800">Uploading attendance data...</span>
+            <span className="text-sm font-medium text-blue-800">{uploadProgress}%</span>
+          </div>
+          <div className="w-full bg-blue-200 rounded-full h-2.5">
+            <div 
+              className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+              style={{ width: `${uploadProgress}%` }}
+            ></div>
+          </div>
+        </div>
+      )}
 
       <div className="mb-8 bg-white border border-gray-200 rounded-lg shadow-sm">
         <div className="p-4 border-b">
