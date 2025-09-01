@@ -19,6 +19,9 @@ interface TrainingProgramUpdateData {
 }
 
 class Server {
+  static getCurrencyRates() {
+      throw new Error("Method not implemented.");
+  }
   static login = (email, password) => {
     // This POST request should go to your login endpoint
     return axios.post(`${api_url}token/`, { email, password });

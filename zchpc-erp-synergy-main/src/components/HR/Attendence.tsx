@@ -4,6 +4,56 @@ import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import Server from "@/server/Server";
 import { toast } from "sonner";
 
+// Helper: display time as HH:MM for UI
+const formatTime = (timeStr) => {
+  if (!timeStr) return "--";
+  try {
+    if (typeof timeStr === "string" && timeStr.match(/^\d{1,2}:\d{2}(?::\d{2})?$/)) {
+      const [hours, minutes] = timeStr.split(":");
+      return `${hours.padStart(2, "0")}:${minutes.padStart(2, "0")}`;
+    }
+    const date = new Date(timeStr);
+    if (!isNaN(date.getTime())) {
+      const hh = date.getHours().toString().padStart(2, "0");
+      const mm = date.getMinutes().toString().padStart(2, "0");
+      return `${hh}:${mm}`;
+    }
+    return timeStr;
+  } catch {
+    return String(timeStr);
+  }
+};
+
+// Helper: strict HH:MM for CSV
+const formatTimeHHMM = (value: any): string => {
+  if (!value) return "";
+  try {
+    if (typeof value === "string") {
+      const m = value.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+      if (m) {
+        const hh = m[1].padStart(2, "0");
+        const mm = m[2].padStart(2, "0");
+        return `${hh}:${mm}`;
+      }
+      const d = new Date(value);
+      if (!isNaN(d.getTime())) {
+        const hh = d.getHours().toString().padStart(2, "0");
+        const mm = d.getMinutes().toString().padStart(2, "0");
+        return `${hh}:${mm}`;
+      }
+      return value;
+    }
+    if (value instanceof Date) {
+      const hh = value.getHours().toString().padStart(2, "0");
+      const mm = value.getMinutes().toString().padStart(2, "0");
+      return `${hh}:${mm}`;
+    }
+    return String(value ?? "");
+  } catch {
+    return String(value ?? "");
+  }
+};
+
 const Attendance = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [attendanceRecords, setAttendanceRecords] = useState([]);
@@ -23,9 +73,24 @@ const Attendance = () => {
     setLoading(true);
     try {
       const response = await Server.fetchAttendanceRecords();
-      setAttendanceRecords(response.data);
+      if (response.data && Array.isArray(response.data)) {
+        // Transform the data to match the column names from the Excel file
+        const formattedRecords = response.data.map(record => ({
+          name: record.employeeName || record.name || `${record.employee?.first_name || ''} ${record.employee?.last_name || ''}`.trim(),
+          'job no': record.employeeId || record.job_number || record['job no'] || '',
+          date: record.date,
+          'time in': record.loginTime || record.time_in || record['time in'],
+          'time out': record.logoutTime || record.time_out || record['time out']
+        }));
+        setAttendanceRecords(formattedRecords);
+      } else {
+        console.warn('Unexpected data format received:', response.data);
+        setAttendanceRecords([]);
+      }
     } catch (error) {
       console.error("Error fetching attendance records:", error);
+      toast.error('Failed to load attendance records. Please try again.');
+      setAttendanceRecords([]);
     } finally {
       setLoading(false);
     }
@@ -42,12 +107,11 @@ const Attendance = () => {
 
   const filteredRecords = attendanceRecords.filter(record => {
     const matchesSearch = 
-      record.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      record.employeeId.toLowerCase().includes(searchTerm.toLowerCase());
+      (record.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (record['job no'] || '').toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesDepartment = 
-      selectedDepartment === "All Departments" || 
-      record.department === selectedDepartment;
+    // Since we removed department from the records, we'll keep this for backward compatibility
+    const matchesDepartment = selectedDepartment === "All Departments";
     
     return matchesSearch && matchesDepartment;
   });
@@ -65,12 +129,20 @@ const Attendance = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const exportToCSV = () => {
-    const headers = ["Name", "Job No", "Date", "Time In", "Time Out"];
+    // Align export with normalized fields
+    const headers = ["name", "job no", "date", "time in", "time out"];
     const csvContent = [
       headers.join(","),
-      ...filteredRecords.map(record => 
-        `"${record.employeeName}","${record.employeeId}","${record.date}","${record.loginTime}","${record.logoutTime}"`
-      )
+      ...filteredRecords.map(record => {
+        const row = [
+          record.name || "",
+          record['job no'] || "",
+          record.date || "",
+          formatTimeHHMM(record['time in']) || "",
+          formatTimeHHMM(record['time out']) || "",
+        ];
+        return row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",");
+      })
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -280,36 +352,31 @@ const Attendance = () => {
                   </td>
                 </tr>
               ) : currentItems?.length > 0 ? (
-                currentItems?.map((record) => (
-                  <tr key={`${record.employeeId}-${record.date}`} className="hover:bg-gray-50">
+                currentItems?.map((record, index) => (
+                  <tr key={`${record['job no']}-${record.date}-${index}`} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="flex items-center justify-center flex-shrink-0 w-10 h-10 font-medium text-blue-600 bg-blue-100 rounded-full">
-                          {record.employeeName.split(' ').map(n => n[0]).join('')}
+                        <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">
+                          {(record.name || "").split(' ').map(n => n[0]).join('').toUpperCase() || '--'}
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900">
-                            {record.employeeName}
+                            {record.name || '--'}
                           </div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {record.employeeId}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {record['job no'] || '--'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(record.date).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                        weekday: 'short'
-                      })}
+                      {record.date ? new Date(record.date).toLocaleDateString() : '--'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {record.loginTime || '--:--'}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {record['time in'] ? formatTime(record['time in']) : '--'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {record.logoutTime || '--:--'}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {record['time out'] ? formatTime(record['time out']) : '--'}
                     </td>
                   </tr>
                 ))

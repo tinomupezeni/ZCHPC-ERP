@@ -101,43 +101,48 @@ const navItems: SidebarItem[] = [
     title: "Payroll",
     icon: CreditCard,
     path: "/payroll",
-    permission: ["hr", "accounting", "admin"], // Now an array with both permissions
+    permission: ["hr", "accountant", "admin"], // Now an array with both permissions
     subItems: [
      
       {
         title: "Salary Setup",
         path: "#salary-setup",
-        permission: ["hr", "accounting"],
+        permission: ["hr", "accountant"],
       },
       {
         title: "Deductions",
         path: "#deductions",
-        permission: ["hr", "accounting"],
+        permission: ["hr", "accountant"],
       },
       {
         title: "Tax Tables",
         path: "#tax-tables",
-        permission: ["hr", "accounting"],
+        permission: ["hr", "accountant"],
+      },
+      {
+        title: "Currencies",
+        path: "#currencies",
+        permission: ["hr", "accountant"],
       },
       {
         title: "Payroll Period",
         path: "#payroll-period",
-        permission: ["hr", "accounting"],
+        permission: ["hr", "accountant"],
       },
       // {
       //   title: "Process Payroll",
       //   path: "#process-payroll",
-      //   permission: ["hr", "accounting"],
+      //   permission: ["hr", "accountant"],
       // },
       // {
       //   title: "Payslips",
       //   path: "#payslips",
-      //   permission: ["hr", "accounting"],
+      //   permission: ["hr", "accountant"],
       // },
       {
         title: "Compliance Reports",
         path: "#reports",
-        permission: ["hr", "accounting"],
+        permission: ["hr", "accountant"],
       },
     ],
   },
@@ -146,7 +151,7 @@ const navItems: SidebarItem[] = [
     title: "Accounting",
     icon: DollarSign,
     path: "/accounting",
-    permission: ["accounting", "admin"],
+    permission: ["accountant", "admin"],
     subItems: [
       {
         title: "General Ledger",

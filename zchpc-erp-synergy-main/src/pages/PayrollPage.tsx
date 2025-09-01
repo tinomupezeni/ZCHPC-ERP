@@ -1,5 +1,6 @@
 import PayrollConfig from "@/components/HR/PayrollConfig";
 import Recruitment from "@/components/HR/Recruitment";
+import CurrencyRates from "@/components/Payroll/CurrencyRates";
 import Deductions from "@/components/Payroll/Deductions";
 import PayrollDashboard from "@/components/Payroll/PayrollDashboard";
 import PayslipGeneration from "@/components/Payroll/PayslipGeneration";
@@ -23,6 +24,8 @@ const PayrollPage = ({openTab} :PayrollProps) => {
         return <Recruitment />
       case '#salary-setup':
         return <SalarySetup />
+      case '#currencies':
+        return <CurrencyRates />
       case '#deductions':
         return <Deductions />
       case '#process-payroll':

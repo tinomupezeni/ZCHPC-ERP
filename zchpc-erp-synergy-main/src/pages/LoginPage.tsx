@@ -34,9 +34,27 @@ const LoginPage = () => {
       const success = await login(email, password);
 
       if (success) {
+        console.log(user?.role?.toLowerCase());
 
         // Redirect to the page they were trying to access or default to dashboard
-        user?.role === "admin" ? navigate("/dashboard") : navigate("/hr");
+        // Redirect to the page they were trying to access or default to dashboard
+        switch (user?.role?.toLowerCase()) {
+          case "admin":
+            navigate("/dashboard");
+            break;
+          case "hr":
+            navigate("/hr");
+            break;
+          case "accountant":
+            navigate("/accounting");
+            break;
+          case "sales":
+            navigate("/sales");
+            break;
+          default:
+            navigate("/dashboard");
+        }
+        // user?.role === "admin" ? navigate("/dashboard") : navigate("/hr");
       }
       // If login fails, `useAuth` handles the toast and returns false,
       // so we don't need to do anything here.

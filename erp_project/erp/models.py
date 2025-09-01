@@ -58,7 +58,7 @@ class CustomUser(AbstractUser):
 )
 
     email = models.EmailField(unique=True)
-    salary = models.IntegerField(null=True, blank=True)
+    salary = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     contractFrom = models.DateField(null=True, blank=True)
     contractTo = models.DateField(null=True, blank=True)
     isActive = models.BooleanField(default=True)
@@ -105,8 +105,8 @@ class CustomUser(AbstractUser):
             raise ValidationError("Managers must have contract dates defined.")
 
         # Accountants must have salaries
-        if self.role == "ACCOUNTANT" and not self.salary:
-            raise ValidationError("Accountants must have a salary defined.")
+        # if self.role == "ACCOUNTANT" :
+        #     raise ValidationError("Accountants must have a salary defined.")
 
     def save(self, *args, **kwargs):
         self.full_clean()  # ✅ enforce RBAC rules
@@ -282,7 +282,7 @@ class ZiGRateToUSD(models.Model):
 class TaxBracket(models.Model):
     currency_choices = [
         ('USD', 'USD'),
-        ('ZWG', 'ZWL/ZiG') # Use ZWG for consistency with your code
+        ('ZiG', 'ZiG') # Use ZWG for consistency with your code
     ]
     currency = models.CharField(max_length=10, choices=currency_choices)
     min_income = models.DecimalField(max_digits=10, decimal_places=2)
@@ -315,23 +315,7 @@ class Payroll(models.Model):
         on_delete=models.PROTECT,  # Prevent deletion if payroll exists
         related_name='payrolls'
     )
-    ZWG_MONTHLY_BRACKETS = [
-    (2800, 0.00, 0),
-    (8400, 0.20, 560),
-    (28000, 0.25, 980),
-    (56000, 0.30, 2380),
-    (84000, 0.35, 5180),
-    (float('inf'), 0.40, 9380),
-]
-
-    USD_MONTHLY_BRACKETS = [
-        (100, 0.00, 0),
-        (300, 0.20, 20),
-        (1000, 0.25, 35),
-        (2000, 0.30, 85),
-        (3000, 0.35, 185),
-        (float('inf'), 0.40, 335),
-    ]
+ 
 
     period = models.DateField()  # First day of the pay period month
     base_salary_usd = models.DecimalField(

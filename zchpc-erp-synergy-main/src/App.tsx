@@ -76,7 +76,7 @@ const App = () => {
             <Route
               path="/accounting"
               element={
-                <ProtectedRoute requiredPermission={["accounting", "admin"]}>
+                <ProtectedRoute requiredPermission={["accountant", "admin"]}>
                   {" "}
                   <MainLayout setOpenTab={setOpenTab}>
                     <AccountingPage openTab={openTab} />{" "}
@@ -88,7 +88,7 @@ const App = () => {
               path="/payroll"
               element={
                 <ProtectedRoute
-                  requiredPermission={["accounting", "hr", "admin"]}
+                  requiredPermission={["accountant", "hr", "admin"]}
                 >
                   {" "}
                   <MainLayout setOpenTab={setOpenTab}>
