@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -32,30 +32,8 @@ const LoginPage = () => {
       // The `login` function is async, so we `await` its result.
       // It returns a boolean indicating success or failure.
       const success = await login(email, password);
+      if (!success) return;
 
-      if (success) {
-        console.log(user?.role?.toLowerCase());
-
-        // Redirect to the page they were trying to access or default to dashboard
-        // Redirect to the page they were trying to access or default to dashboard
-        switch (user?.role?.toLowerCase()) {
-          case "admin":
-            navigate("/dashboard");
-            break;
-          case "hr":
-            navigate("/hr");
-            break;
-          case "accountant":
-            navigate("/accounting");
-            break;
-          case "sales":
-            navigate("/sales");
-            break;
-          default:
-            navigate("/dashboard");
-        }
-        // user?.role === "admin" ? navigate("/dashboard") : navigate("/hr");
-      }
       // If login fails, `useAuth` handles the toast and returns false,
       // so we don't need to do anything here.
     } catch (error) {
@@ -66,6 +44,27 @@ const LoginPage = () => {
       setIsSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    if (user) {
+      switch (user.role?.toLowerCase()) {
+        case "admin":
+          navigate("/dashboard");
+          break;
+        case "hr":
+          navigate("/hr");
+          break;
+        case "accountant":
+          navigate("/accounting");
+          break;
+        case "sales":
+          navigate("/sales");
+          break;
+        default:
+          navigate("/dashboard");
+      }
+    }
+  }, [user, navigate]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">

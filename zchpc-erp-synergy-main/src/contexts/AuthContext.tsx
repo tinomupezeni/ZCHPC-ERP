@@ -22,25 +22,25 @@ export const AuthProvider = ({ children }) => {
   const navigate = useNavigate();
 
   // The login function
+  // AuthContext.js
   const login = useCallback(async (email, password) => {
     try {
       const response = await Server.login(email, password);
       const { access, refresh } = response.data;
 
-      // Store tokens in localStorage
       localStorage.setItem("access_token", access);
       localStorage.setItem("refresh_token", refresh);
 
-      // Fetch the user details after successful login
       const userResponse = await Server.fetchUserDetailsFromToken();
       setUser(userResponse.data);
       setIsAuthenticated(true);
       toast.success("Login successful!");
-      return true;
+
+      return { success: true, user: userResponse.data }; // return the user
     } catch (error) {
       console.error("Login failed:", error);
       toast.error("Login failed. Please check your credentials.");
-      return false;
+      return { success: false, user: null };
     }
   }, []);
 
@@ -62,7 +62,7 @@ export const AuthProvider = ({ children }) => {
       if (access_token) {
         try {
           const userResponse = await Server.fetchUserDetailsFromToken();
-          
+
           setUser(userResponse.data);
           setIsAuthenticated(true);
         } catch (error) {
