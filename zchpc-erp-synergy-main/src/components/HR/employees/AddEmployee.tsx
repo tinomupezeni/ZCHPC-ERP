@@ -1,6 +1,6 @@
 import Server from "@/server/Server";
 import { Loader, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import TaxAndDeductionsDropdown from "./TaxAndDeductions";
 
@@ -31,8 +31,16 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
     emergencyContactName: "",
     emergencyContactPhone: "",
     emergencyContactRelationship: "",
-    selectedDeductions,
+    selectedDeductions: [],
   });
+
+  // Use useEffect to update the employee state when selectedDeductions changes
+  useEffect(() => {
+    setEmployee((prevEmployee) => ({
+      ...prevEmployee,
+      selectedDeductions: selectedDeductions,
+    }));
+  }, [selectedDeductions]); // This is the dependency array
 
   const handleChange = (e) => {
     setEmployee({ ...employee, [e.target.name]: e.target.value });

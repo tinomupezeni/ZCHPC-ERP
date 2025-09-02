@@ -91,5 +91,10 @@ urlpatterns = [
     # System logs
     path("logs/", AuditLogListView.as_view(), name="audit-log-list"),
     
+    # Get the latest ZiG exchange rate
+
+    path("rates/latest/", get_latest_rate, name="latest-rate"),
+    path("rates/", get_all_rates, name="all-rates"),
+    
 
 ]

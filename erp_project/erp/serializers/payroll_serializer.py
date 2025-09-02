@@ -1,13 +1,14 @@
 # erp/app_serializers/payroll_serializer.py
 from rest_framework import serializers
-from ..models import AllowanceType, DeductionType, Payroll, Employees, PayrollPeriod, ZiGRateToUSD
+from ..models import *
 from django.utils.timezone import now
 from decimal import Decimal, ROUND_HALF_UP
 
-class ZiGRateSerializer(serializers.ModelSerializer):
+class DailyZiGRateToUSDSerializer(serializers.ModelSerializer):
     class Meta:
-        model = ZiGRateToUSD
-        fields = ['date', 'rate']
+        model = DailyZiGRateToUSD
+        fields = ["id", "date", "average"]
+
 
 class PayrollSerializer(serializers.ModelSerializer):
     employee_name = serializers.SerializerMethodField()
@@ -38,7 +39,7 @@ class PayrollSerializer(serializers.ModelSerializer):
         return (base_salary_zig - deductions).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
     def _get_latest_exchange_rate(self):
-        rate_entry = ZiGRateToUSD.objects.filter(date__lte=now().date()).order_by('-date').first()
+        rate_entry = DailyZiGRateToUSD.objects.filter(date__lte=now().date()).order_by('-date').first()
         return rate_entry.rate if rate_entry else Decimal('0')
 
     def create(self, validated_data):

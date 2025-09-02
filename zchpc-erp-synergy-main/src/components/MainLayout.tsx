@@ -52,7 +52,7 @@ const navItems: SidebarItem[] = [
     path: "/hr",
     permission: ["hr", "admin"], // Now an array
     subItems: [
-      { title: "Employees", path: "/hr-employees", permission: ["hr",] },
+      { title: "Employees", path: "#hr-employees", permission: ["hr",] },
       {
         title: "Attendance",
         path: "#hr-attendance",

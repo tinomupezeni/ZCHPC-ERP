@@ -5,6 +5,7 @@ from .models import *
 admin.site.register(Employees)
 admin.site.register(TrainingProgram)
 admin.site.register(Job)
+admin.site.register(DailyZiGRateToUSD)
 
 
 @admin.register(AuditLog)

@@ -1,8 +1,5 @@
 from rest_framework import serializers
-from ..models import (
-    Employees, Payroll, ZiGRateToUSD, NSSACap, PensionFund,
-    EmployeeDeductables, TaxBracket
-)
+from ..models import *
 
 class EmployeeSerializer(serializers.ModelSerializer):
     class Meta:
@@ -11,7 +8,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
 class ZiGRateSerializer(serializers.ModelSerializer):
     class Meta:
-        model = ZiGRateToUSD
+        model = DailyZiGRateToUSD
         fields = '__all__'
 
 class NSSACapSerializer(serializers.ModelSerializer):

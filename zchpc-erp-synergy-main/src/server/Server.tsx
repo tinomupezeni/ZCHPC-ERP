@@ -20,7 +20,7 @@ interface TrainingProgramUpdateData {
 
 class Server {
   static getCurrencyRates() {
-      throw new Error("Method not implemented.");
+    return axios.get(`${api_url}rates/`);
   }
   static login = (email, password) => {
     // This POST request should go to your login endpoint
@@ -195,18 +195,18 @@ class Server {
     );
   };
 
-    // Upload attendance records from file
+  // Upload attendance records from file
   static uploadAttendance = (file) => {
     const formData = new FormData();
-    formData.append('file', file);
-    
+    formData.append("file", file);
+
     return axios.post(`${api_url}upload/attendance/`, formData, {
       headers: {
         ...getAuthHeaders(),
-        'Content-Type': 'multipart/form-data',
+        "Content-Type": "multipart/form-data",
       },
     });
-  }
+  };
   // ----------------- Department CRUD -------------------
 
   /**

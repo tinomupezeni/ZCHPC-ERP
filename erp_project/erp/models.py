@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.core.validators import MinValueValidator
 from django.contrib.auth import get_user_model
 from jsonschema import ValidationError
+from datetime import date 
 
 # *******************
 # Departments
@@ -160,6 +161,7 @@ class AuditLog(models.Model):
         return f"{self.username_attempted} - {self.event_type} at {self.timestamp}"
 
 
+
 class AllowanceType(models.Model):
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True, null=True)
@@ -261,23 +263,25 @@ class Employees(models.Model):
     def __str__(self):
         return f"{self.employeeid} - {self.email}"
 
+# *******************************
+# Store daily ZiG to USD exchange rates
+# *******************************
     
-class ZiGRateToUSD(models.Model):
-    date = models.DateField(unique=True)  # Only one rate per day
-    rate = models.DecimalField(
-        max_digits=10,
-        decimal_places=4,
-        validators=[MinValueValidator(0)]
-    )
-    
-    class Meta:
-        ordering = ['-date']  # Newest rates first
-        verbose_name = "ZIG to USD Rate"
-        verbose_name_plural = "ZIG to USD Rates"
-    
-    def __str__(self):
-        return f"{self.date}: 1 ZIG = {self.rate} USD"
+class DailyZiGRateToUSD(models.Model):
+    date = models.DateField(unique=True) 
+    average = models.DecimalField(max_digits=20, decimal_places=8)
 
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Daily ZiG to USD Rate" 
+        verbose_name_plural = "Daily ZiG to USD Rates"
+        ordering = ["-date"]
+
+    def __str__(self):
+        return f"{self.date} - Avg {self.average}"
+    
 
 class TaxBracket(models.Model):
     currency_choices = [
@@ -360,6 +364,8 @@ class Payroll(models.Model):
     pension_usd = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     nssa_zig = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     pension_zig = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    tax_usd = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tax_zig = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     
     class Meta:
@@ -406,6 +412,7 @@ class NSSACap(models.Model):
     usd_cap = models.DecimalField(max_digits=10, decimal_places=2)
     zwl_cap = models.DecimalField(max_digits=12, decimal_places=2)
     rate = models.DecimalField(max_digits=5, decimal_places=4)
+    active_from = models.DateField(default=date.today)
     contribution_type = models.CharField(max_length=30, choices=[('employee', 'Employee Only'),
                                                               ('employer', 'Employer Only'),
                                                               ('employee_and_employer', 'Employee and Employer')])

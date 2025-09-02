@@ -2,17 +2,14 @@ from datetime import datetime
 from django.db import transaction
 from django.utils.timezone import now
 from django.conf import settings
-from ..models import (
-    Employees, Payroll, ZiGRateToUSD,
-    EmployeeDeductables, NSSACap, PensionFund, TaxBracket
-)
+from ..models import *
 
 class PayrollProcessor:
     @staticmethod
     def get_current_rate():
         print("[PayrollProcessor] Fetching current exchange rate...")
         # Get the most recent rate
-        return ZiGRateToUSD.objects.order_by('-date').first()
+        return DailyZiGRateToUSD.objects.order_by('-date').first()
 
     @staticmethod
     def calculate_tax(amount, brackets):
@@ -23,7 +20,10 @@ class PayrollProcessor:
 
         tax_payable = 0.0
         # Ensure brackets are sorted by upper limit for correct calculation
-        sorted_brackets = sorted(brackets, key=lambda x: x[0])
+        sorted_brackets = sorted(
+        [(float("inf") if upper is None else float(upper), float(rate), float(deduct)) for upper, rate, deduct in brackets],
+        key=lambda x: x[0]
+    )
 
         for upper, rate, deduct in sorted_brackets:
             if amount <= upper:
@@ -118,11 +118,17 @@ class PayrollProcessor:
         print(f"\n[PayrollProcessor] Creating payroll for employee: {employee.employeeid}, period: {period}")
 
         # Get relevant tax brackets for the period
-        usd_tax_brackets = Payroll.load_tax_brackets("USD", period)
-        zig_tax_brackets = Payroll.load_tax_brackets("ZWG", period) # Use ZWG as per your model choices
+        usd_tax_brackets = TaxBracket.objects.filter(currency="USD", active_from=period) \
+                                            .order_by("max_income") \
+                                            .values_list("max_income", "rate", "deduction")
+
+        zig_tax_brackets = TaxBracket.objects.filter(currency="ZWG", active_from=period) \
+                                            .order_by("max_income") \
+                                            .values_list("max_income", "rate", "deduction")
+
 
         try:
-            exchange_rate_obj = ZiGRateToUSD.objects.filter(date__lte=period).order_by('-date').first()
+            exchange_rate_obj = DailyZiGRateToUSD.objects.filter(date__lte=period).order_by('-date').first()
             exchange_rate = float(exchange_rate_obj.rate) if exchange_rate_obj and exchange_rate_obj.rate is not None else 0.005
             print(f"[PayrollProcessor] Exchange rate used: {exchange_rate}")
         except Exception as e:

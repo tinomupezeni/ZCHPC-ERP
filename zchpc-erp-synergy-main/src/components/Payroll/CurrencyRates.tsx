@@ -22,6 +22,8 @@ const CurrencyRates = () => {
     setLoading(true);
     try {
       const response = await Server.getCurrencyRates();
+      console.log(response.data);
+      
       setRates(response.data);
       toast.success("Currency rates fetched successfully.");
     } catch (error) {
@@ -65,7 +67,7 @@ const CurrencyRates = () => {
   };
 
   const filteredRates = rates.filter(rate =>
-    format(new Date(rate.date), "PPP").toLowerCase().includes(searchTerm.toLowerCase())
+    rate.date.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -82,7 +84,7 @@ const CurrencyRates = () => {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
             <input
               type="text"
-              placeholder="Search by date..."
+              placeholder="e.g, 2023-08-15"
               className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -127,13 +129,13 @@ const CurrencyRates = () => {
               filteredRates.map((rate) => (
                 <tr key={rate.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {format(new Date(rate.date), "PPP")}
+                    {rate.date}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatUSD(rate.usdRate)}
+                    {formatUSD(1)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatZIG(rate.zigRate)}
+                    {formatZIG(rate.average)}
                   </td>
                 </tr>
               ))

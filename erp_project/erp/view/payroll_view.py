@@ -8,7 +8,7 @@ from django.utils.dateparse import parse_date
 from ..serializers.employee_serializers import EmployeePayslipSerializer
 
 from ..serializers.tax_tables_serializers import EmployeeDeductablesSerializer, NSSACapSerializer, PensionFundSerializer, TaxBracketSerializer, ZiGRateSerializer
-from ..models import AllowanceType, DeductionType, EmployeeDeductables, Employees, NSSACap, Payroll, PayrollPeriod, PensionFund, TaxBracket, ZiGRateToUSD
+from ..models import *
 from ..serializers import payroll_serializer
 from ..services.payroll_processor import PayrollProcessor
 from rest_framework import viewsets
@@ -110,7 +110,7 @@ def get_current_rate(request):
         print("[get_current_rate] Found rate:", rate.rate if rate else "None")
         serializer = payroll_serializer.ZiGRateSerializer(rate)
         return Response(serializer.data)
-    except ZiGRateToUSD.DoesNotExist:
+    except DailyZiGRateToUSD.DoesNotExist:
         print("[get_current_rate] No rate found.")
         return Response(
             {"error": "No exchange rate available"},
@@ -205,7 +205,7 @@ class DeletePayrollSlipView(APIView):
 
 
 class ZiGRateToUSDViewSet(viewsets.ModelViewSet):
-    queryset = ZiGRateToUSD.objects.all()
+    queryset = DailyZiGRateToUSD.objects.all()
     serializer_class = ZiGRateSerializer
     filterset_fields = ['date'] # Allow filtering by date
 
@@ -270,4 +270,33 @@ class UpdateEmployeeSalaryView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    
+# *****************************************8
+# ZiG Rate Endpoints fetch all rates or latest rate
+# *****************************************
+
+@api_view(['GET'])
+def get_all_rates(request):
+    """Return all saved ZiG rates (optionally filter by ?date=YYYY-MM-DD)"""
+    date_filter = request.query_params.get("date")
+    if date_filter:
+        rates = DailyZiGRateToUSD.objects.filter(date=date_filter)
+    else:
+        rates = DailyZiGRateToUSD.objects.all().order_by("-date")
+
+    serializer = payroll_serializer.DailyZiGRateToUSDSerializer(rates, many=True)
+    print(serializer.data)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+def get_latest_rate(request):
+    """Return the most recent ZiG to USD rate"""
+    latest = DailyZiGRateToUSD.objects.order_by("-date").first()
+    if not latest:
+        return Response(
+            {"error": "No exchange rate found"},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    serializer = payroll_serializer.DailyZiGRateToUSDSerializer(latest)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
