@@ -16,23 +16,23 @@ interface PayrollProps {
 const PayrollPage = ({openTab} :PayrollProps) => {
   const renderContent = () => {
     switch (openTab){
-      case '#payroll-setup':
+      case '/payroll/payroll-setup':
         return <PayrollDashboard />
-      case '#payroll-payslips':
+      case '/payroll/payroll-payslips':
         return <PayslipGeneration />
-      case '#payroll-contributions':
+      case '/payroll/payroll-contributions':
         return <Recruitment />
-      case '#salary-setup':
+      case '/payroll/salary-setup':
         return <SalarySetup />
-      case '#currencies':
+      case '/payroll/currencies':
         return <CurrencyRates />
-      case '#deductions':
+      case '/payroll/deductions':
         return <Deductions />
-      case '#process-payroll':
+      case '/payroll/process-payroll':
         return <ProcessPayroll />
-      case '#tax-tables':
+      case '/payroll/tax-tables':
         return <TaxConfig />
-      case '#payroll-period':
+      case '/payroll/payroll-period':
         return <PayrollConfig />
       default :
        return <PayrollDashboard />

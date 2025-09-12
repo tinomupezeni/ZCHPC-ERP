@@ -52,48 +52,53 @@ const navItems: SidebarItem[] = [
     path: "/hr",
     permission: ["hr", "admin"], // Now an array
     subItems: [
-      { title: "Employees", path: "#hr-employees", permission: ["hr",] },
+      { title: "Employees", path: "/hr/hr-employees", permission: ["hr"] },
       {
         title: "Attendance",
-        path: "#hr-attendance",
-        permission: ["hr",],
+        path: "/hr/hr-attendance",
+        permission: ["hr"],
       },
       {
         title: "Recruitment",
-        path: "#hr-recruitment",
-        permission: ["hr", ],
+        path: "/hr/hr-recruitment",
+        permission: ["hr"],
       },
-    //  {
-    //     title: "Performance Management",
-    //     path: "#hr-performance",
-    //     permission: ["hr"],
-    //   }, 
+      //  {
+      //     title: "Performance Management",
+      //     path: "/hr-performance",
+      //     permission: ["hr"],
+      //   },
       {
         title: "Training & Development",
-        path: "#hr-training",
+        path: "/hr/hr-training",
         permission: ["hr"],
         subItems: [
           {
             title: "Programs",
-            path: "#hr-training-programs",
+            path: "/hr/hr-training-programs",
             permission: ["hr"],
           },
           {
             title: "Sessions",
-            path: "#hr-training-sessions",
+            path: "/hr/hr-training-sessions",
             permission: ["hr"],
           },
           {
             title: "Enrollments",
-            path: "#hr-training-enrollments",
+            path: "/hr/hr-training-enrollments",
             permission: ["hr"],
           },
           {
             title: "Certifications",
-            path: "#hr-training-certifications",
+            path: "/hr/hr-training-certifications",
             permission: ["hr"],
           },
         ],
+      },
+      {
+        title: "Reports",
+        path: "/hr/hr-reports",
+        permission: ["hr"],
       },
     ],
   },
@@ -103,50 +108,54 @@ const navItems: SidebarItem[] = [
     path: "/payroll",
     permission: ["hr", "accountant", "admin"], // Now an array with both permissions
     subItems: [
-     
       {
         title: "Salary Setup",
-        path: "#salary-setup",
+        path: "/payroll/salary-setup",
         permission: ["hr", "accountant"],
       },
       {
         title: "Deductions",
-        path: "#deductions",
+        path: "/payroll/deductions",
         permission: ["hr", "accountant"],
       },
       {
         title: "Tax Tables",
-        path: "#tax-tables",
+        path: "/payroll/tax-tables",
         permission: ["hr", "accountant"],
       },
       {
         title: "Currencies",
-        path: "#currencies",
+        path: "/payroll/currencies",
         permission: ["hr", "accountant"],
       },
       {
         title: "Payroll Period",
-        path: "#payroll-period",
+        path: "/payroll/payroll-period",
         permission: ["hr", "accountant"],
       },
       // {
       //   title: "Process Payroll",
-      //   path: "#process-payroll",
+      //   path: "/payroll/process-payroll",
       //   permission: ["hr", "accountant"],
       // },
       // {
       //   title: "Payslips",
-      //   path: "#payslips",
+      //   path: "/payroll/payslips",
       //   permission: ["hr", "accountant"],
       // },
       {
         title: "Compliance Reports",
-        path: "#reports",
+        path: "/payroll/reports",
         permission: ["hr", "accountant"],
       },
     ],
   },
-  { title: "Sales", icon: ShoppingCart, path: "/sales", permission: ["sales", "admin",] },
+  {
+    title: "Sales",
+    icon: ShoppingCart,
+    path: "/sales",
+    permission: ["sales", "admin"],
+  },
   {
     title: "Accounting",
     icon: DollarSign,
@@ -155,32 +164,32 @@ const navItems: SidebarItem[] = [
     subItems: [
       {
         title: "General Ledger",
-        path: "#accounting-general-ledger",
-        permission: ["accounting", ],
+        path: "/accounting-general-ledger",
+        permission: ["accounting"],
       },
       {
         title: "Currencies",
-        path: "#accounting-currencies",
+        path: "/accounting-currencies",
         permission: ["accounting"],
       },
       {
         title: "Accounts Payable",
-        path: "#accounting-payable",
+        path: "/accounting-payable",
         permission: ["accounting"],
       },
       {
         title: "Accounts Receivable",
-        path: "#accounting-receivable",
+        path: "/accounting-receivable",
         permission: ["accounting"],
       },
       {
         title: "Financial Reports",
-        path: "#accounting-reports",
+        path: "/accounting-reports",
         permission: ["accounting"],
       },
       {
         title: "Tax Management",
-        path: "#accounting-tax",
+        path: "/accounting-tax",
         permission: ["accounting"],
       },
     ],
@@ -193,17 +202,17 @@ const navItems: SidebarItem[] = [
     subItems: [
       {
         title: "Orders",
-        path: "#procurement/orders",
+        path: "/procurement/orders",
         permission: ["procurement"],
       },
       {
         title: "Suppliers",
-        path: "#procurement/suppliers",
+        path: "/procurement/suppliers",
         permission: ["procurement"],
       },
       {
         title: "Reports",
-        path: "#procurement/reports",
+        path: "/procurement/reports",
         permission: ["procurement"],
       },
     ],
@@ -217,12 +226,12 @@ const navItems: SidebarItem[] = [
       { title: "Stock", path: "/inventory/stock", permission: ["inventory"] },
       {
         title: "Categories",
-        path: "#inventory/categories",
+        path: "/inventory/categories",
         permission: ["inventory"],
       },
       {
         title: "Movements",
-        path: "#inventory/movements",
+        path: "/inventory/movements",
         permission: ["inventory"],
       },
     ],

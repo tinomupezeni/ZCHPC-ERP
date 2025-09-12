@@ -111,7 +111,7 @@ export default function HrDashboard() {
     <div className="space-y-6 animate-fade-in">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Employees Card */}
-        <Card className="subtle-shadow">
+        <Card className="subtle-shadow" onClick={() => navigate('/hr/hr-employees')}>
           <CardHeader className="pb-2">
             <div className="flex items-center space-x-2">
               <div className="p-2 bg-blue-100 rounded-full">
@@ -131,7 +131,7 @@ export default function HrDashboard() {
         </Card>
 
         {/* Open Positions Card */}
-        <Card className="subtle-shadow">
+        <Card className="subtle-shadow" onClick={() => navigate('/hr/hr-recruitment')}>
           <CardHeader className="pb-2">
             <div className="flex items-center space-x-2">
               <div className="p-2 bg-green-100 rounded-full">
@@ -151,7 +151,7 @@ export default function HrDashboard() {
         </Card>
 
         {/* Time Off Requests Card */}
-        <Card className="subtle-shadow">
+        <Card className="subtle-shadow" onClick={() => navigate('/hr/hr-recruitment')}>
           <CardHeader className="pb-2">
             <div className="flex items-center space-x-2">
               <div className="p-2 bg-amber-100 rounded-full">

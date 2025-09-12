@@ -311,7 +311,7 @@ const Employees = () => {
                           : "Inactive"}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <td className="px-6 py-4 z-100000 whitespace-nowrap text-right text-sm font-medium">
                       <Menu
                         as="div"
                         className="relative inline-block text-left"

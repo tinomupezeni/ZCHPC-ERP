@@ -11,6 +11,7 @@ import TrainingSessionsPage from "@/components/HR/training_development/TrainingS
 import TrainingEnrollmentsPage from "@/components/HR/training_development/TrainingEnrollments";
 import TrainingCertificationsPage from "@/components/HR/training_development/TrainingCertifications";
 import { Card } from "@/components/ui/card";
+import HrReports from "@/components/HR/HrReports";
 
 // HRPage.tsx
 interface HRPageProps {
@@ -32,22 +33,24 @@ const HRPage = ({ openTab }: HRPageProps) => {
   }, []); // Initialize today with the current date
   const renderContent = () => {
     switch (openTab) {
-      case "#hr-payroll":
+      case "/hr/hr-payroll":
         return <Payroll />;
-      case "#hr-employees":
+      case "/hr/hr-employees":
         return <Employees />;
-      case "#hr-attendance":
+      case "/hr/hr-attendance":
         return <Attendance />;
-      case "#hr-recruitment":
+      case "/hr/hr-recruitment":
         return <Recruitment />;
-      case "#hr-training-programs":
+      case "/hr/hr-training-programs":
         return <TrainingProgramsPage />;
-      case "#hr-training-sessions":
+      case "/hr/hr-training-sessions":
         return <TrainingSessionsPage />;
-      case "#hr-training-enrollments":
+      case "/hr/hr-training-enrollments":
         return <TrainingEnrollmentsPage />;
-      case "#hr-training-certifications":
+      case "/hr/hr-training-certifications":
         return <TrainingCertificationsPage />;
+      case "/hr/hr-reports":
+        return <HrReports />;
       default:
         return <HrDashboard />;
     }
