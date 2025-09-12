@@ -294,6 +294,7 @@ class TaxBracket(models.Model):
     rate = models.DecimalField(max_digits=5, decimal_places=3) # e.g., 0.20 for 20%
     deduction = models.DecimalField(max_digits=10, decimal_places=2) # Deductible amount for that bracket
     active_from = models.DateField(default=timezone.now)
+    provider = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
         verbose_name = "Tax Bracket"
@@ -360,12 +361,18 @@ class Payroll(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(default=timezone.now,)
     notes = models.TextField(blank=True)
-    nssa_usd = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    pension_usd = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    nssa_zig = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    pension_zig = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    tax_usd = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    tax_zig = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    paye_usd = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    paye_zig = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    aids_levy_usd = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    aids_levy_zig = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    nssa_employee_usd = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    nssa_employer_usd = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    nssa_employee_zig = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    nssa_employer_zig = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_allowances_usd = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_allowances_zig = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_deductions_usd = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_deductions_zig = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     
     class Meta:

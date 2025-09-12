@@ -103,15 +103,25 @@ class Server {
 
   // fetch payslips
   static fetchPayslips = (month) => {
-    return axios.get(`${api_url}all/payslips/?period=${month}`);
+    return axios.get(`${api_url}api/payroll/payrolls/?period=${month}`);
   };
 
   // delete payslip
   static deleteEmployeeSlip = (id, period) => {
     return axios.delete(
-      `${api_url}/delete/payslip/?employee=${id}&period=${period}`
+      `${api_url}/payrolls/delete_slip/?employee=${id}&period=${period}`
     );
   };
+
+  // approve payslip
+static approvePayslip = (id, period) => {
+  return axios.post(
+    `${api_url}api/payroll/payrolls/approve_slip/`,
+    { employee: id, period: period }, // send data in body
+    { headers: getAuthHeaders() }
+  );
+};
+
 
   // API's for hr training and development
 

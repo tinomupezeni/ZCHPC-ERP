@@ -11,7 +11,7 @@ import { toast } from "sonner";
 const reportConfig = {
   leaveBalance: {
     title: "Leave Balance Report",
-    endpoint: "http://localhost:8000/api/leavebalances/",
+    endpoint: "http://localhost:8000/api/hr/payrolls/",
     headers: [
       "Employee ID",
       "Name",
@@ -434,8 +434,10 @@ export default function DynamicReport({ reportType }) {
     const fetchData = async () => {
       try {
         const res = await fetch(config.endpoint);
+        
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();
+        console.log(data);
         setReportData(data);
       } catch (err) {
         console.error(`Error fetching ${config.title}:`, err);

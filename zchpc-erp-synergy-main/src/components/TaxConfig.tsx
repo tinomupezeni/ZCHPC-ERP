@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getTaxBrackets, createTaxBracket, updateTaxBracket, deleteTaxBracket } from '../server/api'; // Assuming 'api' is in 'src/api.js' based on previous example
+import { getTaxBrackets, createTaxBracket, updateTaxBracket, deleteTaxBracket } from '../server/api'; 
 
 const TaxConfig = () => {
     const [taxBrackets, setTaxBrackets] = useState([]);
@@ -9,6 +9,7 @@ const TaxConfig = () => {
         max_income: '',
         rate: '',
         deduction: '',
+        provider: '', // Initial state for the provider
         active_from: new Date().toISOString().split('T')[0],
     });
     const [editingId, setEditingId] = useState(null);
@@ -60,6 +61,7 @@ const TaxConfig = () => {
                     max_income: '',
                     rate: '',
                     deduction: '',
+                    provider:'',
                     active_from: new Date().toISOString().split('T')[0],
                 });
             }
@@ -79,6 +81,7 @@ const TaxConfig = () => {
             rate: bracket.rate,
             deduction: bracket.deduction,
             active_from: bracket.active_from,
+            provider: bracket.provider,
         });
         setEditingId(bracket.id);
         setMessage('');
@@ -115,6 +118,24 @@ const TaxConfig = () => {
             )}
 
             <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 p-5 border border-gray-200 rounded-md bg-white">
+                <label className="block">
+                    <span className="text-gray-700">TAX PROVIDER:</span>
+                    <select
+                        name="provider"
+                        value={formData.provider}
+                        onChange={handleChange}
+                        required
+                        className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    >
+                        <option value="">Select a Tax Provider</option>
+                        <option value="PAYE">PAYE (Pay As You Earn)</option>
+                        <option value="NSSA">NSSA (National Social Security Authority)</option>
+                        <option value="ZIMDEF">ZIMDEF (Zimbabwe Manpower Development Fund)</option>
+                        <option value="AIDS Levy">AIDS Levy</option>
+                        <option value="Standard Development Levy">Standard Development Levy</option>
+                        {/* Add more common tax/statutory deduction names as needed */}
+                    </select>
+                </label>
                 <label className="block">
                     <span className="text-gray-700">Currency:</span>
                     <select
@@ -204,6 +225,7 @@ const TaxConfig = () => {
                                     max_income: '',
                                     rate: '',
                                     deduction: '',
+                                    provider:'',
                                     active_from: new Date().toISOString().split('T')[0],
                                 });
                             }}
@@ -222,6 +244,9 @@ const TaxConfig = () => {
                         <tr>
                             <th className="py-3 px-4 bg-gray-100 border-b border-gray-200 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                                 ID
+                            </th>
+                            <th className="py-3 px-4 bg-gray-100 border-b border-gray-200 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                Provider
                             </th>
                             <th className="py-3 px-4 bg-gray-100 border-b border-gray-200 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                                 Currency
@@ -250,6 +275,7 @@ const TaxConfig = () => {
                         {taxBrackets.map((bracket) => (
                             <tr key={bracket.id} className="hover:bg-gray-50">
                                 <td className="py-3 px-4 border-b border-gray-200 text-sm">{bracket.id}</td>
+                                <td className="py-3 px-4 border-b border-gray-200 text-sm">{bracket.provider}</td>
                                 <td className="py-3 px-4 border-b border-gray-200 text-sm">{bracket.currency}</td>
                                 <td className="py-3 px-4 border-b border-gray-200 text-sm">${bracket.min_income}</td>
                                 <td className="py-3 px-4 border-b border-gray-200 text-sm">{bracket.max_income ? `$${bracket.max_income}` : 'MAX'}</td>

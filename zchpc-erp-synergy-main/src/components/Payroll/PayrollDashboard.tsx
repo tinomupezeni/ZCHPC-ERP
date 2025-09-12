@@ -53,7 +53,7 @@ const PayrollDashboard = () => {
       );
       console.log(response.data);
 
-      setPayrollRecords(response.data.data);
+      setPayrollRecords(response.data);
     } catch (error) {
       console.error("Error fetching payroll records:", error);
     } finally {
@@ -72,10 +72,8 @@ const PayrollDashboard = () => {
 
   const filteredRecords = payrollRecords.filter((record) => {
     const matchesSearch =
-      record.employee?.employeeid.includes(searchTerm.toLowerCase()) ||
-      record.employee?.employeeid
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase());
+      record?.employee_id.includes(searchTerm.toLowerCase()) ||
+      record?.employee_id.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesDepartment =
       selectedDepartment === "All Departments" ||
@@ -104,6 +102,22 @@ const PayrollDashboard = () => {
         toast.error("Error deleting payslip", error);
         console.log(error);
       });
+  };
+
+  const approvePayslip = async (record) => {
+    try {
+      await Server.approvePayslip(record.id, record.period); // new endpoint
+      toast.success(`Payslip for ${record.employee_name} approved`);
+      // Update the local state so UI refreshes
+      setPayrollRecords((prev) =>
+        prev.map((r) =>
+          r.id === record.id ? { ...r, status: "Processed" } : r
+        )
+      );
+    } catch (error) {
+      console.error("Error approving payslip:", error);
+      toast.error("Failed to approve payslip");
+    }
   };
 
   // const processPayroll = async () => {
@@ -361,7 +375,7 @@ const PayrollDashboard = () => {
               ) : payrollRecords.length > 0 ? (
                 payrollRecords.map((record) => (
                   <tr
-                    key={`${record.employee?.employeeid}-${record.period}`}
+                    key={`${record?.employee_id}-${record?.period}`}
                     className="hover:bg-gray-50"
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -374,7 +388,7 @@ const PayrollDashboard = () => {
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900">
-                            {record?.employee_name}
+                            {record?.employee_name} {record?.employee_surname}
                           </div>
                           <div className="text-sm text-gray-500">
                             ID: {record?.employee_id}
@@ -382,33 +396,32 @@ const PayrollDashboard = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {record?.position}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 uppercase">
+                      {record?.employee_department}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
-                      {formatUSD(record.base_salary_usd)}
+                      {formatUSD(record?.base_salary_usd)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
                       {formatZIG(record?.base_salary_zig)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
-                      {formatUSD(record.net_salary_usd)}
+                      {formatUSD(record?.net_salary_usd)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
                       {formatZIG(record?.net_salary_zig)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {getStatusBadge(record.status)}
+                      {getStatusBadge(record?.status)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <Menu
                         as="div"
                         className="relative inline-block text-left"
                       >
-                        <div>
+                        <div className="flex items-center gap-2">
                           <MenuButton
                             className="inline-flex justify-center w-full rounded-md px-2 py-1 text-sm font-medium text-gray-700 hover:bg-gray-100 focus:outline-none"
-                            // onClick={() => setEditPayslip(!editPayslip)}
                             onClick={() =>
                               setOpenMenuId(
                                 openMenuId === record.id ? null : record.id
@@ -418,12 +431,28 @@ const PayrollDashboard = () => {
                             <MoreVertical className="h-5 w-5 text-gray-400" />
                           </MenuButton>
                         </div>
-                        {openMenuId === record.id && (
-                          <Menu
-                            as="div"
-                            className="right-1 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-1000000"
-                          >
-                            <MenuItem>
+
+                        {openMenuId === record?.id && (
+                          <Menu.Items className="absolute right-0 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
+                            {record.status !== "Processed" && (
+                              <Menu.Item>
+                                {({ active }) => (
+                                  <button
+                                    onClick={() => approvePayslip(record)}
+                                    className={`${
+                                      active
+                                        ? "bg-green-100 text-green-900"
+                                        : "text-green-700"
+                                    } group flex items-center w-full px-4 py-2 text-sm`}
+                                  >
+                                    <DollarSign className="mr-2 h-4 w-4" />
+                                    Approve Payslip
+                                  </button>
+                                )}
+                              </Menu.Item>
+                            )}
+
+                            <Menu.Item>
                               {({ active }) => (
                                 <button
                                   onClick={() => {
@@ -441,8 +470,9 @@ const PayrollDashboard = () => {
                                   View Payslip
                                 </button>
                               )}
-                            </MenuItem>
-                            <MenuItem>
+                            </Menu.Item>
+
+                            <Menu.Item>
                               {({ active }) => (
                                 <button
                                   className={`${
@@ -455,8 +485,9 @@ const PayrollDashboard = () => {
                                   Print Payslip
                                 </button>
                               )}
-                            </MenuItem>
-                            <MenuItem>
+                            </Menu.Item>
+
+                            <Menu.Item>
                               {({ active }) => (
                                 <button
                                   className={`${
@@ -469,26 +500,28 @@ const PayrollDashboard = () => {
                                   Email Payslip
                                 </button>
                               )}
-                            </MenuItem>
-                            <MenuItem>
+                            </Menu.Item>
+
+                            <Menu.Item>
                               {({ active }) => (
                                 <button
+                                  onClick={() =>
+                                    deletePayslip(record.id, record.period)
+                                  }
                                   className={`${
                                     active
                                       ? "bg-red-100 text-red-900"
                                       : "text-red-700"
                                   } group flex items-center w-full px-4 py-2 text-sm`}
-                                  onClick={() =>
-                                    deletePayslip(record.id, record.period)
-                                  }
                                 >
                                   <Trash2 className="mr-2 h-4 w-4" />
                                   Delete Payslip
                                 </button>
                               )}
-                            </MenuItem>
+                            </Menu.Item>
+
                             {record.status === "Failed" && (
-                              <MenuItem>
+                              <Menu.Item>
                                 {({ active }) => (
                                   <button
                                     className={`${
@@ -500,9 +533,9 @@ const PayrollDashboard = () => {
                                     Retry Payment
                                   </button>
                                 )}
-                              </MenuItem>
+                              </Menu.Item>
                             )}
-                          </Menu>
+                          </Menu.Items>
                         )}
                       </Menu>
                     </td>
@@ -597,7 +630,7 @@ const PayrollDashboard = () => {
             <div className="text-2xl font-bold text-blue-600 mt-1">
               {formatUSD(
                 payrollRecords.reduce(
-                  (sum, record) => sum + (Number(record.base_salary_usd) || 0),
+                  (sum, record) => sum + (Number(record?.base_salary_usd) || 0),
                   0
                 )
               )}
@@ -611,7 +644,7 @@ const PayrollDashboard = () => {
             <div className="text-2xl font-bold text-green-600 mt-1">
               {formatZIG(
                 payrollRecords.reduce(
-                  (sum, record) => sum + (Number(record.base_salary_zig) || 0),
+                  (sum, record) => sum + (Number(record?.base_salary_zig) || 0),
                   0
                 )
               )}
@@ -625,8 +658,9 @@ const PayrollDashboard = () => {
             </div>
             <div className="text-2xl font-bold text-yellow-600 mt-1">
               {
-                payrollRecords.filter((record) => record.status === "Processed")
-                  .length
+                payrollRecords.filter(
+                  (record) => record?.status === "Processed"
+                ).length
               }
               /{payrollRecords.length}
             </div>
