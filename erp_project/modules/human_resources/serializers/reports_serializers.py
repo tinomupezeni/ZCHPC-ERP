@@ -1,5 +1,5 @@
-from rest_framework import serializers
-from erp.models import Payroll, Employees, EmployeeDeductables, AllowanceType, DeductionType
+from erp.dependencies import *
+
 
 class EmployeeSerializer(serializers.ModelSerializer):
     class Meta:

@@ -1,8 +1,4 @@
-from datetime import datetime
-from django.db import transaction
-from django.utils.timezone import now
-from django.conf import settings
-from ..models import *
+from erp.dependencies import *
 
 class PayrollProcessor:
     @staticmethod

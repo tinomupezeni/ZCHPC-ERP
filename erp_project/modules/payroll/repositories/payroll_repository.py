@@ -1,4 +1,4 @@
-from erp.models import Payroll, DailyZiGRateToUSD, TaxBracket, NSSACap, Employees
+from erp.dependencies import *
 
 class PayrollRepository:
 

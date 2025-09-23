@@ -1,12 +1,5 @@
-# erp/services/payroll_service.py
-from datetime import datetime
-from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-from django.db import transaction
-from ..repositories.payroll_repository import PayrollRepository, TaxRepository, NSSARepository
-from erp.models import DailyZiGRateToUSD, Employees, PayrollPeriod, Payroll
+from erp.dependencies import *
 
-
-# erp/services/payroll_service.py
 class PayrollService:
 
     AIDS_LEVY_RATE = Decimal("0.03")
@@ -115,6 +108,17 @@ class PayrollService:
         total_usd = sum([d.amount for d in employee.deductions.all()])
         total_zig = sum([d.amount for d in employee.deductions.all()])
         return Decimal(total_usd), Decimal(total_zig)
+    
+    
+    @staticmethod
+    def get_latest_zig_to_usd_rate():
+        """
+        Fetch the latest ZiG to USD exchange rate from DailyZiGRateToUSD
+        """
+        latest_rate = DailyZiGRateToUSD.objects.order_by('-date').first()
+        if latest_rate:
+            return latest_rate.average
+        return latest_rate
     
     
     @staticmethod

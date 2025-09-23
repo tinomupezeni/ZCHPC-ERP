@@ -1,5 +1,4 @@
-from rest_framework import serializers
-from ..models import Employees, Department, TrainingProgram, TrainingSession, TrainingEnrollment
+from erp.dependencies import *
 
 class EmployeeSerializer(serializers.ModelSerializer):
     class Meta:

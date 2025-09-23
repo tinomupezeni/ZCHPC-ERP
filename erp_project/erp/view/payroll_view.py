@@ -1,17 +1,7 @@
-from django.shortcuts import get_object_or_404
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from rest_framework import status
-from datetime import datetime
-from django.utils.dateparse import parse_date
 
-from ..serializers.employee_serializers import EmployeePayslipSerializer
 
-from ..serializers.tax_tables_serializers import EmployeeDeductablesSerializer, NSSACapSerializer, PensionFundSerializer, TaxBracketSerializer, ZiGRateSerializer
-from ..models import *
-from ..serializers import payroll_serializer
-from ..services.payroll_processor import PayrollProcessor
-from rest_framework import viewsets
+from erp.dependencies import *
+
 
 
 @api_view(['POST'])

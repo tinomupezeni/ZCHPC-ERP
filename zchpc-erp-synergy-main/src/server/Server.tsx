@@ -3,6 +3,7 @@ import axios from "axios";
 const api_url = "http://127.0.0.1:8000/";
 // const api_url = "http://0.0.0.0:8000/";
 // const api_url = "http://192.168.80.92:8000/";
+
 const getAuthHeaders = () => {
   const token = localStorage.getItem("access_token");
 

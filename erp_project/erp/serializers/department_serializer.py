@@ -1,5 +1,4 @@
-from rest_framework import serializers
-from ..models import Department
+from erp.dependencies import *
 
 class DepartmentSerializer(serializers.ModelSerializer):
     class Meta:

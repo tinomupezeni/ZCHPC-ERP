@@ -1,8 +1,4 @@
-# erp/app_serializers/payroll_serializer.py
-from rest_framework import serializers
-from ..models import *
-from django.utils.timezone import now
-from decimal import Decimal, ROUND_HALF_UP
+from erp.dependencies import *
 
 class DailyZiGRateToUSDSerializer(serializers.ModelSerializer):
     class Meta:

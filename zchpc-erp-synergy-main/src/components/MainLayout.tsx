@@ -164,33 +164,38 @@ const navItems: SidebarItem[] = [
     subItems: [
       {
         title: "General Ledger",
-        path: "/accounting-general-ledger",
-        permission: ["accounting"],
+        path: "/accounting/accounting-general-ledger",
+        permission: ["accountant"],
+      },
+      {
+        title: "Payroll Process",
+        path: "/accounting/accounting-payroll",
+        permission: ["accountant"],
       },
       {
         title: "Currencies",
-        path: "/accounting-currencies",
-        permission: ["accounting"],
+        path: "/accounting/accounting-currencies",
+        permission: ["accountant"],
       },
       {
         title: "Accounts Payable",
-        path: "/accounting-payable",
-        permission: ["accounting"],
+        path: "/accounting/accounting-payable",
+        permission: ["accountant"],
       },
       {
         title: "Accounts Receivable",
-        path: "/accounting-receivable",
-        permission: ["accounting"],
+        path: "/accounting/accounting-receivable",
+        permission: ["accountant"],
       },
       {
         title: "Financial Reports",
-        path: "/accounting-reports",
-        permission: ["accounting"],
+        path: "/accounting/accounting-reports",
+        permission: ["accountant"],
       },
       {
         title: "Tax Management",
-        path: "/accounting-tax",
-        permission: ["accounting"],
+        path: "/accounting/accounting-tax",
+        permission: ["accountant"],
       },
     ],
   },
@@ -202,12 +207,27 @@ const navItems: SidebarItem[] = [
     subItems: [
       {
         title: "Orders",
-        path: "/procurement/orders",
+        path: "/procurement/purchase-orders",
         permission: ["procurement"],
       },
       {
         title: "Suppliers",
         path: "/procurement/suppliers",
+        permission: ["procurement"],
+      },
+      {
+        title: "Purchase Requests",
+        path: "/procurement/purchase-requests",
+        permission: ["procurement"],
+      },
+      {
+        title: "Budget Centers",
+        path: "/procurement/budget-centers",
+        permission: ["procurement"],
+      },
+      {
+        title: "Deliveries",
+        path: "/procurement/deliveries",
         permission: ["procurement"],
       },
       {

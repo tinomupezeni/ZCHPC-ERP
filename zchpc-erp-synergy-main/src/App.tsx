@@ -8,7 +8,7 @@ import LoginPage from "./pages/LoginPage";
 import Dashboard from "./pages/Dashboard";
 import SalesPage from "./pages/SalesPage";
 import AccountingPage from "./pages/AccountingPage";
-import ProcurementPage from "./pages/ProcurementPage";
+import ProcurementPage from "./components/Procurement/ProcurementPage";
 import HRPage from "./pages/HRPage";
 import InventoryPage from "./pages/InventoryPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -82,7 +82,7 @@ const App = () => {
               element={
                 <ProtectedRoute requiredPermission={["procurement", "admin"]}>
                   <MainLayout setOpenTab={setOpenTab}>
-                    <ProcurementPage />
+                    <ProcurementPage openTab={openTab}/>
                   </MainLayout>
                 </ProtectedRoute>
               }

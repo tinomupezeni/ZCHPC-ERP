@@ -2,8 +2,15 @@ import { PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import AccountDashboard from "@/components/Accounting/AccountDashboard";
 import CurrencyManager from "@/components/Accounting/Currencies";
+import PartnerManager from "@/components/Accounting/PartnerManager";
+import JournalEntries from "@/components/Accounting/JournalEntries";
+import ReportsDashboard from "@/components/Accounting/ReportsDashboard";
+import GeneralLedger from "@/components/Accounting/GeneralLedger";
+import AccountsPayable from "@/components/Accounting/AccountsPayable";
+import AccountsReceivable from "@/components/Accounting/AccountsReceivable";
+import TaxManager from "@/components/Accounting/TaxManager";
+import PayrollNotifications from "@/components/Accounting/PayrollNotifications";
 
-// HRPage.tsx
 interface AccountProps {
   openTab: string;
 }
@@ -11,8 +18,25 @@ interface AccountProps {
 const AccountingPage = ({ openTab }: AccountProps) => {
   const renderContent = () => {
     switch (openTab) {
-      case "accounting-currencies":
+      case "/accounting/accounting-general-ledger":
+        return <GeneralLedger />;
+      case "/accounting/accounting-currencies":
         return <CurrencyManager />;
+      case "/accounting/accounting-payable":
+        return <AccountsPayable />;
+      case "/accounting/accounting-receivable":
+        return <AccountsReceivable />;
+      case "/accounting/accounting-reports":
+        return <ReportsDashboard />;
+      case "/accounting/accounting-tax":
+        return <TaxManager />;
+      // Optional extras:
+      case "/accounting/accounting-partners":
+        return <PartnerManager />;
+      case "/accounting/accounting-entries":
+        return <JournalEntries />;
+      case "/accounting/accounting-payroll":
+        return <PayrollNotifications />;
       default:
         return <AccountDashboard />;
     }
@@ -26,12 +50,6 @@ const AccountingPage = ({ openTab }: AccountProps) => {
           <p className="text-muted-foreground">
             Manage financial transactions and reports
           </p>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Button>
-            <PlusCircle className="mr-2 h-4 w-4" />
-            New Transaction
-          </Button>
         </div>
       </div>
 

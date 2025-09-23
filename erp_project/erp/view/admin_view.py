@@ -1,10 +1,5 @@
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from django.db.models import Count, Sum
-from ..models import Employees, Department, Payroll
-from django.utils import timezone
-from datetime import timedelta
-import calendar
+
+from erp.dependencies import *
 
 class DashboardDataView(APIView):
     def get(self, request, *args, **kwargs):

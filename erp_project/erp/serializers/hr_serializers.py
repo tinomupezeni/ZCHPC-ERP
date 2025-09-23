@@ -1,7 +1,4 @@
-from rest_framework import serializers
-from ..models import TrainingCertification, TrainingEnrollment, TrainingProgram, TrainingSession, AttendanceRecord
-from django.utils.timezone import now
-from django.utils import timezone
+from erp.dependencies import *
 
 
 class TrainingProgramSerializer(serializers.ModelSerializer):

@@ -1,9 +1,7 @@
-from rest_framework import status
-from rest_framework.response import Response
-from rest_framework.decorators import api_view
-from .models import CustomUser, Employees
-from .serializers import employee_serializers
-from django.contrib.auth import get_user_model
+
+# from django.contrib.auth import get_user_model
+
+from erp.dependencies import *
 
 User = get_user_model()
 

@@ -20,7 +20,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
      path('', include('erp.urls')),
      path('api/payroll/', include('modules.payroll.payroll_urls')),
-     path('api/hr/', include('modules.hr.hr_urls')),
+     path('api/hr/', include('modules.human_resources.hr_urls')),
+     path('api/procurement/', include('modules.procurement.urls')),
 
       path("__reload__/", include("django_browser_reload.urls")),
 ]

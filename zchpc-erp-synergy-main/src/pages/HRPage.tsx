@@ -69,10 +69,9 @@ const HRPage = ({ openTab }: HRPageProps) => {
             </p>
           </div>
         </div>
-        <Card className="subtle-shadow flex items-center p-4">
+        <Card className="shadow-sm flex items-center p-4 bg-primary">
           <div className="text-right">
-            <p className="text-xl font-semibold text-primary">{today}</p>
-            <p className="text-sm text-muted-foreground">Current Date</p>
+            <p className="text-xl font-semibold text-white">{today}</p>
           </div>
         </Card>
       </div>

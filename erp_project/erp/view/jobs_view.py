@@ -1,10 +1,5 @@
 # jobs/views.py
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from ..models import Job
-from ..serializers.jobs_serializer import JobSerializer
-from rest_framework.generics import RetrieveUpdateAPIView
+from erp.dependencies import *
 
 class JobListCreate(APIView):
     """List all jobs or create a new one"""

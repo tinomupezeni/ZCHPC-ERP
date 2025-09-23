@@ -1,13 +1,5 @@
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status, viewsets
-from django.db.models import Count, Q
-from django.utils import timezone
-from ..models import Employees, Department, TrainingProgram, TrainingSession
-from ..serializers.hr_dashboard_serializer import (
-    EmployeeSerializer, DepartmentSerializer, TrainingProgramSerializer,
-    TrainingSessionSerializer
-)
+
+from erp.dependencies import *
 
 class HrDashboardView(APIView):
     """

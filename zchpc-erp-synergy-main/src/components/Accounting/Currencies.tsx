@@ -31,12 +31,12 @@ const CurrencyManager = () => {
       prev.map((currency) =>
         currency.code === selectedCurrency
           ? {
-              ...currency,
-              rates: [
-                { rate: parseFloat(newRate.rate), date: new Date(newRate.date) },
-                ...currency.rates, // Keep history sorted
-              ],
-            }
+            ...currency,
+            rates: [
+              { rate: parseFloat(newRate.rate), date: new Date(newRate.date) },
+              ...currency.rates, // Keep history sorted
+            ],
+          }
           : currency
       )
     );
@@ -136,6 +136,22 @@ const CurrencyManager = () => {
           </Table>
         </div>
       )}
+      <div className="space-y-4">
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {currencies.map((cur) => (
+            <div key={cur.id} className="p-4 border rounded shadow-sm">
+              <p className="font-semibold">{cur.name} ({cur.code})</p>
+              <p>Symbol: {cur.symbol}</p>
+              <p>Rate to Base: {cur.rate_to_base}</p>
+              <div className="mt-2 flex space-x-2">
+                <Button size="sm" variant="outline">Edit</Button>
+                <Button size="sm" variant="destructive">Delete</Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 };

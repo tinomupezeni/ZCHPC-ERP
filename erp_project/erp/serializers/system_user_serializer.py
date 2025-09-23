@@ -1,5 +1,4 @@
-from rest_framework import serializers
-from ..models import CustomUser
+from erp.dependencies import *
 
 class CustomUserSerializer(serializers.ModelSerializer):
     class Meta:

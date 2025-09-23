@@ -1,13 +1,20 @@
-from datetime import timedelta
+from datetime import date, timedelta
 import uuid
-from django.contrib.auth.models import AbstractUser
-from django.db import models
-# In your models.py
+from django.db import models, transaction
+from django.db.models import Count, Sum, Q
 from django.utils import timezone
-from django.core.validators import MinValueValidator
-from django.contrib.auth import get_user_model
+from django.utils.timezone import now
 from jsonschema import ValidationError
-from datetime import date 
+from django.utils.timezone import now
+from django.utils.dateparse import parse_date
+from django.core.validators import MinValueValidator
+from django.shortcuts import get_object_or_404, render, redirect
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from django.contrib import admin
+from django.contrib.auth import authenticate, login, get_user_model
+from django.contrib.auth.models import AbstractUser
 
 # *******************
 # Departments

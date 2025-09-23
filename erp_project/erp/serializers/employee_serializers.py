@@ -1,8 +1,6 @@
-from rest_framework import serializers
 
-from ..serializers.payroll_serializer import AllowanceTypeSerializer, DeductionTypeSerializer
-from ..models import AllowanceType, CustomUser, DeductionType, Employees
-from datetime import datetime
+
+from erp.dependencies import *
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(source="department.name", read_only=True)

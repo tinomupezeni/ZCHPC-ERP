@@ -1,6 +1,6 @@
-from rest_framework import generics, permissions, filters
-from ..models import AuditLog
-from ..serializers.audit_serializer import AuditLogSerializer
+
+from erp.dependencies import *
+
 
 class AuditLogListView(generics.ListAPIView):
     serializer_class = AuditLogSerializer

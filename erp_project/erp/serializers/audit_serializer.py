@@ -1,5 +1,4 @@
-from rest_framework import serializers
-from ..models import AuditLog
+from erp.dependencies import *
 
 class AuditLogSerializer(serializers.ModelSerializer):
     class Meta:

@@ -16,6 +16,9 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .view.jobs_view import JobListCreate, JobDetail, JobToggleStatus
 from .view.auth_view import CustomTokenObtainPairView
 
+
+from erp.dependencies import *
+
 router = DefaultRouter()
 router.register(r'zig-rates', ZiGRateToUSDViewSet)
 router.register(r'nssa-caps', NSSACapViewSet)

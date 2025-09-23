@@ -1,21 +1,8 @@
-from ..serializers import employee_serializers
-from ..serializers.hr_serializers import *
-from rest_framework import status
-from rest_framework.response import Response
-from rest_framework.decorators import api_view
-from ..models import Employees, TrainingProgram
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
-from rest_framework.parsers import JSONParser
-from django.shortcuts import get_object_or_404
-from django.db.models import Q
-from rest_framework.decorators import api_view, parser_classes
-from rest_framework.parsers import MultiPartParser, FormParser
-from django.contrib.auth import get_user_model
-import csv
-from datetime import datetime
-from ..permissions import RolePermission
+
+
+
+from erp.dependencies import *
+
 
 # employee registration
 @api_view(['POST'])

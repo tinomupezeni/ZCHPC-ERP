@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
+import { BarChart3, Download } from "lucide-react";
 import { motion } from "framer-motion";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
@@ -410,17 +410,17 @@ const reportConfig = {
     ],
   },
   zimdef: {
-  title: "ZIMDEF Report",
-  endpoint: "http://localhost:8000/api/zimdef/",
-  headers: ["Employee ID", "Name", "Period", "Amount (USD)", "Amount (ZiG)"],
-  dataMap: (item) => [
-    item.employee.employeeid,
-    `${item.employee.firstname} ${item.employee.surname}`,
-    item.period,
-    item.amount_usd,
-    item.amount_zig,
-  ],
-},
+    title: "ZIMDEF Report",
+    endpoint: "http://localhost:8000/api/zimdef/",
+    headers: ["Employee ID", "Name", "Period", "Amount (USD)", "Amount (ZiG)"],
+    dataMap: (item) => [
+      item.employee.employeeid,
+      `${item.employee.firstname} ${item.employee.surname}`,
+      item.period,
+      item.amount_usd,
+      item.amount_zig,
+    ],
+  },
   // Add other reports here following the same pattern
 };
 
@@ -428,13 +428,18 @@ export default function DynamicReport({ reportType }) {
   const [reportData, setReportData] = useState([]);
   const config = reportConfig[reportType];
 
+  const today = new Date();
+  const formattedDate = `${today.getDate()}/${
+    today.getMonth() + 1
+  }/${today.getFullYear()}`;
+
   useEffect(() => {
     if (!config) return;
 
     const fetchData = async () => {
       try {
         const res = await fetch(config.endpoint);
-        
+
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();
         console.log(data);
@@ -476,43 +481,67 @@ export default function DynamicReport({ reportType }) {
             <Download className="w-4 h-4 mr-2" /> Export PDF
           </Button>
         </div>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border">
-              <thead className="bg-gray-100">
-                <tr>
-                  {config.headers.map((header) => (
-                    <th key={header} className="p-2 border">
-                      {header}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {reportData.length > 0 ? (
-                  reportData.map((item, index) => (
-                    <tr key={index}>
-                      {config.dataMap(item).map((cell, cellIndex) => (
-                        <td key={cellIndex} className="p-2 border">
-                          {cell}
-                        </td>
-                      ))}
-                    </tr>
-                  ))
-                ) : (
+        <div className="border border-black">
+          {config.title === "Leave Balance Report" && (
+            <div className="w-full border-b border-black mb-5">
+              <div className="flex align-center text-center justify-center font-semibold">
+                <div>
+                  <h1 className="uppercase">Leave Balance Report</h1>
+                  <p>Department of Human Resources</p>
+                </div>
+              </div>
+              <div className="flex justify-between font-semibold mx-7">
+                <div>
+                  <p>RUN DATE : {formattedDate}</p>
+                  <p>PAGE : 1</p>
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <BarChart3 className="h-6 w-6 text-primary" />
+                    <span className="text-lg font-semibold">ZCHPC ERP</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border border-black">
+                <thead className="bg-white">
                   <tr>
-                    <td
-                      colSpan={config.headers.length}
-                      className="p-4 text-center text-gray-500"
-                    >
-                      No data available.
-                    </td>
+                    {config.headers.map((header) => (
+                      <th key={header} className="p-2 border">
+                        {header}
+                      </th>
+                    ))}
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
+                </thead>
+                <tbody>
+                  {reportData.length > 0 ? (
+                    reportData.map((item, index) => (
+                      <tr key={index}>
+                        {config.dataMap(item).map((cell, cellIndex) => (
+                          <td key={cellIndex} className="p-2 border">
+                            {cell}
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan={config.headers.length}
+                        className="p-4 text-center text-gray-500"
+                      >
+                        No data available.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </div>
       </Card>
     </motion.div>
   );

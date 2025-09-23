@@ -1,10 +1,5 @@
-from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework.response import Response
-from rest_framework import status
 
-from ..serializers.auth_serializer import CustomTokenObtainPairSerializer
-from ..models import CustomUser, AuditLog
-
+from erp.dependencies import *
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
