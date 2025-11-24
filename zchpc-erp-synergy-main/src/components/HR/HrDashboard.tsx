@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Server from "../../server/Server"; // Make sure to import your Server utility
+import { hrDashboard } from "@/server/hr.services";
 import { useNavigate } from "react-router-dom";
 
 // Define a type or interface for the data to ensure consistency and help with autocompletion
@@ -73,7 +74,7 @@ export default function HrDashboard() {
     // Fetch data from the server
     const fetchData = async () => {
       try {
-        const response = await Server.fetchHrDashboardData(); // Assuming this is your API call
+        const response = await hrDashboard(); // Assuming this is your API call
         setData(response.data);
       } catch (error) {
         console.error("Failed to fetch HR dashboard data:", error);

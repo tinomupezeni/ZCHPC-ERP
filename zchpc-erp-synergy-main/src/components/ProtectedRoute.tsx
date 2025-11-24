@@ -11,28 +11,28 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children, 
   requiredPermission 
 }) => {
-  const { isAuthenticated, user, isLoading, checkPermission } = useAuth();
+  const { user, isLoading, checkPermission } = useAuth(); // This now works!
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-  if (isLoading) return; // wait for auth check to finish
+    if (isLoading) return; // Wait for the context's auth check
 
-  // If still no user after isLoading, redirect
-  if (!user) {
-    navigate('/login', {
-      state: { from: location.pathname },
-      replace: true,
-    });
-    return;
-  }
+    // If check is done and there's no user, redirect to login
+    if (!user) {
+      navigate('/login', {
+        state: { from: location.pathname },
+        replace: true,
+      });
+      return;
+    }
 
-  // If permission is required but user doesn't have it
-  if (requiredPermission && !checkPermission(requiredPermission)) {
-    user?.role === "admin" ? navigate("/dashboard") : navigate("/hr");
-  }
-}, [isLoading, user, requiredPermission, navigate, location.pathname]);
-
+    // If permission is required but user doesn't have it
+    if (requiredPermission && !checkPermission(requiredPermission)) {
+      // FIXED: Redirect to a single, safe default page
+      navigate("/dashboard", { replace: true }); 
+    }
+  }, [isLoading, user, requiredPermission, navigate, location.pathname, checkPermission]);
   // Render a isLoading spinner while the auth status is being determined
   if (isLoading) {
     return (

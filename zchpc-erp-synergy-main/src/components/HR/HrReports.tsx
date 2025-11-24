@@ -1,286 +1,176 @@
-import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Search,
-  BarChart4,
-  Users2,
-  DollarSign,
-  Clock,
-  FileText,
-  UserMinus,
-  Award,
-  Truck,
-  BriefcaseMedical,
-  Book,
-  Building,
-  TrendingUp,
-  Handshake,
-  Shield,
-  Calculator,
-  FileWarning,
+import { useState } from "react";
+import { 
+  Search, Users2, DollarSign, FileText, UserMinus, 
+  Award, Clock, Handshake, FileWarning, TrendingUp, 
+  Calculator, Building, BriefcaseMedical, Shield, Book, 
+  Truck, ChevronRight, LayoutGrid
 } from "lucide-react";
-import { toast } from "sonner";
-import Server from "@/server/Server";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import BasicSalaryReport from "./reports/BasicSalaryReport";
-import LeaveBalanceReport from "./reports/LeaveBalanceReport";
-import PAYEReport from "./reports/PAYEReport";
-import DeductionsReport from "./reports/DeductionsReport";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import DynamicReport from "./reports/DynamicReports";
 
+// Group reports logically for easier navigation
+const REPORT_GROUPS = [
+  {
+    title: "Core Payroll",
+    items: [
+      { id: "basicSalary", label: "Basic Salary", icon: DollarSign },
+      { id: "paye", label: "PAYE Tax", icon: FileText },
+      { id: "nssa", label: "NSSA", icon: Shield },
+      { id: "necPension", label: "NEC Pension", icon: Shield },
+      { id: "zimdef", label: "ZIMDEF", icon: Building },
+      { id: "standardDevLevy", label: "Std Dev Levy", icon: Building },
+    ]
+  },
+  {
+    title: "Benefits & Allowances",
+    items: [
+      { id: "allowances", label: "All Allowances", icon: Award },
+      { id: "medicalAid", label: "Medical Aid", icon: BriefcaseMedical },
+      { id: "cashInM", label: "Cash in Lieu of Medical", icon: Calculator },
+      { id: "funeralPolicy", label: "Funeral Policy", icon: Shield },
+      { id: "vehicleBenefit", label: "Vehicle Benefit", icon: Truck },
+      { id: "clothing", label: "Clothing Allowance", icon: Award },
+      { id: "bonus", label: "Bonus", icon: DollarSign },
+    ]
+  },
+  {
+    title: "HR Management",
+    items: [
+      { id: "leaveBalance", label: "Leave Balances", icon: Users2 },
+      { id: "overtime", label: "Overtime", icon: Clock },
+      { id: "acting", label: "Acting Allowance", icon: Handshake },
+      { id: "promotion", label: "Promotions", icon: TrendingUp },
+      { id: "training", label: "Training Costs", icon: Book },
+    ]
+  },
+  {
+    title: "Deductions & Loans",
+    items: [
+      { id: "deductions", label: "General Deductions", icon: UserMinus },
+      { id: "loan", label: "Employee Loans", icon: DollarSign },
+      { id: "terminalBenefits", label: "Terminal Benefits", icon: FileWarning },
+      { id: "retention", label: "Retention", icon: TrendingUp },
+    ]
+  }
+];
+
 const HrReports = () => {
-  const [reports, setReports] = useState({
-    leaveBalance: [],
-    basicSalary: [],
-    paye: [],
-    nssa: [],
-    deductions: [],
-    allowances: [],
-    bonus: [],
-    overtime: [],
-    acting: [],
-    terminalBenefits: [],
-    retention: [],
-    cashInM: [],
-    zimdef: [],
-    loan: [],
-    clothing: [],
-    medicalAid: [],
-    funeralPolicy: [],
-    training: [],
-    standardDevLevy: [],
-    promotion: [],
-    vehicleBenefit: [],
-    necPension: [],
-  });
-  const [selectedReport, setSelectedReport] = useState("leaveBalance");
+  const [selectedReport, setSelectedReport] = useState("basicSalary");
   const [searchTerm, setSearchTerm] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // useEffect(() => {
-  //   // Fetches all the necessary report data from the server.
-  //   const fetchReports = async () => {
-  //     try {
-  //       const response = await Server.fetchFinancialReports();
-  //       setReports(response.data);
-  //     } catch (error) {
-  //       console.error("Failed to fetch reports:", error);
-  //       toast.error("Failed to load reports.");
-  //     }
-  //   };
-  //   fetchReports();
-  // }, []);
-
-  const getFilteredData = (reportType) => {
-    const data = reports[reportType] || [];
-    if (!searchTerm) {
-      return data;
-    }
-    return data.filter((item) => {
-      const value =
-        item.employeeName || item.name || item.description || item.position;
-      return value && value.toLowerCase().includes(searchTerm.toLowerCase());
-    });
-  };
-
-  const renderContent = () => {
-    console.log(selectedReport);
-
-    switch (selectedReport) {
-      case "leaveBalance":
-        return <LeaveBalanceReport />;
-      case "basicSalary":
-        return <BasicSalaryReport />;
-      case "paye":
-        return <PAYEReport />;
-      case "nssa":
-        return <BasicSalaryReport />;
-      case "deductions":
-        return <DeductionsReport />;
-      case "allowances":
-        return <BasicSalaryReport />;
-      case "overtime":
-        return <BasicSalaryReport />;
-      case "actingAllowance":
-        return <BasicSalaryReport />;
-      case "terminalBenefits":
-        return <BasicSalaryReport />;
-      case "retention":
-        return <BasicSalaryReport />;
-      case "cashInM":
-        return <BasicSalaryReport />;
-      case "zimdef":
-        return <BasicSalaryReport />;
-      case "employeeLoans":
-        return <BasicSalaryReport />;
-      case "clothingAllowance":
-        return <BasicSalaryReport />;
-      case "medicalAid":
-        return <BasicSalaryReport />;
-      case "funeralPolicy":
-        return <BasicSalaryReport />;
-      case "training":
-        return <BasicSalaryReport />;
-      case "standardDevLevy":
-        return <BasicSalaryReport />;
-      case "promotion":
-        return <BasicSalaryReport />;
-      case "vehicleBenefit":
-        return <BasicSalaryReport />;
-      case "necPension":
-        return <BasicSalaryReport />;
-      case "bonus":
-        return <BasicSalaryReport />;
-      default:
-        return (
-          <div className="p-4 text-center text-muted-foreground">
-            Select a report to view its data.
-          </div>
-        );
-    }
-  };
+  // Find the active label for the header
+  const activeReportLabel = REPORT_GROUPS.flatMap(g => g.items).find(i => i.id === selectedReport)?.label;
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Financial Reports
-          </h1>
-          <p className="text-muted-foreground">
-            Comprehensive financial and payroll reports for analysis.
-          </p>
+    <div className="flex h-[calc(100vh-4rem)] bg-gray-50">
+      
+      {/* --- Sidebar Navigation --- */}
+      <div className={`w-72 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col transition-all duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-72 hidden'}`}>
+        <div className="p-6 border-b border-gray-100">
+          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+            <LayoutGrid className="h-6 w-6 text-blue-600" />
+            Reports Hub
+          </h2>
+          <p className="text-xs text-gray-500 mt-1">Financial & HR Analytics</p>
         </div>
-        <div className="relative w-full sm:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search all reports..."
-            className="pl-9"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
+        
+        <ScrollArea className="flex-1 px-4 py-6">
+          <div className="space-y-8">
+            {REPORT_GROUPS.map((group) => (
+              <div key={group.title}>
+                <h3 className="px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                  {group.title}
+                </h3>
+                <div className="space-y-1">
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = selectedReport === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => setSelectedReport(item.id)}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group ${
+                          isActive 
+                            ? "bg-blue-50 text-blue-700 shadow-sm" 
+                            : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                        }`}
+                      >
+                        <span className={`p-1.5 rounded-md ${isActive ? "bg-white text-blue-600 shadow-sm" : "bg-gray-100 text-gray-500 group-hover:bg-white"}`}>
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        {item.label}
+                        {isActive && <ChevronRight className="h-4 w-4 ml-auto text-blue-400" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
       </div>
 
-      <div className="flex items-center gap-4 flex-wrap">
-        <Select value={selectedReport} onValueChange={setSelectedReport}>
-          <SelectTrigger className="w-full sm:w-[240px]">
-            {/* <BarChart4 className="h-4 w-4 mr-2 text-muted-foreground" /> */}
-            <SelectValue placeholder="Select a report" />
-          </SelectTrigger>
-          <SelectContent>
-            {/* List of Report SelectItems */}
-            <SelectItem value="leaveBalance" className="flex">
-              <span>
-                <Users2 className="mr-2 h-4 w-4" />
-              </span>
-              <span className="font-bold">Leave Balance</span>
-            </SelectItem>
-            <SelectItem value="basicSalary">
-              <DollarSign className="mr-2 h-4 w-4" />
-              Basic Salary
-            </SelectItem>
-            <SelectItem value="paye">
-              <FileText className="mr-2 h-4 w-4" />
-              PAYE
-            </SelectItem>
-            <SelectItem value="nssa">
-              <FileText className="mr-2 h-4 w-4" />
-              N.A.S.A
-            </SelectItem>
-            <SelectItem value="deductions">
-              <UserMinus className="mr-2 h-4 w-4" />
-              Deductions
-            </SelectItem>
-            <SelectItem value="allowances">
-              <Award className="mr-2 h-4 w-4" />
-              Allowances
-            </SelectItem>
-            <SelectItem value="bonus">
-              <DollarSign className="mr-2 h-4 w-4" />
-              Bonus
-            </SelectItem>
-            <SelectItem value="overtime">
-              <Clock className="mr-2 h-4 w-4" />
-              Overtime/Shortime
-            </SelectItem>
-            <SelectItem value="acting">
-              <Handshake className="mr-2 h-4 w-4" />
-              Acting
-            </SelectItem>
-            <SelectItem value="terminalBenefits">
-              <FileWarning className="mr-2 h-4 w-4" />
-              Terminal Benefits
-            </SelectItem>
-            <SelectItem value="retention">
-              <TrendingUp className="mr-2 h-4 w-4" />
-              Retention
-            </SelectItem>
-            <SelectItem value="cashInM">
-              <Calculator className="mr-2 h-4 w-4" />
-              Cash in Lieu of Medical
-            </SelectItem>
-            <SelectItem value="zimdef">
-              <Building className="mr-2 h-4 w-4" />
-              ZIMDEF
-            </SelectItem>
-            <SelectItem value="loan">
-              <DollarSign className="mr-2 h-4 w-4" />
-              Loan
-            </SelectItem>
-            <SelectItem value="clothing">
-              <Award className="mr-2 h-4 w-4" />
-              Clothing
-            </SelectItem>
-            <SelectItem value="medicalAid">
-              <BriefcaseMedical className="mr-2 h-4 w-4" />
-              Medical Aid
-            </SelectItem>
-            <SelectItem value="funeralPolicy">
-              <Shield className="mr-2 h-4 w-4" />
-              Funeral Policy
-            </SelectItem>
-            <SelectItem value="training">
-              <Book className="mr-2 h-4 w-4" />
-              Training
-            </SelectItem>
-            <SelectItem value="standardDevLevy">
-              <Building className="mr-2 h-4 w-4" />
-              Standard Dev Levy
-            </SelectItem>
-            <SelectItem value="promotion">
-              <TrendingUp className="mr-2 h-4 w-4" />
-              Promotion
-            </SelectItem>
-            <SelectItem value="vehicleBenefit">
-              <Truck className="mr-2 h-4 w-4" />
-              Vehicle Benefit
-            </SelectItem>
-            <SelectItem value="necPension">
-              <Shield className="mr-2 h-4 w-4" />
-              NEC Pension
-            </SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      {/* --- Main Content Area --- */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        
+        {/* Header Toolbar */}
+        <div className="bg-white border-b border-gray-200 px-8 py-5 flex justify-between items-center sticky top-0 z-10">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">{activeReportLabel}</h1>
+            <p className="text-sm text-gray-500 mt-1">Viewing real-time data for {new Date().getFullYear()}</p>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <div className="relative w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search in report..."
+                className="pl-10 bg-gray-50 border-gray-200 focus:bg-white transition-all"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <button className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm">
+              Export PDF
+            </button>
+            <button className="px-4 py-2 bg-blue-600 rounded-lg text-sm font-medium text-white hover:bg-blue-700 shadow-sm shadow-blue-200">
+              Export CSV
+            </button>
+          </div>
+        </div>
 
-      <div className="mt-6">
-        <DynamicReport reportType={selectedReport} searchTerm={searchTerm} />
+        {/* Report Container */}
+        <div className="flex-1 overflow-auto p-8">
+          <div className="max-w-7xl mx-auto space-y-6">
+            
+            {/* Summary Cards (Optional Placeholder for now) */}
+            {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+               <Card className="border-none shadow-sm bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+                 <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-blue-100">Total Amount</CardTitle></CardHeader>
+                 <CardContent><div className="text-2xl font-bold">$142,300.00</div></CardContent>
+               </Card>
+               <Card className="border-none shadow-sm">
+                 <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">Employees</CardTitle></CardHeader>
+                 <CardContent><div className="text-2xl font-bold text-gray-800">142</div></CardContent>
+               </Card>
+               <Card className="border-none shadow-sm">
+                 <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">Variance</CardTitle></CardHeader>
+                 <CardContent><div className="text-2xl font-bold text-green-600">+2.4%</div></CardContent>
+               </Card>
+            </div> */}
+
+            {/* The Actual Report Table */}
+            <Card className="border-gray-200 shadow-sm overflow-hidden">
+              <CardContent className="p-0">
+                <DynamicReport reportType={selectedReport} searchTerm={searchTerm} />
+              </CardContent>
+            </Card>
+
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -9,7 +9,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   BarChart3,
-  TrendingUp,
   Users,
   Clock,
   CheckCircle2,
@@ -35,71 +34,66 @@ import {
   Legend,
 } from "recharts";
 import { useNavigate } from "react-router-dom";
-import Server from "../server/Server"; // Make sure to import your Server utility
+import { apiClient } from "../server/apiClient"; // 1. Use apiClient
+import { toast } from "sonner"; // 2. Import toast for errors
+import { getAdminDashboardData } from "../server/admin.services";
+import { DashboardData } from "../types/admin";
+
+// --- Define the data structure ---
+// (This is based on your component's initial state)
+interface DashboardData {
+  metrics: {
+    total_employees: number;
+    total_attendees: number;
+  };
+  charts: {
+    employee_distribution: { department: string; employees: number }[];
+    payroll_distribution: {
+      employee__department: string;
+      total_usd: string;
+      total_zig: string;
+    }[];
+  };
+  lists: {
+    tasks_due: {
+      id: number;
+      text: string;
+      done: boolean;
+      module: string;
+      due: string;
+    }[];
+  };
+}
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8"];
 
-const Dashboard = () => {
-  const [dashboardData, setDashboardData] = useState({
-    metrics: {
-      total_employees: 0,
-      total_attendees: 0,
-    },
-    charts: {
-      employee_distribution: [],
-      payroll_distribution: [],
-    },
-    lists: {
-      recent_activities: [],
-      tasks_due: [],
-    },
-  });
-  const [loading, setLoading] = useState(true);
+// --- Helper: Get Module Icon (Moved outside component) ---
+const getModuleIcon = (module: string) => {
+  switch (module) {
+    case "sales":
+      return <ShoppingCart className="h-4 w-4 text-blue-500" />;
+    case "hr":
+      return <Users className="h-4 w-4 text-green-500" />;
+    case "procurement":
+      return <DollarSign className="h-4 w-4 text-amber-500" />;
+    case "inventory":
+      return <Package className="h-4 w-4 text-purple-500" />;
+    case "accounting":
+      return <BarChart3 className="h-4 w-4 text-red-500" />;
+    default:
+      return <BarChart3 className="h-4 w-4" />;
+  }
+};
+
+// --- Helper: Metric Card Component (Moved outside component) ---
+const MetricCard = ({ title, value, icon, path }: {
+  title: string;
+  value: string;
+  icon: React.ReactNode;
+  path: string;
+}) => {
   const navigate = useNavigate();
-  const [today, setToday] = useState(""); // Add this state for the date
-
-  useEffect(() => {
-    const todayDate = new Date();
-    const options = {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    };
-    setToday(todayDate.toLocaleDateString("en-US", options));
-
-    const fetchData = async () => {
-      try {
-        const response = await Server.fetchDashboardData(); // Assuming this is your API call
-        setDashboardData(response.data);
-      } catch (error) {
-        console.error("Failed to fetch dashboard data:", error);
-        // Handle error, e.g., show a toast notification
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
-
-  const getModuleIcon = (module) => {
-    switch (module) {
-      case "sales":
-        return <ShoppingCart className="h-4 w-4 text-blue-500" />;
-      case "hr":
-        return <Users className="h-4 w-4 text-green-500" />;
-      case "procurement":
-        return <DollarSign className="h-4 w-4 text-amber-500" />;
-      case "inventory":
-        return <Package className="h-4 w-4 text-purple-500" />;
-      case "accounting":
-        return <BarChart3 className="h-4 w-4 text-red-500" />;
-      default:
-        return <BarChart3 className="h-4 w-4" />;
-    }
-  };
-
-  const renderMetricCard = (title, value, icon, path) => (
+  return (
     <Card className="hover-scale subtle-shadow">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
@@ -107,7 +101,6 @@ const Dashboard = () => {
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">{value}</div>
-
         <Button
           variant="ghost"
           size="sm"
@@ -119,7 +112,68 @@ const Dashboard = () => {
       </CardContent>
     </Card>
   );
+};
 
+// --- Main Dashboard Component ---
+const Dashboard = () => {
+  // 3. Use null initial state and add error state
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [today, setToday] = useState("");
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Set today's date
+    const todayDate = new Date();
+    const options: Intl.DateTimeFormatOptions = {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    };
+    setToday(todayDate.toLocaleDateString("en-US", options));
+
+    // Fetch dashboard data
+    const fetchData = async () => {
+      try {
+        // 4. Use apiClient and the correct dashboard URL
+        const response = await getAdminDashboardData();
+        console.log(response);
+        
+        setDashboardData(response);
+      } catch (error) {
+        console.error("Failed to fetch dashboard data:", error);
+        setError("Failed to load dashboard. Please try again.");
+        toast.error("Failed to Load Dashboard", {
+          description: "Could not retrieve data from the server.",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  // 5. PERFORMANCE: Memoize chart data so it's not recalculated on every render
+  const payrollChartData = useMemo(() => {
+    if (!dashboardData) return [];
+    return dashboardData.charts.payroll_distribution.map((item) => ({
+      name: item.employee__department,
+      value: parseFloat(item.total_usd) + parseFloat(item.total_zig),
+    }));
+  }, [dashboardData]);
+
+  const employeeChartData = useMemo(() => {
+    if (!dashboardData) return [];
+    return dashboardData.charts.employee_distribution.map((item) => ({
+      department: item.department,
+      employees: item.employees,
+    }));
+  }, [dashboardData]);
+
+
+  // --- Render States ---
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[80vh]">
@@ -130,6 +184,21 @@ const Dashboard = () => {
     );
   }
 
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[80vh]">
+        <h2 className="text-xl font-semibold text-destructive">{error}</h2>
+        <p className="text-muted-foreground">Please refresh the page or contact support.</p>
+      </div>
+    );
+  }
+
+  // This check is important after adding the null initial state
+  if (!dashboardData) {
+    return null;
+  }
+
+  // --- Main Render ---
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
@@ -148,18 +217,18 @@ const Dashboard = () => {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
-        {renderMetricCard(
-          "Total Employees",
-          dashboardData.metrics.total_employees.toString(),
-          <Users className="h-4 w-4 text-primary" />,
-          "/hr"
-        )}
-        {renderMetricCard(
-          "Total Attendees Today",
-          dashboardData.metrics.total_attendees.toString(),
-          <Users className="h-4 w-4 text-primary" />,
-          "/attendence"
-        )}
+        <MetricCard
+          title="Total Employees"
+          value={dashboardData.metrics.total_employees.toString()}
+          icon={<Users className="h-4 w-4 text-primary" />}
+          path="/hr"
+        />
+        <MetricCard
+          title="Total Attendees Today"
+          value={dashboardData.metrics.total_attendees.toString()}
+          icon={<Users className="h-4 w-4 text-primary" />}
+          path="/attendence"
+        />
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">
@@ -170,51 +239,45 @@ const Dashboard = () => {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-1">
-            <Card className="subtle-shadow">
-              <CardHeader>
-                <CardTitle>Tasks Due</CardTitle>
-                <CardDescription>
-                  Upcoming tasks requiring your attention
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {dashboardData.lists.tasks_due.map((task) => (
-                    <div key={task.id} className="flex items-start">
-                      <div className="mr-3 mt-0.5">
-                        {task.done ? (
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <Clock className="h-4 w-4 text-amber-500" />
-                        )}
-                      </div>
-                      <div className="space-y-1 flex-1">
-                        <p
-                          className={`text-sm ${
-                            task.done
-                              ? "line-through text-muted-foreground"
-                              : ""
-                          }`}
-                        >
-                          {task.text}
-                        </p>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center text-xs text-muted-foreground">
-                            {getModuleIcon(task.module)}
-                            <span className="ml-1">{task.module}</span>
-                          </div>
-                          <span className="text-xs font-medium">
-                            {task.due}
-                          </span>
+          <Card className="subtle-shadow">
+            <CardHeader>
+              <CardTitle>Tasks Due</CardTitle>
+              <CardDescription>
+                Upcoming tasks requiring your attention
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {dashboardData.lists.tasks_due.map((task) => (
+                  <div key={task.id} className="flex items-start">
+                    <div className="mr-3 mt-0.5">
+                      {task.done ? (
+                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <Clock className="h-4 w-4 text-amber-500" />
+                      )}
+                    </div>
+                    <div className="space-y-1 flex-1">
+                      <p
+                        className={`text-sm ${
+                          task.done ? "line-through text-muted-foreground" : ""
+                        }`}
+                      >
+                        {task.text}
+                      </p>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center text-xs text-muted-foreground">
+                          {getModuleIcon(task.module)}
+                          <span className="ml-1">{task.module}</span>
                         </div>
+                        <span className="text-xs font-medium">{task.due}</span>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="payroll" className="space-y-4">
@@ -227,15 +290,9 @@ const Dashboard = () => {
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
+                    {/* 6. Use the memoized data */}
                     <Pie
-                      data={dashboardData.charts.payroll_distribution.map(
-                        (item) => ({
-                          name: item.employee__department,
-                          value:
-                            parseFloat(item.total_usd) +
-                            parseFloat(item.total_zig),
-                        })
-                      )}
+                      data={payrollChartData}
                       cx="50%"
                       cy="50%"
                       labelLine={false}
@@ -246,14 +303,12 @@ const Dashboard = () => {
                         `${name} ${(percent * 100).toFixed(0)}%`
                       }
                     >
-                      {dashboardData.charts.payroll_distribution.map(
-                        (_, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={COLORS[index % COLORS.length]}
-                          />
-                        )
-                      )}
+                      {payrollChartData.map((_, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                        />
+                      ))}
                     </Pie>
                     <Tooltip
                       formatter={(value) =>
@@ -286,32 +341,21 @@ const Dashboard = () => {
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
-                    data={dashboardData.charts.employee_distribution.map(
-                      (item) => ({
-                        department: item.department,
-                        employees: item.employees,
-                      })
-                    )}
-                    margin={{
-                      top: 5,
-                      right: 30,
-                      left: 20,
-                      bottom: 5,
-                    }}
+                    // 7. Use the memoized data
+                    data={employeeChartData}
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="department" />
                     <YAxis />
                     <Tooltip />
                     <Bar dataKey="employees" fill="#8884d8">
-                      {dashboardData.charts.employee_distribution.map(
-                        (_, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={COLORS[index % COLORS.length]}
-                          />
-                        )
-                      )}
+                      {employeeChartData.map((_, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                        />
+                      ))}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>

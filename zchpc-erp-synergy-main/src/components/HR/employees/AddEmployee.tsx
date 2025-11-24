@@ -1,12 +1,33 @@
-import Server from "@/server/Server";
-import { Loader, X } from "lucide-react";
+import { Loader, X, Plus, Check, X as CancelIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import TaxAndDeductionsDropdown from "./TaxAndDeductions";
+import { addEmployee } from "@/server/employees.services";
+import {
+  addPosition,
+  getPositions,
+  addDepartMethod,
+  getDepartment, 
+} from "@/server/hr.services";
 
 export default function AddEmployee({ setShowModal, fetchEmployees }) {
   const [loading, setLoading] = useState(false);
+
+  // --- Data Source States ---
+  const [departments, setDepartments] = useState([]);
+  const [positions, setPositions] = useState([]);
+
+  // --- Inline Add States ---
+  const [isAddingDept, setIsAddingDept] = useState(false);
+  const [newDeptName, setNewDeptName] = useState("");
+  const [deptLoading, setDeptLoading] = useState(false);
+
+  const [isAddingPos, setIsAddingPos] = useState(false);
+  const [newPosTitle, setNewPosTitle] = useState("");
+  const [posLoading, setPosLoading] = useState(false);
+
   const [selectedDeductions, setSelectedDeductions] = useState([]);
+  
   const [employee, setEmployee] = useState({
     firstname: "",
     surname: "",
@@ -19,11 +40,11 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
     bankName: "",
     accountNumber: "",
     payFrequency: "Monthly",
-    employeeType: "Full-Time",
+    employeeType: "Full-time", // Lowercase 't' matches backend
     leaveDays: 21,
     pensionScheme: "",
-    position: "",
-    department: "",
+    position: "",   // Stores Position ID
+    department: "", // Stores Department ID
     usd_salary: "",
     zig_salary: "",
     contractFrom: "",
@@ -34,33 +55,166 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
     selectedDeductions: [],
   });
 
-  // Use useEffect to update the employee state when selectedDeductions changes
+  // --- 1. Load Departments on Mount ---
+  const loadDepartments = async () => {
+    try {
+      const data = await getDepartment();
+      setDepartments(data.data);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to load departments");
+    }
+  };
+
   useEffect(() => {
-    setEmployee((prevEmployee) => ({
-      ...prevEmployee,
+    loadDepartments();
+  }, []);
+
+  // --- 2. Cascading: Load Positions when Dept Changes ---
+  const loadPositions = async () => {
+    if (!employee.department) {
+      setPositions([]);
+      return;
+    }
+    try {
+      const data = await getPositions(employee.department);
+      setPositions(data);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to load positions");
+    }
+  };
+
+  useEffect(() => {
+    loadPositions();
+  }, [employee.department]);
+
+  // Update state when deductions change
+  useEffect(() => {
+    setEmployee((prev) => ({
+      ...prev,
       selectedDeductions: selectedDeductions,
     }));
-  }, [selectedDeductions]); // This is the dependency array
+  }, [selectedDeductions]);
 
   const handleChange = (e) => {
     setEmployee({ ...employee, [e.target.name]: e.target.value });
   };
 
+  // --- 3. Inline Creation Logic ---
+
+  const handleCreateDepartment = async () => {
+    if (!newDeptName.trim()) return;
+    setDeptLoading(true);
+    try {
+      // Create in DB
+      const newDept = await addDepartMethod({ name: newDeptName });
+      
+      // Update local list
+      const updatedList = [...departments, newDept];
+      setDepartments(updatedList);
+      
+      // Select the new item automatically
+      setEmployee(prev => ({ ...prev, department: newDept.id }));
+      
+      toast.success("Department created!");
+      setIsAddingDept(false);
+      setNewDeptName("");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to create department");
+    } finally {
+      setDeptLoading(false);
+    }
+  };
+
+  const handleCreatePosition = async () => {
+    if (!newPosTitle.trim() || !employee.department) return;
+    setPosLoading(true);
+    try {
+      // Create in DB
+      const newPos = await addPosition({
+        title: newPosTitle,
+        department_id: employee.department,
+      });
+
+      // Update local list
+      const updatedList = [...positions, newPos];
+      setPositions(updatedList);
+
+      // Select the new item automatically
+      setEmployee(prev => ({ ...prev, position: newPos.id }));
+
+      toast.success("Position created!");
+      setIsAddingPos(false);
+      setNewPosTitle("");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to create position");
+    } finally {
+      setPosLoading(false);
+    }
+  };
+
+  // --- 4. Submit Handler ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
-    console.log(employee);
-    // setLoading(false);
+    // Transform Payload
+    const payload = {
+      first_name: employee.firstname,
+      surname: employee.surname,
+      national_id: employee.nationalId,
+      date_of_birth: employee.dob || null,
+      gender: employee.gender,
+      marital_status: employee.maritalStatus,
+      email: employee.email,
+      phone: employee.phone,
+
+      // Banking
+      bank_name: employee.bankName,
+      bank_account: employee.accountNumber,
+      pay_frequency: employee.payFrequency,
+
+      // Employment
+      employee_type: employee.employeeType,
+      leave_days_entitled: employee.leaveDays,
+      contract_from: employee.contractFrom || null,
+      contract_to: employee.contractTo || null,
+
+      // Foreign Keys (Sending IDs)
+      department_id: employee.department,
+      position_id: employee.position,
+
+      // Salary (Handle empty strings)
+      usd_salary: employee.usd_salary ? parseFloat(employee.usd_salary) : 0,
+      zig_salary: employee.zig_salary ? parseFloat(employee.zig_salary) : 0,
+      pension_fund: employee.pensionScheme,
+
+      // Emergency
+      emergency_contact_name: employee.emergencyContactName,
+      emergency_contact_number: employee.emergencyContactPhone,
+      emergency_contact_relationship: employee.emergencyContactRelationship,
+
+      // Deductions
+      deductions_data: selectedDeductions,
+    };
 
     try {
-      await Server.addEmployee(employee);
+      await addEmployee(payload);
       toast.success("Employee added successfully");
       setShowModal(false);
       fetchEmployees();
     } catch (error) {
       console.error("Error adding employee:", error);
-      toast.error("Error adding employee");
+      if (error.response?.data?.email) {
+        toast.error("Email already exists.");
+      } else if (error.response?.data?.national_id) {
+        toast.error("National ID already exists.");
+      } else {
+        toast.error("Failed to add employee. Check inputs.");
+      }
     } finally {
       setLoading(false);
     }
@@ -68,9 +222,10 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl overflow-hidden">
+      <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+        
         {/* Header */}
-        <div className="bg-blue-600 p-4 flex justify-between items-center">
+        <div className="bg-blue-600 p-4 flex justify-between items-center shrink-0">
           <h2 className="text-xl font-semibold text-white">Add New Employee</h2>
           <button
             onClick={() => setShowModal(false)}
@@ -80,11 +235,9 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
           </button>
         </div>
 
-        {/* Form - Using tabs for better organization */}
-        <form
-          onSubmit={handleSubmit}
-          className="max-h-[70vh] overflow-y-auto p-6"
-        >
+        {/* Scrollable Content */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6">
+          
           {/* Personal Information Section */}
           <div className="mb-8">
             <h3 className="text-lg font-medium text-gray-800 mb-4 pb-2 border-b border-gray-200">
@@ -92,9 +245,7 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  First Name*
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">First Name*</label>
                 <input
                   type="text"
                   name="firstname"
@@ -105,9 +256,7 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Surname*
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Surname*</label>
                 <input
                   type="text"
                   name="surname"
@@ -118,9 +267,7 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  National ID/Passport*
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">National ID*</label>
                 <input
                   type="text"
                   name="nationalId"
@@ -131,9 +278,7 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date of Birth*
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth*</label>
                 <input
                   type="date"
                   name="dob"
@@ -144,9 +289,7 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Gender*
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Gender*</label>
                 <select
                   name="gender"
                   value={employee.gender}
@@ -161,9 +304,7 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Marital Status
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Marital Status</label>
                 <select
                   name="maritalStatus"
                   value={employee.maritalStatus}
@@ -177,9 +318,7 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email*
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email*</label>
                 <input
                   type="email"
                   name="email"
@@ -190,9 +329,7 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Phone*
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone*</label>
                 <input
                   type="tel"
                   name="phone"
@@ -211,51 +348,136 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
               Employment Details
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Position*
-                </label>
-                <input
-                  type="text"
-                  name="position"
-                  value={employee.position}
-                  onChange={handleChange}
-                  required
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                />
+              
+              {/* --- Department Selection with Inline Add --- */}
+              <div className="col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Department*</label>
+                {isAddingDept ? (
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      placeholder="New Department Name"
+                      className="w-full p-2 border border-blue-400 rounded-md bg-blue-50"
+                      value={newDeptName}
+                      onChange={(e) => setNewDeptName(e.target.value)}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreateDepartment}
+                      disabled={deptLoading}
+                      className="p-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                    >
+                      {deptLoading ? <Loader className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingDept(false)}
+                      className="p-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                    >
+                      <CancelIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <select
+                      name="department"
+                      value={employee.department}
+                      onChange={handleChange}
+                      required
+                      className="w-full p-2 border border-gray-300 rounded-md"
+                    >
+                      <option value="">Select Department</option>
+                      {departments?.map((dept) => (
+                        <option key={dept.id} value={dept.id}>{dept.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingDept(true)}
+                      className="p-2 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
+                      title="Add New Department"
+                    >
+                      <Plus className="h-4 w-4 text-gray-600" />
+                    </button>
+                  </div>
+                )}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Department*
-                </label>
-                <input
-                  type="text"
-                  name="department"
-                  value={employee.department}
-                  onChange={handleChange}
-                  required
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                />
+
+              {/* --- Position Selection with Inline Add --- */}
+              <div className="col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Position*</label>
+                {isAddingPos ? (
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      placeholder="New Position Title"
+                      className="w-full p-2 border border-blue-400 rounded-md bg-blue-50"
+                      value={newPosTitle}
+                      onChange={(e) => setNewPosTitle(e.target.value)}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreatePosition}
+                      disabled={posLoading}
+                      className="p-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                    >
+                      {posLoading ? <Loader className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingPos(false)}
+                      className="p-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                    >
+                      <CancelIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <select
+                      name="position"
+                      value={employee.position}
+                      onChange={handleChange}
+                      required
+                      disabled={!employee.department} // Must select Dept first
+                      className="w-full p-2 border border-gray-300 rounded-md disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Select Position</option>
+                      {positions.map((pos) => (
+                        <option key={pos.id} value={pos.id}>{pos.title}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingPos(true)}
+                      disabled={!employee.department}
+                      className="p-2 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 disabled:opacity-50"
+                      title="Add New Position"
+                    >
+                      <Plus className="h-4 w-4 text-gray-600" />
+                    </button>
+                  </div>
+                )}
+                {!employee.department && <span className="text-xs text-gray-500">Select Department first</span>}
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Employee Type*
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Employee Type*</label>
                 <select
                   name="employeeType"
                   value={employee.employeeType}
                   onChange={handleChange}
                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 >
-                  <option value="Full-Time">Full-Time</option>
-                  <option value="Part-Time">Part-Time</option>
+                  <option value="Full-time">Full-time</option>
+                  <option value="Part-time">Part-time</option>
                   <option value="Contract">Contract</option>
+                  <option value="Intern">Intern</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Leave Days/Year
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Leave Days/Year</label>
                 <input
                   type="number"
                   name="leaveDays"
@@ -265,9 +487,7 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Contract Start*
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contract Start*</label>
                 <input
                   type="date"
                   name="contractFrom"
@@ -278,9 +498,7 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Contract End*
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contract End*</label>
                 <input
                   type="date"
                   name="contractTo"
@@ -300,9 +518,7 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Basic Salary (USD)*
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Basic Salary (USD)*</label>
                 <input
                   type="number"
                   name="usd_salary"
@@ -313,9 +529,7 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Basic Salary (ZiG)*
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Basic Salary (ZiG)*</label>
                 <input
                   type="number"
                   name="zig_salary"
@@ -326,9 +540,7 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Pay Frequency*
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Pay Frequency*</label>
                 <select
                   name="payFrequency"
                   value={employee.payFrequency}
@@ -336,13 +548,12 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="Monthly">Monthly</option>
+                  <option value="Weekly">Weekly</option>
                   <option value="Bi-Weekly">Bi-Weekly</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Bank Name
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Bank Name</label>
                 <input
                   type="text"
                   name="bankName"
@@ -352,9 +563,7 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Account Number
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Account Number</label>
                 <input
                   type="text"
                   name="accountNumber"
@@ -364,9 +573,7 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Pension Scheme
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Pension Scheme</label>
                 <input
                   type="text"
                   name="pensionScheme"
@@ -384,18 +591,13 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
               Tax & Statutory Information
             </h3>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Taxes & Deductions
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Taxes & Deductions</label>
               <TaxAndDeductionsDropdown onSelect={setSelectedDeductions} />
             </div>
 
-            {/* Display selected items */}
             {selectedDeductions.length > 0 && (
               <div className="mt-2">
-                <h4 className="text-sm font-medium text-gray-700">
-                  Selected Deductions:
-                </h4>
+                <h4 className="text-sm font-medium text-gray-700">Selected Deductions:</h4>
                 <ul className="mt-1 space-y-1">
                   {selectedDeductions.map((item) => (
                     <li key={item.id} className="text-sm text-gray-600">
@@ -414,9 +616,7 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Contact Name
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contact Name</label>
                 <input
                   type="text"
                   name="emergencyContactName"
@@ -426,9 +626,7 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Contact Phone
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contact Phone</label>
                 <input
                   type="tel"
                   name="emergencyContactPhone"
@@ -438,9 +636,7 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Relationship
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Relationship</label>
                 <input
                   type="text"
                   name="emergencyContactRelationship"
@@ -452,8 +648,8 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
             </div>
           </div>
 
-          {/* Form Actions */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+          {/* Form Actions (Pinned to bottom) */}
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 mt-auto">
             <button
               type="button"
               onClick={() => setShowModal(false)}

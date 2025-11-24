@@ -1,15 +1,15 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import Server from "../server/Server";
+
+import { getDepartment, addUser } from "@/server/hr.services";
 
 export default function AddUser({ setShowModal, onSuccess }) {
   const [employee, setEmployee] = useState({
-    firstname: "",
-    surname: "",
+    first_name: "",
+    last_name: "",
     role: "",
     email: "",
     department: "", // Ensure this is initialized to a default value for the dropdown
-    password: "erp@1234",
   });
   const [loading, setLoading] = useState(false);
   const [departments, setDepartments] = useState([]);
@@ -30,7 +30,7 @@ export default function AddUser({ setShowModal, onSuccess }) {
 
   // Fetch departments when the component loads
   useEffect(() => {
-    Server.fetchDepartments()
+    getDepartment()
       .then((response) => {
         setDepartments(response.data);
       })
@@ -51,7 +51,7 @@ export default function AddUser({ setShowModal, onSuccess }) {
     e.preventDefault();
     setLoading(true);
 
-    Server.addSystemUSer(employee)
+    addUser(employee)
       .then(() => {
         toast.success("New user successfully added");
         setLoading(false);
@@ -87,8 +87,8 @@ export default function AddUser({ setShowModal, onSuccess }) {
               <label className="text-sm text-gray-600">First Name</label>
               <input
                 type="text"
-                name="firstname"
-                value={employee.firstname}
+                name="first_name"
+                value={employee.first_name}
                 onChange={handleChange}
                 required
                 className="w-full p-2 border rounded"
@@ -98,8 +98,8 @@ export default function AddUser({ setShowModal, onSuccess }) {
               <label className="text-sm text-gray-600">Surname</label>
               <input
                 type="text"
-                name="surname"
-                value={employee.surname}
+                name="last_name"
+                value={employee.last_name}
                 onChange={handleChange}
                 required
                 className="w-full p-2 border rounded"

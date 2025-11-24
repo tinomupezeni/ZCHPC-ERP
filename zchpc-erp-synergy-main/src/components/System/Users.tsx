@@ -1,17 +1,12 @@
-import React from "react";
-import { useEffect, useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import React, { useState } from "react";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -22,62 +17,53 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { UserPlus, Search, Edit, Trash2, User } from "lucide-react";
+import { UserPlus, Search, Edit, Trash2, User as UserIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns"; // ✅ add this for date formatting
-import Server from "@/server/Server";
+import { format } from "date-fns"; 
+import {deleteUserMethod} from '@/server/hr.services'
 
 export default function Users({ setAddUser, users }) {
   const [searchTerm, setSearchTerm] = useState("");
 
-  const getStatusBadge = (status: boolean) => {
-    switch (status) {
-      case true:
-        return (
-          <Badge className="bg-green-100 text-green-800 hover:bg-green-200">
-            Active
-          </Badge>
-        );
-      case false:
-        return (
-          <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-200">
-            Inactive
-          </Badge>
-        );
-      case null:
-        return (
-          <Badge className="bg-red-100 text-red-800 hover:bg-red-200">
-            Suspended
-          </Badge>
-        );
-      default:
-        return <Badge>{status}</Badge>;
+  // 1. Fixed Status Logic (Handle 'is_active')
+  const getStatusBadge = (isActive) => {
+    if (isActive === true) {
+        return <Badge className="bg-green-100 text-green-800 hover:bg-green-200">Active</Badge>;
+    } else {
+        return <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-200">Inactive</Badge>;
     }
   };
 
   const addNewUser = () => {
-    toast.success("User creation form would open here");
     setAddUser(true);
   };
 
-  const Modal = (id: string) => {
-    toast.success(`Edit user ${id}`);
-    setEditEmployeeId(id);
-    setEditUserModal(true);
+  const Modal = (id) => {
+    // Use UUID for editing
+    console.log("Edit UUID:", id);
+    // setEditEmployeeId(id); 
+    // setEditUserModal(true);
   };
 
-  const deleteUser = (id: string) => {
-    Server.deleteUser(id)
+  const deleteUser = (id) => {
+    // Use UUID for deletion
+    deleteUserMethod(id)
       .then(() => {
-        toast.success(`Deleted employee ${id}`);
-        setUsers(users.filter((user) => user.employeeid !== id));
+        toast.success("User deleted successfully");
+        // Ideally refresh the list from parent or context here
       })
       .catch((error) => {
         console.log(error);
-
-        toast.error("Error deleting user ", id);
+        toast.error("Error deleting user");
       });
   };
+
+  // Filter logic updated to check first_name, last_name and email
+  const filteredUsers = users.filter(user => 
+    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.last_name?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div>
@@ -106,63 +92,79 @@ export default function Users({ setAddUser, users }) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[80px]">ID</TableHead>
+                  <TableHead className="w-[100px]">Emp ID</TableHead>
                   <TableHead>User</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Department</TableHead>
-                  <TableHead>Last Active</TableHead>
+                  <TableHead>Joined</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.length > 0 ? (
-                  users.map((user) => (
-                    <TableRow key={user.employeeid}>
+                {filteredUsers.length > 0 ? (
+                  filteredUsers.map((user) => (
+                    // 2. Use UUID (user.id) for the React Key
+                    <TableRow key={user.id}>
                       <TableCell className="font-medium">
-                        {user.employeeid}
+                        {/* 3. Access Nested Employee ID safely */}
+                        {user.employee_profile?.employee_id || "N/A"}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center space-x-2">
                           <Avatar className="h-8 w-8">
+                            {/* 4. Fix Name Accessors */}
                             <AvatarImage
-                              src={`https://api.dicebear.com/7.x/initials/svg?seed=${user.firstname} ${user.surname}`}
-                              alt={`${user.firstname} ${user.surname}`}
+                              src={`https://api.dicebear.com/7.x/initials/svg?seed=${user.first_name} ${user.last_name}`}
+                              alt={`${user.first_name} ${user.last_name}`}
                             />
                             <AvatarFallback>
-                              {`${user.firstname} ${user.surname}`.charAt(0)}
+                              {user.first_name ? user.first_name.charAt(0) : "U"}
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <div className="font-medium">{`${user.firstname} ${user.surname}`}</div>
+                            <div className="font-medium">
+                                {user.first_name} {user.last_name}
+                            </div>
                             <div className="text-sm text-muted-foreground lowercase">
                               {user.email}
                             </div>
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>{user.role}</TableCell>
-                      <TableCell>{user.department_name}</TableCell>
+                      
+                      {/* 5. Access Nested Profile Data */}
                       <TableCell>
-                        {" "}
-                        {user.last_login_at
-                          ? format(new Date(user.last_login_at), "PPpp") 
-                          : "Never"}
+                        {user.employee_profile?.role || (user.is_superuser ? "Superuser" : "User")}
                       </TableCell>
-                      <TableCell>{getStatusBadge(user.isActive)}</TableCell>
+                      <TableCell>
+                        {user.employee_profile?.department || "-"}
+                      </TableCell>
+                      
+                      {/* 6. Date Formatting */}
+                      <TableCell>
+                        {user.date_joined
+                          ? format(new Date(user.date_joined), "PP") 
+                          : "-"}
+                      </TableCell>
+                      
+                      {/* 7. Status Fix */}
+                      <TableCell>{getStatusBadge(user.is_active)}</TableCell>
+                      
                       <TableCell className="text-right">
                         <div className="flex justify-end space-x-1">
+                          {/* 8. Pass UUID to actions */}
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => Modal(user.employeeid)}
+                            onClick={() => Modal(user.id)}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => deleteUser(user.employeeid)}
+                            onClick={() => deleteUser(user.id)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -171,25 +173,22 @@ export default function Users({ setAddUser, users }) {
                     </TableRow>
                   ))
                 ) : (
-                  <tr>
-                    <td
+                  <TableRow>
+                    <TableCell
                       colSpan={7}
                       className="py-10 text-center text-muted-foreground"
                     >
                       <div className="flex flex-col items-center space-y-2">
-                        <User className="h-8 w-8 text-gray-400" />
+                        <UserIcon className="h-8 w-8 text-gray-400" />
                         <p className="text-lg font-medium">
-                          No system users yet
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          Add a user to get started
+                          No users found
                         </p>
                         <Button variant="outline" onClick={addNewUser}>
-                          <UserPlus /> Add User
+                          <UserPlus className="mr-2 h-4 w-4" /> Add User
                         </Button>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 )}
               </TableBody>
             </Table>

@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,58 +12,59 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { BarChart3, Eye, EyeClosed, Lock, Mail } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext"; // 1. Import only this
 
 const LoginPage = () => {
-  // Use 'email' for consistency with the backend and UI labels
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [viewPassword, setViewPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { login, user } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
+  
+  // 2. Destructure 'login' from the hook. 
+  // This version of login automatically handles setUser internally.
+  const { login } = useAuth(); 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     try {
-      // The `login` function is async, so we `await` its result.
-      // It returns a boolean indicating success or failure.
-      const success = await login(email, password);
-      if (!success) return;
+      // 3. Call the Context login (not the service directly)
+      const user = await login(email, password); 
+      
+      console.log("Login Successful, User:", user);
 
-      // If login fails, `useAuth` handles the toast and returns false,
-      // so we don't need to do anything here.
+      // 4. Now route based on the profile
+      if (user && user.employee_profile) {
+        const role = user.employee_profile.role?.toLowerCase();
+        
+        switch (role) {
+          case "admin":
+            navigate("/dashboard");
+            break;
+          case "hr":
+            navigate("/hr");
+            break;
+          case "accountant":
+            navigate("/accounting");
+            break;
+          case "sales":
+            navigate("/sales");
+            break;
+          default:
+            navigate("/dashboard");
+        }
+      } else {
+        // Fallback if no profile exists
+        navigate("/dashboard");
+      }
     } catch (error) {
-      // This catch block will only execute for unexpected errors, not API login failures,
-      // because the `login` function handles its own errors and returns false.
-      console.error("An unexpected error occurred during login:", error);
+      console.error("Login failed:", error);
     } finally {
       setIsSubmitting(false);
     }
   };
-
-  useEffect(() => {
-    if (user) {
-      switch (user.role?.toLowerCase()) {
-        case "admin":
-          navigate("/dashboard");
-          break;
-        case "hr":
-          navigate("/hr");
-          break;
-        case "accountant":
-          navigate("/accounting");
-          break;
-        case "sales":
-          navigate("/sales");
-          break;
-        default:
-          navigate("/dashboard");
-      }
-    }
-  }, [user, navigate]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
@@ -98,7 +98,7 @@ const LoginPage = () => {
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="email"
-                    type="email" // Use type="email" for better browser validation and keyboard
+                    type="email"
                     placeholder="name@company.com"
                     className="pl-10"
                     value={email}

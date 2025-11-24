@@ -25,9 +25,6 @@ import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   UserPlus,
-  Search,
-  Edit,
-  Trash2,
   UserCog,
   Lock,
   Globe,
@@ -42,7 +39,8 @@ import Server from "@/server/Server";
 import EditUserModal from "@/components/EditUserModal";
 import Users from "@/components/System/Users";
 import { Logs } from "@/components/System/Logs";
-
+import { getDepartment, addDepartMethod } from "@/server/hr.services";
+import { getUsers } from "@/components/System/auth.services";
 
 const SettingsPage = () => {
   // const { user } = useAuth();
@@ -73,7 +71,7 @@ const SettingsPage = () => {
   };
 
   const fetchDepartments = () => {
-    Server.fetchDepartments()
+    getDepartment()
       .then((response) => {
         setDepartments(response.data);
       })
@@ -85,7 +83,7 @@ const SettingsPage = () => {
 
  
   const fetchUsers = () => {
-    Server.fetchUser()
+    getUsers()
       .then((response) => {
         console.log(response.data);
         setUsers(response.data);

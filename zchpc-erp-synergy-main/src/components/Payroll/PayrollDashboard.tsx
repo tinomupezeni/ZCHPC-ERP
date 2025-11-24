@@ -11,211 +11,195 @@ import {
   Loader,
   Eye,
   Trash2,
+  PlayCircle
 } from "lucide-react";
 import { format } from "date-fns";
 import PayslipModal from "./PayslipModal";
-import { Menu, MenuButton, MenuItem } from "@headlessui/react";
-import Server from "@/server/Server";
-import ProcessPayrollModal from "./ProcessPayrollModal";
+import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import { formatUSD, formatZIG } from "../ui/utils";
-import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
+// Import your new specific services
+import { 
+  getPayslips, 
+  deletePayslip, 
+  approvePayslip, 
+  processPayroll,
+  PayrollRecord 
+} from "@/server/payroll.services";
+import { getDepartment } from "@/server/hr.services";
+
 const PayrollDashboard = () => {
+  // State
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [showPayslip, setShowPayslip] = useState(false);
-  const [selectedRecord, setSelectedRecord] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [payrollRecords, setPayrollRecords] = useState([]);
+  const [selectedRecord, setSelectedRecord] = useState<PayrollRecord | null>(null);
+  
+  // Data State
+  const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>([]);
+  const [departments, setDepartments] = useState<string[]>(["All Departments"]);
   const [loading, setLoading] = useState(false);
+  const [processing, setProcessing] = useState(false);
+
+  // Filters
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedDepartment, setSelectedDepartment] = useState("All Departments");
+  const [selectedStatus, setSelectedStatus] = useState("All Statuses");
+  
+  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const [selectedStatus, setSelectedStatus] = useState("All Statuses");
-  const [departments, setDepartments] = useState(["All Departments"]);
-  const [selectedDepartment, setSelectedDepartment] =
-    useState("All Departments");
-  // const [showProcessModal, setShowProcessModal] = useState(false);
-  const [editPayslip, setEditPayslip] = useState(false);
-  const [openMenuId, setOpenMenuId] = useState(null); // Track which row's menu is open
-  const navigate = useNavigate();
+  
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
 
+  // --- 1. Initial Data Load ---
   useEffect(() => {
-    fetchPayrollRecords();
-    fetchDepartments();
+    loadData();
   }, [selectedMonth]);
 
-  const fetchPayrollRecords = async () => {
+  useEffect(() => {
+    loadDepartments();
+  }, []);
+
+  const loadData = async () => {
     setLoading(true);
-
     try {
-      const response = await Server.fetchPayslips(
-        format(selectedMonth, "yyyy-MM")
-      );
-      console.log(response.data);
-
-      setPayrollRecords(response.data);
+      const period = format(selectedMonth, "yyyy-MM");
+      const data = await getPayslips(period);
+      console.log(data);
+      
+      setPayrollRecords(data);
     } catch (error) {
-      console.error("Error fetching payroll records:", error);
+      console.error("Error fetching payroll:", error);
+      toast.error("Failed to load payroll records");
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchDepartments = async () => {
+  const loadDepartments = async () => {
     try {
-      const response = await Server.fetchDepartments();
-      setDepartments(["All Departments", ...response.data]);
+      // Reusing the HR service we created earlier
+      const data = await getDepartment();
+      // Extract just the names for the filter dropdown
+      const deptNames = data.map((d: any) => d.name);
+      setDepartments(["All Departments", ...deptNames]);
     } catch (error) {
       console.error("Error fetching departments:", error);
     }
   };
 
-  const filteredRecords = payrollRecords.filter((record) => {
-    const matchesSearch =
-      record?.employee_id.includes(searchTerm.toLowerCase()) ||
-      record?.employee_id.toLowerCase().includes(searchTerm.toLowerCase());
+  // --- 2. Actions ---
 
-    const matchesDepartment =
-      selectedDepartment === "All Departments" ||
-      record.employee.department === selectedDepartment;
-
-    const matchesStatus =
-      selectedStatus === "All Statuses" || record.status === selectedStatus;
-
-    return matchesSearch && matchesDepartment && matchesStatus;
-  });
-
-  // Pagination logic
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredRecords.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredRecords.length / itemsPerPage);
-
-  const paginate = (pageNumber) => setCurrentPage(pageNumber);
-
-  const deletePayslip = (id, period) => {
-    Server.deleteEmployeeSlip(id, period)
-      .then(() => {
-        toast.success("Payslip successfully deleted");
-      })
-      .catch((error) => {
-        toast.error("Error deleting payslip", error);
-        console.log(error);
-      });
-  };
-
-  const approvePayslip = async (record) => {
+  const handleProcessPayroll = async () => {
+    setProcessing(true);
     try {
-      await Server.approvePayslip(record.id, record.period); // new endpoint
-      toast.success(`Payslip for ${record.employee_name} approved`);
-      // Update the local state so UI refreshes
-      setPayrollRecords((prev) =>
-        prev.map((r) =>
-          r.id === record.id ? { ...r, status: "Processed" } : r
-        )
-      );
+      const period = format(selectedMonth, "yyyy-MM");
+      await processPayroll({ month: period });
+      toast.success(`Payroll processed for ${period}`);
+      loadData(); // Refresh list
     } catch (error) {
-      console.error("Error approving payslip:", error);
-      toast.error("Failed to approve payslip");
+      console.error(error);
+      toast.error("Failed to process payroll");
+    } finally {
+      setProcessing(false);
     }
   };
 
-  // const processPayroll = async () => {
-  //   setLoading(true);
-  //   try {
-  //     await Server.processPayroll({
-  //       month: format(selectedMonth, "yyyy-MM"),
-  //     });
-  //     toast.success("Payroll processed successfully");
-  //     fetchPayrollRecords();
-  //   } catch (error) {
-  //     console.error("Error processing payroll:", error);
-  //     toast.error("Error processing payroll");
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
+  const handleDelete = async (id: number) => {
+    if(!confirm("Are you sure? This will remove the payslip record.")) return;
+    try {
+      await deletePayslip(id);
+      toast.success("Payslip deleted");
+      // Optimistic update
+      setPayrollRecords(prev => prev.filter(r => r.id !== id));
+    } catch (error) {
+      toast.error("Failed to delete payslip");
+    }
+  };
+
+  const handleApprove = async (record: PayrollRecord) => {
+    try {
+      await approvePayslip(record.id);
+      toast.success(`Approved ${record.employee_name}`);
+      // Optimistic update
+      setPayrollRecords(prev =>
+        prev.map(r => r.id === record.id ? { ...r, status: "Processed" } : r)
+      );
+    } catch (error) {
+      toast.error("Failed to approve");
+    }
+  };
 
   const exportToCSV = () => {
+    if (payrollRecords.length === 0) {
+        toast.warning("No records to export");
+        return;
+    }
+    
     const headers = [
-      "Employee ID",
-      "Name",
-      "Department",
-      "Base Salary (USD)",
-      "Base Salary (ZIG)",
-      "Net Salary (USD)",
-      "Net Salary (ZIG)",
-      "Status",
+      "Employee ID", "Name", "Department", "Base USD", "Base ZiG", "Net USD", "Net ZiG", "Status"
     ];
-    const csvContent = [
-      headers.join(","),
-      ...filteredRecords.map(
-        (record) =>
-          `"${record.employee.employeeId}","${record.employee.name}","${
-            record.employee.department
-          }","${record.salary.baseSalaryUSD.toFixed(
-            2
-          )}","${record.salary.baseSalaryZIG.toFixed(
-            2
-          )}","${record.salary.netSalaryUSD.toFixed(
-            2
-          )}","${record.salary.netSalaryZIG.toFixed(2)}","${record.status}"`
-      ),
-    ].join("\n");
+    
+    const csvRows = filteredRecords.map(r => 
+      `"${r.employee_id}","${r.employee_name} ${r.employee_surname}","${r.employee_department}",` +
+      `"${r.base_salary_usd}","${r.base_salary_zig}","${r.net_salary_usd}","${r.net_salary_zig}","${r.status}"`
+    );
 
+    const csvContent = [headers.join(","), ...csvRows].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute(
-      "download",
-      `payroll_${format(selectedMonth, "yyyy_MM")}.csv`
-    );
+    link.setAttribute("download", `payroll_${format(selectedMonth, "yyyy_MM")}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case "Processed":
-        return (
-          <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-            Processed
-          </span>
-        );
-      case "Pending":
-        return (
-          <span className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
-            Pending
-          </span>
-        );
-      case "Failed":
-        return (
-          <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
-            Failed
-          </span>
-        );
-      default:
-        return (
-          <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
-            {status}
-          </span>
-        );
-    }
+  // --- 3. Filtering & Pagination ---
+
+  const filteredRecords = payrollRecords.filter((record) => {
+    const matchesSearch = 
+        record.employee_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        record.employee_surname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        record.employee_id?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesDepartment = selectedDepartment === "All Departments" || record.employee_department === selectedDepartment;
+    const matchesStatus = selectedStatus === "All Statuses" || record.status === selectedStatus;
+
+    return matchesSearch && matchesDepartment && matchesStatus;
+  });
+
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredRecords.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredRecords.length / itemsPerPage);
+
+  const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
+
+  const getStatusBadge = (status: string) => {
+    const styles: Record<string, string> = {
+      "Processed": "bg-green-100 text-green-800",
+      "Pending": "bg-yellow-100 text-yellow-800",
+      "Failed": "bg-red-100 text-red-800",
+      "Draft": "bg-gray-100 text-gray-800"
+    };
+    return (
+      <span className={`px-2 py-1 text-xs font-medium rounded-full ${styles[status] || styles["Draft"]}`}>
+        {status}
+      </span>
+    );
   };
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
+      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">
-            Payroll Dashboard
-          </h1>
+          <h1 className="text-2xl font-bold text-gray-800">Payroll Dashboard</h1>
           <p className="text-sm text-gray-500">
-            {payrollRecords.length}{" "}
-            {payrollRecords.length === 1 ? "record" : "records"} for{" "}
-            {format(selectedMonth, "MMMM yyyy")}
+            {payrollRecords.length} records for {format(selectedMonth, "MMMM yyyy")}
           </p>
         </div>
         <div className="flex gap-3">
@@ -223,337 +207,148 @@ const PayrollDashboard = () => {
             onClick={exportToCSV}
             className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
           >
-            <Download className="h-4 w-4" />
-            Export
+            <Download className="h-4 w-4" /> Export
           </button>
           <button
-            // onClick={processPayroll}
-            onClick={() => fetchPayrollRecords()}
-            // onClick={() => setShowProcessModal(true)}
-            disabled={loading}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-colors disabled:opacity-70"
+            onClick={handleProcessPayroll}
+            disabled={processing || loading}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-colors disabled:opacity-70 shadow-sm"
           >
-            {loading && <Loader className="h-4 w-4 animate-spin" />}
-            <DollarSign className="h-5 w-5" />
-            Process Payroll
+            {processing ? <Loader className="h-4 w-4 animate-spin" /> : <PlayCircle className="h-5 w-5" />}
+            Run Payroll
           </button>
         </div>
       </div>
 
+      {/* Filters Bar */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-        <div className="p-4 border-b">
-          <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-              <input
-                type="month"
-                className="pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={format(selectedMonth, "yyyy-MM")}
-                onChange={(e) => {
-                  setSelectedMonth(new Date(e.target.value));
-                  setCurrentPage(1);
-                }}
-              />
-            </div>
-            <div className="relative flex-1 w-full">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-              <input
-                type="text"
-                placeholder="Search by name or employee ID..."
-                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
-                }}
-              />
-            </div>
-            <div className="flex flex-wrap gap-2 w-full md:w-auto">
-              <div className="relative">
-                <select
-                  className="appearance-none border rounded-lg px-4 py-2 pr-8 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={selectedDepartment}
-                  onChange={(e) => {
-                    setSelectedDepartment(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                >
-                  {departments
-                    .filter((dept) => dept !== "All Departments") // Filter out the initial string
-                    .map((dept) => (
-                      <option key={dept.id} value={dept.name}>
-                        {dept.name}
-                      </option>
-                    ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              </div>
-              <div className="relative">
-                <select
-                  className="appearance-none border rounded-lg px-4 py-2 pr-8 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={selectedStatus}
-                  onChange={(e) => {
-                    setSelectedStatus(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                >
-                  <option>All Statuses</option>
-                  <option>Processed</option>
-                  <option>Pending</option>
-                  <option>Failed</option>
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              </div>
-            </div>
+        <div className="p-4 border-b flex flex-col md:flex-row gap-4">
+          <div className="relative">
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
+            <input
+              type="month"
+              className="pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              value={format(selectedMonth, "yyyy-MM")}
+              onChange={(e) => {
+                if(e.target.value) setSelectedMonth(new Date(e.target.value));
+                setCurrentPage(1);
+              }}
+            />
+          </div>
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
+            <input
+              type="text"
+              placeholder="Search employee..."
+              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+            />
+          </div>
+          <div className="flex gap-2">
+            <select
+              className="border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+              value={selectedDepartment}
+              onChange={(e) => { setSelectedDepartment(e.target.value); setCurrentPage(1); }}
+            >
+              {departments.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <select
+              className="border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+              value={selectedStatus}
+              onChange={(e) => { setSelectedStatus(e.target.value); setCurrentPage(1); }}
+            >
+              <option>All Statuses</option>
+              <option>Processed</option>
+              <option>Pending</option>
+              <option>Failed</option>
+            </select>
           </div>
         </div>
+      </div>
 
+      {/* Table */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Employee
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Department
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Base Salary (USD)
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Base Salary (ZIG)
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Net Salary (USD)
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Net Salary (ZIG)
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Status
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Actions
-                </th>
+                {["Employee", "Department", "Base (USD)", "Base (ZiG)", "Net (USD)", "Net (ZiG)", "Status", ""].map((h, i) => (
+                    <th key={i} className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider ${i > 1 && i < 6 ? 'text-right' : 'text-left'}`}>
+                        {h}
+                    </th>
+                ))}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
-                <tr>
-                  <td colSpan="8" className="px-6 py-8 text-center">
-                    <Loader className="h-8 w-8 animate-spin mx-auto text-blue-600" />
-                    <p className="mt-2 text-sm text-gray-500">
-                      Loading payroll records...
-                    </p>
-                  </td>
-                </tr>
-              ) : payrollRecords.length > 0 ? (
-                payrollRecords.map((record) => (
-                  <tr
-                    key={`${record?.employee_id}-${record?.period}`}
-                    className="hover:bg-gray-50"
-                  >
+                <tr><td colSpan={8} className="px-6 py-8 text-center text-gray-500"><Loader className="h-8 w-8 animate-spin mx-auto mb-2"/>Loading...</td></tr>
+              ) : currentItems.length > 0 ? (
+                currentItems.map((record) => (
+                  <tr key={record.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">
-                          {record?.employee_name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")}
+                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold">
+                          {record.employee_name?.[0]}{record.employee_surname?.[0]}
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">
-                            {record?.employee_name} {record?.employee_surname}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            ID: {record?.employee_id}
-                          </div>
+                          <div className="text-sm font-medium text-gray-900">{record.employee_name} </div>
+                          <div className="text-sm text-gray-500">{record.employee_id}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 uppercase">
-                      {record?.employee_department}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
-                      {formatUSD(record?.base_salary_usd)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
-                      {formatZIG(record?.base_salary_zig)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
-                      {formatUSD(record?.net_salary_usd)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
-                      {formatZIG(record?.net_salary_zig)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {getStatusBadge(record?.status)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <Menu
-                        as="div"
-                        className="relative inline-block text-left"
-                      >
-                        <div className="flex items-center gap-2">
-                          <MenuButton
-                            className="inline-flex justify-center w-full rounded-md px-2 py-1 text-sm font-medium text-gray-700 hover:bg-gray-100 focus:outline-none"
-                            onClick={() =>
-                              setOpenMenuId(
-                                openMenuId === record.id ? null : record.id
-                              )
-                            }
-                          >
-                            <MoreVertical className="h-5 w-5 text-gray-400" />
-                          </MenuButton>
-                        </div>
-
-                        {openMenuId === record?.id && (
-                          <Menu.Items className="absolute right-0 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
-                            {record.status !== "Processed" && (
-                              <Menu.Item>
-                                {({ active }) => (
-                                  <button
-                                    onClick={() => approvePayslip(record)}
-                                    className={`${
-                                      active
-                                        ? "bg-green-100 text-green-900"
-                                        : "text-green-700"
-                                    } group flex items-center w-full px-4 py-2 text-sm`}
-                                  >
-                                    <DollarSign className="mr-2 h-4 w-4" />
-                                    Approve Payslip
-                                  </button>
-                                )}
-                              </Menu.Item>
-                            )}
-
-                            <Menu.Item>
-                              {({ active }) => (
-                                <button
-                                  onClick={() => {
-                                    setSelectedRecord(record);
-                                    setShowPayslip(true);
-                                    setOpenMenuId(null);
-                                  }}
-                                  className={`${
-                                    active
-                                      ? "bg-gray-100 text-gray-900"
-                                      : "text-gray-700"
-                                  } group flex items-center w-full px-4 py-2 text-sm`}
-                                >
-                                  <Eye className="mr-2 h-4 w-4" />
-                                  View Payslip
-                                </button>
-                              )}
-                            </Menu.Item>
-
-                            <Menu.Item>
-                              {({ active }) => (
-                                <button
-                                  className={`${
-                                    active
-                                      ? "bg-gray-100 text-gray-900"
-                                      : "text-gray-700"
-                                  } group flex items-center w-full px-4 py-2 text-sm`}
-                                >
-                                  <Printer className="mr-2 h-4 w-4" />
-                                  Print Payslip
-                                </button>
-                              )}
-                            </Menu.Item>
-
-                            <Menu.Item>
-                              {({ active }) => (
-                                <button
-                                  className={`${
-                                    active
-                                      ? "bg-gray-100 text-gray-900"
-                                      : "text-gray-700"
-                                  } group flex items-center w-full px-4 py-2 text-sm`}
-                                >
-                                  <Mail className="mr-2 h-4 w-4" />
-                                  Email Payslip
-                                </button>
-                              )}
-                            </Menu.Item>
-
-                            <Menu.Item>
-                              {({ active }) => (
-                                <button
-                                  onClick={() =>
-                                    deletePayslip(record.id, record.period)
-                                  }
-                                  className={`${
-                                    active
-                                      ? "bg-red-100 text-red-900"
-                                      : "text-red-700"
-                                  } group flex items-center w-full px-4 py-2 text-sm`}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Delete Payslip
-                                </button>
-                              )}
-                            </Menu.Item>
-
-                            {record.status === "Failed" && (
-                              <Menu.Item>
-                                {({ active }) => (
-                                  <button
-                                    className={`${
-                                      active
-                                        ? "bg-gray-100 text-gray-900"
-                                        : "text-gray-700"
-                                    } group flex items-center w-full px-4 py-2 text-sm`}
-                                  >
-                                    Retry Payment
-                                  </button>
-                                )}
-                              </Menu.Item>
-                            )}
-                          </Menu.Items>
-                        )}
+                    <td className="px-6 py-4 text-sm text-gray-500">{record.employee_department}</td>
+                    <td className="px-6 py-4 text-sm text-right font-medium">{formatUSD(record.base_salary_usd)}</td>
+                    <td className="px-6 py-4 text-sm text-right font-medium">{formatZIG(record.base_salary_zig)}</td>
+                    <td className="px-6 py-4 text-sm text-right text-green-600 font-bold">{formatUSD(record.net_salary_usd)}</td>
+                    <td className="px-6 py-4 text-sm text-right text-green-600 font-bold">{formatZIG(record.net_salary_zig)}</td>
+                    <td className="px-6 py-4">{getStatusBadge(record.status)}</td>
+                    <td className="px-6 py-4 text-right">
+                      <Menu as="div" className="relative inline-block text-left">
+                        <MenuButton className="p-2 hover:bg-gray-100 rounded-full" onClick={() => setOpenMenuId(openMenuId === record.id ? null : record.id)}>
+                          <MoreVertical className="h-5 w-5 text-gray-400" />
+                        </MenuButton>
+                        <MenuItems className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
+                           <div className="py-1">
+                             {record.status !== "Processed" && (
+                               <MenuItem>
+                                 {({ active }) => (
+                                   <button onClick={() => handleApprove(record)} className={`${active ? "bg-green-50 text-green-700" : "text-gray-700"} flex w-full items-center px-4 py-2 text-sm`}>
+                                     <DollarSign className="mr-2 h-4 w-4" /> Approve
+                                   </button>
+                                 )}
+                               </MenuItem>
+                             )}
+                             <MenuItem>
+                               {({ active }) => (
+                                 <button onClick={() => { setSelectedRecord(record); setShowPayslip(true); }} className={`${active ? "bg-blue-50 text-blue-700" : "text-gray-700"} flex w-full items-center px-4 py-2 text-sm`}>
+                                   <Eye className="mr-2 h-4 w-4" /> View Payslip
+                                 </button>
+                               )}
+                             </MenuItem>
+                             <MenuItem>
+                               {({ active }) => (
+                                 <button onClick={() => handleDelete(record.id)} className={`${active ? "bg-red-50 text-red-700" : "text-gray-700"} flex w-full items-center px-4 py-2 text-sm`}>
+                                   <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                 </button>
+                               )}
+                             </MenuItem>
+                           </div>
+                        </MenuItems>
                       </Menu>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="8" className="px-6 py-8 text-center">
-                    <div className="flex flex-col items-center justify-center">
-                      <DollarSign className="h-12 w-12 text-gray-400" />
-                      <h3 className="mt-2 text-sm font-medium text-gray-900">
-                        No payroll records found
-                      </h3>
-                      <p className="mt-1 text-sm text-gray-500">
-                        {searchTerm
-                          ? "Try adjusting your search or filter"
-                          : "Process payroll for the selected month to get started"}
-                      </p>
+                  <td colSpan={8} className="px-6 py-12 text-center">
+                    <div className="flex flex-col items-center">
+                      <DollarSign className="h-12 w-12 text-gray-300 mb-3" />
+                      <h3 className="text-lg font-medium text-gray-900">No payroll records</h3>
+                      <p className="text-gray-500">Run payroll or adjust filters.</p>
                     </div>
                   </td>
                 </tr>
@@ -561,116 +356,54 @@ const PayrollDashboard = () => {
             </tbody>
           </table>
         </div>
-
-        {/* Pagination */}
+        
+        {/* Pagination Component */}
         {filteredRecords.length > itemsPerPage && (
-          <div className="px-6 py-4 border-t flex items-center justify-between">
-            <div className="text-sm text-gray-500">
-              Showing{" "}
-              <span className="font-medium">{indexOfFirstItem + 1}</span> to{" "}
-              <span className="font-medium">
-                {Math.min(indexOfLastItem, filteredRecords.length)}
-              </span>{" "}
-              of <span className="font-medium">{filteredRecords.length}</span>{" "}
-              results
+            <div className="px-6 py-4 border-t flex items-center justify-between bg-gray-50">
+                <span className="text-sm text-gray-700">
+                    Page {currentPage} of {totalPages}
+                </span>
+                <div className="flex gap-2">
+                    <button 
+                        onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1}
+                        className="px-3 py-1 border rounded bg-white disabled:opacity-50"
+                    >
+                        Prev
+                    </button>
+                    <button 
+                        onClick={() => paginate(currentPage + 1)} disabled={currentPage === totalPages}
+                        className="px-3 py-1 border rounded bg-white disabled:opacity-50"
+                    >
+                        Next
+                    </button>
+                </div>
             </div>
-            <div className="flex space-x-2">
-              <button
-                onClick={() => paginate(currentPage - 1)}
-                disabled={currentPage === 1}
-                className={`px-3 py-1 rounded-md border ${
-                  currentPage === 1
-                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                    : "hover:bg-gray-100"
-                }`}
-              >
-                Previous
-              </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                (number) => (
-                  <button
-                    key={number}
-                    onClick={() => paginate(number)}
-                    className={`px-3 py-1 rounded-md border ${
-                      currentPage === number
-                        ? "bg-blue-600 text-white"
-                        : "hover:bg-gray-100"
-                    }`}
-                  >
-                    {number}
-                  </button>
-                )
-              )}
-              <button
-                onClick={() => paginate(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className={`px-3 py-1 rounded-md border ${
-                  currentPage === totalPages
-                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                    : "hover:bg-gray-100"
-                }`}
-              >
-                Next
-              </button>
-            </div>
-          </div>
         )}
       </div>
 
-      {/* Payroll Summary */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-6">
-        <h2 className="text-lg font-medium text-gray-800 mb-4">
-          Payroll Summary - {format(selectedMonth, "MMMM yyyy")}
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-            <div className="text-sm font-medium text-blue-800">
-              Total Payroll (USD)
-            </div>
-            <div className="text-2xl font-bold text-blue-600 mt-1">
-              {formatUSD(
-                payrollRecords.reduce(
-                  (sum, record) => sum + (Number(record?.base_salary_usd) || 0),
-                  0
-                )
-              )}
-            </div>
-            <div className="text-xs text-blue-500 mt-2">Gross amount</div>
-          </div>
-          <div className="bg-green-50 p-4 rounded-lg border border-green-100">
-            <div className="text-sm font-medium text-green-800">
-              Total Payroll (ZIG)
-            </div>
-            <div className="text-2xl font-bold text-green-600 mt-1">
-              {formatZIG(
-                payrollRecords.reduce(
-                  (sum, record) => sum + (Number(record?.base_salary_zig) || 0),
-                  0
-                )
-              )}
-            </div>
-            <div className="text-xs text-green-500 mt-2">Gross amount</div>
-          </div>
-
-          <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-100">
-            <div className="text-sm font-medium text-yellow-800">
-              Employees Paid
-            </div>
-            <div className="text-2xl font-bold text-yellow-600 mt-1">
-              {
-                payrollRecords.filter(
-                  (record) => record?.status === "Processed"
-                ).length
-              }
-              /{payrollRecords.length}
-            </div>
-            <div className="text-xs text-yellow-500 mt-2">
-              Successfully processed
-            </div>
-          </div>
-        </div>
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+         <div className="bg-white p-6 rounded-xl shadow-sm border border-blue-100">
+            <p className="text-sm text-blue-600 font-medium">Total Gross (USD)</p>
+            <p className="text-2xl font-bold text-gray-900 mt-2">
+                {formatUSD(payrollRecords.reduce((sum, r) => sum + (Number(r.base_salary_usd) || 0), 0))}
+            </p>
+         </div>
+         <div className="bg-white p-6 rounded-xl shadow-sm border border-green-100">
+            <p className="text-sm text-green-600 font-medium">Total Gross (ZiG)</p>
+            <p className="text-2xl font-bold text-gray-900 mt-2">
+                {formatZIG(payrollRecords.reduce((sum, r) => sum + (Number(r.base_salary_zig) || 0), 0))}
+            </p>
+         </div>
+         <div className="bg-white p-6 rounded-xl shadow-sm border border-yellow-100">
+            <p className="text-sm text-yellow-600 font-medium">Processed Status</p>
+            <p className="text-2xl font-bold text-gray-900 mt-2">
+                {payrollRecords.filter(r => r.status === 'Processed').length} / {payrollRecords.length}
+            </p>
+         </div>
       </div>
 
+      {/* Payslip Modal */}
       {showPayslip && selectedRecord && (
         <PayslipModal
           PayrollRecord={selectedRecord}

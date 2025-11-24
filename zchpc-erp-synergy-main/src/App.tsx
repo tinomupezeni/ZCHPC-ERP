@@ -15,7 +15,7 @@ import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 import { AuthProvider } from "./contexts/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
-import MainLayout from "./components/MainLayout";
+import MainLayout from "./layout/MainLayout";
 import PayrollPage from "./pages/PayrollPage";
 
 const queryClient = new QueryClient();

@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import {toast} from "sonner";
-import Server from "../server/Server";
-import { on } from "events";
+import { addDepartMethod } from "@/server/hr.services";
 
 export default function AddDepartment({ setShowModal, onSuccess }) {
   // Use state to manage department data
@@ -13,19 +12,7 @@ export default function AddDepartment({ setShowModal, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState([]); // State to hold the list of users for the dropdown
 
-  // Fetch the list of users when the component mounts
-  useEffect(() => {
-    // Assuming you have a fetchUsers method in your Server class
-    // that gets all CustomUsers
-    Server.fetchUser() // This needs to be the method that fetches all users
-      .then((res) => {
-        setUsers(res.data);
-      })
-      .catch((error) => {
-        console.error("Error fetching users:", error);
-        toast.error("Failed to load users for manager selection.");
-      });
-  }, []);
+
 
   const handleChange = (e) => {
     // Update the department state based on form input
@@ -37,7 +24,7 @@ export default function AddDepartment({ setShowModal, onSuccess }) {
     setLoading(true);
 
     // Call the new addDepartment method from your Server class
-    Server.addDepartment(department)
+    addDepartMethod(department)
       .then(() => {
         toast.success("New department successfully added.");
         setLoading(false);
