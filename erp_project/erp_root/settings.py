@@ -85,8 +85,12 @@ WSGI_APPLICATION = 'erp_root.wsgi.application'
 # --- Database ---
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'erp_db',
+        'USER': 'erp_user',
+        'PASSWORD': 'erp@1234',
+        'HOST': 'localhost',      # Or the IP address of your DB server
+        'PORT': '5432',           # Default PostgreSQL port
     }
 }
 

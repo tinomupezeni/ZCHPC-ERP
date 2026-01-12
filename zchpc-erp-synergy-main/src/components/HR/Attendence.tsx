@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Search, Calendar, MoreVertical, Filter, Download, ChevronDown, Clock, Check, X, Upload } from "lucide-react";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
-import Server from "@/server/Server";
+import Server from "@/services/Server";
 import { toast } from "sonner";
 
 // Helper: display time as HH:MM for UI

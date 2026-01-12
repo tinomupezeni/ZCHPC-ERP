@@ -24,6 +24,17 @@ class Department(models.Model):
     def __str__(self):
         return self.name
 
+
+class Role(models.Model):
+    name = models.CharField(max_length=50, unique=True) # e.g., "ADMIN", "HR"
+    display_name = models.CharField(max_length=100) # e.g., "System Administrator"
+    description = models.TextField(blank=True)
+    
+    permissions = models.JSONField(default=list, blank=True)
+
+    def __str__(self):
+        return self.display_name
+
 class Position(models.Model):
     """
     Defines a specific job title or position within a department.
@@ -151,7 +162,7 @@ class Employees(models.Model):
     zimra_tax_number = models.CharField(max_length=50, blank=True, verbose_name="ZIMRA Tax Number")
     paye_number = models.CharField(max_length=50, blank=True, verbose_name="PAYE Number")
     pays_aids_levy = models.BooleanField(default=True, verbose_name="Pays AIDS Levy")
-
+    role = models.ForeignKey(Role, on_delete=models.PROTECT, related_name='employees')
     # --- Emergency Contact ---
     emergency_contact_name = models.CharField(max_length=100, blank=True)
     emergency_contact_number = models.CharField(max_length=15, blank=True)

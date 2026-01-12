@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, Routes, Route, Navigate } from "react-router-dom";
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
+// import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import LoginPage from "./pages/LoginPage";
@@ -13,9 +13,8 @@ import HRPage from "./pages/HRPage";
 import InventoryPage from "./pages/InventoryPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
-import { AuthProvider } from "./contexts/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
-import MainLayout from "./layout/MainLayout";
+import { MainLayout } from "./layout/MainLayout";
 import PayrollPage from "./pages/PayrollPage";
 
 const queryClient = new QueryClient();
@@ -30,10 +29,8 @@ const App = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
+      <>
         <TooltipProvider>
-          <Toaster />
-          <Sonner />
           <Routes>
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<LoginPage />} />
@@ -70,7 +67,9 @@ const App = () => {
             <Route
               path="/payroll/*"
               element={
-                <ProtectedRoute requiredPermission={["accountant", "hr", "admin"]}>
+                <ProtectedRoute
+                  requiredPermission={["accountant", "hr", "admin"]}
+                >
                   <MainLayout setOpenTab={setOpenTab}>
                     <PayrollPage openTab={openTab} />
                   </MainLayout>
@@ -82,7 +81,7 @@ const App = () => {
               element={
                 <ProtectedRoute requiredPermission={["procurement", "admin"]}>
                   <MainLayout setOpenTab={setOpenTab}>
-                    <ProcurementPage openTab={openTab}/>
+                    <ProcurementPage openTab={openTab} />
                   </MainLayout>
                 </ProtectedRoute>
               }
@@ -120,7 +119,8 @@ const App = () => {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </TooltipProvider>
-      </AuthProvider>
+      </>
+      <Toaster position="top-right" richColors closeButton />
     </QueryClientProvider>
   );
 };

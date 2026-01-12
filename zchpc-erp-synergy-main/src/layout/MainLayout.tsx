@@ -1,42 +1,25 @@
 import React, { useState, useMemo } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  LogOut,
-  ChevronLeft,
-  ChevronRight,
-  Menu,
-  X,
-  BarChart3,
-} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { navItems } from "./navConfig";
+import { SidebarItem } from "./SidebarItem";
+import { LogOut, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { cn } from "@/lib/utils";
-import { navItems } from "./navConfig"; // 1. Moved nav items to a separate file
-import { SidebarItem } from "./SidebarItem"; // 2. Created a sub-component for nav items
 
-interface MainLayoutProps {
-  children: React.ReactNode;
-}
-
-export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
+export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const [collapsed, setCollapsed] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, logout, checkPermission, isLoading } = useAuth();
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>(
     {}
   );
-  
-  // 3. This is how you get the user data!
-  const { user, logout, checkPermission } = useAuth();
-  
-  const location = useLocation();
-  const navigate = useNavigate();
 
-  const toggleSidebar = () => setCollapsed((prev) => !prev);
-  const toggleMobileMenu = () => setMobileMenuOpen((prev) => !prev);
-
-  // 4. This recursive function filters the nav list based on the user's role
   const filteredNavItems = useMemo(() => {
+    // If loading, show nothing (or we will show the skeleton below)
+    if (isLoading || !user) return [];
+
     const filterItems = (items: typeof navItems): typeof navItems => {
       return items
         .filter((item) => checkPermission(item.permission))
@@ -46,148 +29,88 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         }));
     };
     return filterItems(navItems);
-  }, [checkPermission]); // 'navItems' is constant, so checkPermission is the only dependency
+  }, [user, isLoading, checkPermission]); // Dependency on 'user' is key for refresh fix
 
-  // 5. FIXED: Correctly access nested user data
   const userName = `${user?.first_name || ""} ${user?.last_name || ""}`;
-  const userRole = user?.employee_profile?.role || "Staff";
-  const userFallback = (user?.first_name?.[0] || "U") + (user?.last_name?.[0] || "");
-  const userAvatarUrl = `https://api.dicebear.com/7.x/initials/svg?seed=${userName}`;
+  const userRole = user?.employee_profile?.role_name || "Staff";
+  const userFallback =
+    (user?.first_name?.[0] || "U") + (user?.last_name?.[0] || "");
 
   return (
-    <div className="flex min-h-screen bg-background">
-      {/* --- Desktop Sidebar --- */}
+    <div className="flex min-h-screen bg-[#f8fafc]">
       <aside
         className={cn(
-          "fixed inset-y-0 z-20 flex h-full flex-col border-r bg-card transition-all duration-300 ease-in-out",
-          collapsed ? "w-[70px]" : "w-[240px]",
-          "hidden md:flex"
+          "fixed inset-y-0 z-20 flex h-full flex-col border-r bg-white transition-all",
+          collapsed ? "w-[70px]" : "w-[260px]"
         )}
       >
-        {/* Logo and Collapse Button */}
-        <div className="flex h-16 items-center justify-between px-4">
+        <div className="flex h-16 items-center px-6 border-b">
+          <BarChart3 className="h-6 w-6 text-blue-600 mr-2" />
           {!collapsed && (
-            <div className="flex items-center space-x-2">
-              <BarChart3 className="h-6 w-6 text-primary" />
-              <span className="text-lg font-semibold">ZCHPC ERP</span>
-            </div>
-          )}
-          {collapsed && <BarChart3 className="h-6 w-6 text-primary" />}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleSidebar}
-            className={cn("h-8 w-8", collapsed && "hidden")}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          {collapsed && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleSidebar}
-              className="absolute -right-4 top-9 h-8 w-8 rounded-full border bg-background shadow-md"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+            <span className="font-bold text-slate-900">ZCHPC ERP</span>
           )}
         </div>
-        
-        {/* Navigation */}
-        <div className="flex-1 overflow-auto py-2">
-          <nav className="grid gap-1 px-2">
-            {filteredNavItems.map((item) => (
-              <SidebarItem
-                key={item.path || item.title}
-                item={item}
-                collapsed={collapsed}
-                expandedItems={expandedItems}
-                setExpandedItems={setExpandedItems}
-              />
-            ))}
+
+        <div className="flex-1 overflow-y-auto py-6 px-3">
+          <nav className="space-y-1">
+            {isLoading ? (
+              <div className="space-y-3 p-2 animate-pulse">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="h-9 bg-slate-100 rounded-md w-full" />
+                ))}
+              </div>
+            ) : (
+              filteredNavItems.map((item) => (
+                <SidebarItem
+                  key={item.path}
+                  item={item}
+                  collapsed={collapsed}
+                  expandedItems={expandedItems}
+                  setExpandedItems={setExpandedItems}
+                />
+              ))
+            )}
           </nav>
         </div>
-        
-        {/* User Profile & Logout */}
-        <div className="mt-auto border-t p-4">
-          <div className={cn("flex items-center", collapsed && "justify-center")}>
+
+        <div className="mt-auto border-t p-4 bg-slate-50/50">
+          <div className="flex items-center px-2">
             <Avatar className="h-8 w-8">
-              <AvatarImage src={userAvatarUrl} />
+              <AvatarImage
+                src={`https://api.dicebear.com/7.x/initials/svg?seed=${userName}`}
+              />
               <AvatarFallback>{userFallback}</AvatarFallback>
             </Avatar>
             {!collapsed && (
-              <div className="ml-2">
-                <p className="text-sm font-medium">{userName}</p>
-                <p className="text-xs text-muted-foreground">{userRole}</p>
+              <div className="ml-3 overflow-hidden">
+                <p className="text-xs font-bold text-slate-900 truncate">
+                  {userName}
+                </p>
+                <p className="text-[10px] text-slate-500 uppercase">
+                  {userRole}
+                </p>
               </div>
             )}
           </div>
           <Button
             variant="ghost"
-            className={cn(
-              "mt-2 w-full justify-start text-muted-foreground",
-              collapsed && "justify-center px-0"
-            )}
             onClick={logout}
+            className="mt-2 w-full justify-start text-slate-400 hover:text-red-600"
           >
-            <LogOut className={cn("h-4 w-4", !collapsed && "mr-2")} />
-            {!collapsed && <span>Logout</span>}
+            <LogOut className="h-4 w-4 mr-2" />
+            {!collapsed && <span className="text-xs font-bold">Logout</span>}
           </Button>
         </div>
       </aside>
 
-      {/* --- Mobile Header & Menu --- */}
-      <div className="md:hidden flex items-center h-16 px-4 border-b bg-card w-full justify-between sticky top-0 z-30">
-        <div className="flex items-center space-x-2">
-          <BarChart3 className="h-6 w-6 text-primary" />
-          <span className="text-lg font-semibold">ZCHPC ERP</span>
-        </div>
-        <Button variant="ghost" size="icon" onClick={toggleMobileMenu}>
-          <Menu className="h-6 w-6" />
-        </Button>
-      </div>
-      
-      {/* Mobile Sidebar (Overlay) */}
-      {mobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-50 bg-background/80 backdrop-blur-sm" onClick={toggleMobileMenu}>
-          <aside className="fixed inset-y-0 right-0 z-50 w-3/4 bg-card shadow-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 border-b">
-              <span className="text-lg font-semibold">Menu</span>
-              <Button variant="ghost" size="icon" onClick={toggleMobileMenu}>
-                <X className="h-6 w-6" />
-              </Button>
-            </div>
-            <nav className="grid gap-1 p-4">
-              {filteredNavItems.map((item) => (
-                 <SidebarItem
-                    key={item.path || item.title}
-                    item={item}
-                    collapsed={false} // Always expanded on mobile
-                    expandedItems={expandedItems}
-                    setExpandedItems={setExpandedItems}
-                    onNavigate={toggleMobileMenu} // Close menu on nav
-                 />
-              ))}
-            </nav>
-          </aside>
-        </div>
-      )}
-
-      {/* --- Main Content Area --- */}
       <main
         className={cn(
-          "flex-1 transition-all duration-300 ease-in-out",
-          "md:ml-[240px]",
-          collapsed && "md:ml-[70px]",
-          "mt-16 md:mt-0" // Account for mobile header
+          "flex-1 transition-all",
+          !collapsed ? "ml-[260px]" : "ml-[70px]"
         )}
       >
-        <div className="container py-6 md:py-8 px-2 md:px-8 max-w-8xl">
-          {children}
-        </div>
+        <div className="p-8">{children}</div>
       </main>
     </div>
   );
 };
-
-export default MainLayout;

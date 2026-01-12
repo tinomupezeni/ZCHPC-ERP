@@ -34,9 +34,9 @@ import {
   Legend,
 } from "recharts";
 import { useNavigate } from "react-router-dom";
-import { apiClient } from "../server/apiClient"; // 1. Use apiClient
+import { apiClient } from "../services/apiClient"; // 1. Use apiClient
 import { toast } from "sonner"; // 2. Import toast for errors
-import { getAdminDashboardData } from "../server/admin.services";
+import { getAdminDashboardData } from "../services/admin.services";
 import { DashboardData } from "../types/admin";
 
 // --- Define the data structure ---

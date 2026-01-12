@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getTaxBrackets, createTaxBracket, updateTaxBracket, deleteTaxBracket } from '../server/api'; 
+import { getTaxBrackets, createTaxBracket, updateTaxBracket, deleteTaxBracket } from '../services/api'; 
 
 const TaxConfig = () => {
     const [taxBrackets, setTaxBrackets] = useState([]);

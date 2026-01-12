@@ -5,8 +5,8 @@ import {
   ShieldCheck, AlertCircle
 } from "lucide-react";
 import { toast } from "sonner";
-import { updateEmployee, getOneEmployee } from "@/server/employees.services";
-import { getDepartment, getPositions } from "@/server/hr.services";
+import { updateEmployee, getOneEmployee } from "@/services/employees.services";
+import { getDepartment, getPositions } from "@/services/hr.services";
 import { format, differenceInYears, differenceInMonths } from "date-fns";
 
 export default function EmployeeDetailModal({ employee: initialEmployee, onClose, onUpdate }) {

@@ -23,14 +23,16 @@ const HRPage = ({ openTab }: HRPageProps) => {
 
   useEffect(() => {
     const todayDate = new Date();
-    const options = {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    };
-    setToday(todayDate.toLocaleDateString("en-US", options));
-  }, []); // Initialize today with the current date
+    setToday(
+      todayDate.toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    );
+  }, []);
+
   const renderContent = () => {
     switch (openTab) {
       case "/hr/hr-payroll":

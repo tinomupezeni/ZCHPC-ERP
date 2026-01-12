@@ -5,7 +5,7 @@ import { ClipboardList, Plus, User, BookOpen, Calendar, Pencil, Trash2 } from "l
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import Modal from "@/components/ui/Modal";
-import Server from "@/server/Server";
+import Server from "@/services/Server";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";

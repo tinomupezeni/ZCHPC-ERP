@@ -24,6 +24,8 @@ class EmployeeProfileSerializer(serializers.ModelSerializer):
     # Use StringRelatedField to show "HR" instead of department ID 3
     department = serializers.StringRelatedField()
     position = serializers.StringRelatedField()
+    role = serializers.ReadOnlyField(source='role.name')
+    role_permissions = serializers.ReadOnlyField(source='role.permissions')
 
     class Meta:
         model = Employees
@@ -34,7 +36,8 @@ class EmployeeProfileSerializer(serializers.ModelSerializer):
             'department', 
             'position',
             'date_joined',
-            'is_active'
+            'is_active',
+            'role_permissions',
         ]
 
 # We need a serializer for Position to use in EmployeeSerializer

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { X, DollarSign, Check, AlertCircle, Loader, Calendar } from "lucide-react";
 import { format } from "date-fns";
-import Server from "@/server/Server";
+import Server from "@/services/Server";
 import { toast } from "sonner";
 
 const ProcessPayrollModal = ({ isOpen, onClose, payrollMonth, onSuccess }) => {

@@ -1,182 +1,420 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-
-import { getDepartment, addUser } from "@/server/hr.services";
+import { Plus, X, Check, Copy, ShieldCheck, UserCircle } from "lucide-react";
+import {
+  getDepartment,
+  addDepartment,
+  getRoles,
+  addRole,
+  addUser,
+} from "@/services/hr.services";
 
 export default function AddUser({ setShowModal, onSuccess }) {
+  const [step, setStep] = useState(1); // 1: Form, 2: Confirm, 3: Credentials
   const [employee, setEmployee] = useState({
     first_name: "",
     last_name: "",
     role: "",
     email: "",
-    department: "", // Ensure this is initialized to a default value for the dropdown
+    department: "",
   });
-  const [loading, setLoading] = useState(false);
+  const [createdCredentials, setCreatedCredentials] = useState(null);
+
+  // Data lists
   const [departments, setDepartments] = useState([]);
-  const [departmentsLoading, setDepartmentsLoading] = useState(true);
+  const [dbRoles, setDbRoles] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  // Define a list of meaningful ERP roles
-  const roles = [
-  { value: "ADMIN", label: "Admin" },
-  { value: "HR", label: "HR" },
-  { value: "ACCOUNTANT", label: "Accountant" },
-  { value: "PROCUREMENT", label: "Procurement" },
-  { value: "SALES", label: "Sales" },
-  { value: "MANAGER", label: "Manager" },
-  { value: "STAFF", label: "Staff" },
-  { value: "INTERN", label: "Intern" },
-];
+  // Inline Add states
+  const [isAddingDept, setIsAddingDept] = useState(false);
+  const [newDeptName, setNewDeptName] = useState("");
+  const [isAddingRole, setIsAddingRole] = useState(false);
+  const [newRoleName, setNewRoleName] = useState("");
 
+  const fetchInitialData = async () => {
+    try {
+      const [deptRes, roleRes] = await Promise.all([
+        getDepartment(),
+        getRoles(),
+      ]);
+      setDepartments(deptRes.data);
+      setDbRoles(roleRes); // Assuming role service returns .data already based on previous service update
+    } catch (err) {
+      toast.error("Failed to load system data");
+    }
+  };
 
-  // Fetch departments when the component loads
   useEffect(() => {
-    getDepartment()
-      .then((response) => {
-        setDepartments(response.data);
-      })
-      .catch((error) => {
-        console.error("Failed to fetch departments:", error);
-        toast.error("Failed to load departments.");
-      })
-      .finally(() => {
-        setDepartmentsLoading(false);
-      });
+    fetchInitialData();
   }, []);
 
-  const handleChange = (e) => {
-    setEmployee({ ...employee, [e.target.name]: e.target.value });
+  const handleQuickAddDept = async () => {
+    if (!newDeptName.trim()) return;
+    try {
+      const res = await addDepartment({ name: newDeptName });
+      setDepartments([...departments, res.data]);
+      setEmployee({ ...employee, department: res.data.id });
+      setNewDeptName("");
+      setIsAddingDept(false);
+      toast.success("Department created");
+    } catch (err) {
+      toast.error("Department already exists");
+    }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setLoading(true);
-
-    addUser(employee)
-      .then(() => {
-        toast.success("New user successfully added");
-        setLoading(false);
-        onSuccess();
-        setShowModal(false);
-      })
-      .catch((error) => {
-        console.error("Error registering user:", error.response.data);
-        const errorMessage = error.response?.data?.email?.[0] || "Failed to add new user. Please check your inputs.";
-        toast.error(errorMessage);
-        setLoading(false);
+  const handleQuickAddRole = async () => {
+    if (!newRoleName.trim()) return;
+    try {
+      const res = await addRole({
+        name: newRoleName.toUpperCase().replace(/\s+/g, "_"),
+        display_name: newRoleName,
       });
+      setDbRoles([...dbRoles, res]);
+      setEmployee({ ...employee, role: res.id });
+      setNewRoleName("");
+      setIsAddingRole(false);
+      toast.success("Role created");
+    } catch (err) {
+      toast.error("Failed to create role");
+    }
   };
+
+  const handleCopy = (text) => {
+    navigator.clipboard.writeText(text);
+    toast.success("Copied to clipboard");
+  };
+
+  const handleSubmit = async () => {
+    setLoading(true);
+    try {
+      const response = await addUser(employee);
+      setCreatedCredentials(response.data);
+      setStep(3);
+      onSuccess();
+    } catch (error) {
+      toast.error(error.response?.data?.email?.[0] || "Registration failed");
+      setStep(1);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getDeptName = () =>
+    departments.find((d) => String(d.id) === String(employee.department))?.name;
+  const getRoleName = () =>
+    dbRoles.find((r) => String(r.id) === String(employee.role))?.display_name;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center">
-      <div className="bg-white rounded-lg w-full max-w-lg shadow-lg">
-        {/* Header */}
-        <div className="p-4 border-b flex justify-between items-center">
-          <h2 className="text-xl font-semibold">Add System User</h2>
-          <button
-            onClick={() => setShowModal(false)}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Form */}
-        <form className="p-6 space-y-4" onSubmit={handleSubmit}>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm text-gray-600">First Name</label>
-              <input
-                type="text"
-                name="first_name"
-                value={employee.first_name}
-                onChange={handleChange}
-                required
-                className="w-full p-2 border rounded"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-gray-600">Surname</label>
-              <input
-                type="text"
-                name="last_name"
-                value={employee.last_name}
-                onChange={handleChange}
-                required
-                className="w-full p-2 border rounded"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm text-gray-600">Role</label>
-              <select
-                name="role"
-                value={employee.role}
-                onChange={handleChange}
-                required
-                className="w-full p-2 border rounded"
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-200">
+        {/* Step 1: Entry Form */}
+        {step === 1 && (
+          <>
+            <div className="p-6 border-b bg-slate-50 flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">
+                  New System User
+                </h2>
+                <p className="text-sm text-slate-500">
+                  Step 1: Enter basic information
+                </p>
+              </div>
+              <button
+                onClick={() => setShowModal(false)}
+                className="text-slate-400 hover:text-slate-600"
               >
-                <option value="" disabled>Select a role</option>
-                {roles.map((role) => (
-                  <option key={role.value} value={role.value}>
-                    {role.label}
-                  </option>
-                ))}
-              </select>
+                <X />
+              </button>
+            </div>
+            <form
+              className="p-6 space-y-5"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setStep(2);
+              }}
+            >
+              <div className="grid grid-cols-2 gap-4">
+                <input
+                  placeholder="First Name"
+                  value={employee.first_name}
+                  onChange={(e) =>
+                    setEmployee({ ...employee, first_name: e.target.value })
+                  }
+                  required
+                  className="p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <input
+                  placeholder="Surname"
+                  value={employee.last_name}
+                  onChange={(e) =>
+                    setEmployee({ ...employee, last_name: e.target.value })
+                  }
+                  required
+                  className="p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                {/* Role Section */}
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[12px] font-bold text-slate-400 uppercase">
+                      Role
+                    </label>
+                    {!isAddingRole && (
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingRole(true)}
+                        className="text-[12px] text-blue-600 font-bold hover:underline"
+                      >
+                        Add New
+                      </button>
+                    )}
+                  </div>
+                  {isAddingRole ? (
+                    <div className="flex gap-1">
+                      <input
+                        autoFocus
+                        placeholder="Role Name"
+                        value={newRoleName}
+                        onChange={(e) => setNewRoleName(e.target.value)}
+                        className="flex-1 p-2 text-sm border border-blue-300 rounded-lg outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleQuickAddRole}
+                        className="p-1.5 bg-blue-600 text-white rounded-lg"
+                      >
+                        <Check className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingRole(false)}
+                        className="p-1.5 bg-slate-100 text-slate-400 rounded-lg"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <select
+                      value={employee.role}
+                      onChange={(e) =>
+                        setEmployee({ ...employee, role: e.target.value })
+                      }
+                      required
+                      className="w-full p-2.5 border rounded-lg text-sm"
+                    >
+                      <option value="">Select Role</option>
+                      {dbRoles?.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.display_name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {/* Dept Section */}
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[12px] font-bold text-slate-400 uppercase">
+                      Department
+                    </label>
+                    {!isAddingDept && (
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingDept(true)}
+                        className="text-[12px] text-blue-600 font-bold hover:underline"
+                      >
+                        Add New
+                      </button>
+                    )}
+                  </div>
+                  {isAddingDept ? (
+                    <div className="flex gap-1">
+                      <input
+                        autoFocus
+                        placeholder="Dept Name"
+                        value={newDeptName}
+                        onChange={(e) => setNewDeptName(e.target.value)}
+                        className="flex-1 p-2 text-sm border border-blue-300 rounded-lg outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleQuickAddDept}
+                        className="p-1.5 bg-blue-600 text-white rounded-lg"
+                      >
+                        <Check className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingDept(false)}
+                        className="p-1.5 bg-slate-100 text-slate-400 rounded-lg"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <select
+                      value={employee.department}
+                      onChange={(e) =>
+                        setEmployee({ ...employee, department: e.target.value })
+                      }
+                      required
+                      className="w-full p-2.5 border rounded-lg text-sm"
+                    >
+                      <option value="">Select Dept</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </div>
+
+              <input
+                placeholder="Work Email"
+                type="email"
+                value={employee.email}
+                onChange={(e) =>
+                  setEmployee({ ...employee, email: e.target.value })
+                }
+                required
+                className="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+              />
+
+              <div className="flex justify-end pt-4">
+                <button
+                  type="submit"
+                  className="px-8 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all"
+                >
+                  Continue to Summary
+                </button>
+              </div>
+            </form>
+          </>
+        )}
+
+        {/* Step 2: Confirmation Summary */}
+        {step === 2 && (
+          <div className="p-8 space-y-6">
+            <div className="text-center">
+              <div className="h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <UserCircle className="h-10 w-10 text-blue-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-800">
+                Review Details
+              </h2>
+              <p className="text-slate-500 text-sm">
+                Verify information before system activation
+              </p>
+            </div>
+
+            <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 space-y-4">
+              <div className="flex justify-between border-b pb-2">
+                <span className="text-slate-500 text-sm">Full Name</span>
+                <span className="font-semibold text-slate-800">
+                  {employee.first_name} {employee.last_name}
+                </span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
+                <span className="text-slate-500 text-sm">Role</span>
+                <span className="font-semibold text-blue-600 uppercase text-sm tracking-wider">
+                  {getRoleName()}
+                </span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
+                <span className="text-slate-500 text-sm">Department</span>
+                <span className="font-semibold text-slate-800">
+                  {getDeptName()}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 text-sm">Email</span>
+                <span className="font-semibold text-slate-800">
+                  {employee.email}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setStep(1)}
+                className="flex-1 py-3 border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-50"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={loading}
+                className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 shadow-lg shadow-green-100 transition-all"
+              >
+                {loading ? "Processing..." : "Confirm & Create"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Credentials Display */}
+        {step === 3 && createdCredentials && (
+          <div className="p-8 space-y-6 text-center animate-in fade-in zoom-in duration-300">
+            <div className="h-20 w-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
+              <ShieldCheck className="h-12 w-12 text-green-600" />
             </div>
             <div>
-              <label className="text-sm text-gray-600">Department</label>
-              <select
-                name="department"
-                value={employee.department}
-                onChange={handleChange}
-                required
-                className="w-full p-2 border rounded"
-                disabled={departmentsLoading}
-              >
-                <option value="" disabled>
-                  {departmentsLoading ? "Loading..." : "Select Department"}
-                </option>
-                {departments.map((dept) => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.name}
-                  </option>
-                ))}
-              </select>
+              <h2 className="text-2xl font-bold text-slate-800">
+                Account Created
+              </h2>
+              <p className="text-slate-500 mt-1 text-sm">
+                Provide these credentials to the employee
+              </p>
             </div>
-          </div>
 
-          <div>
-            <label className="text-sm text-gray-600">Email</label>
-            <input
-              type="email"
-              name="email"
-              value={employee.email}
-              onChange={handleChange}
-              required
-              className="w-full p-2 border rounded"
-            />
-          </div>
+            <div className="space-y-3">
+              <div className="p-4 bg-slate-900 rounded-xl text-left">
+                <label className="text-[12px] text-slate-500 font-bold uppercase tracking-widest">
+                  Login Email
+                </label>
+                <div className="flex justify-between items-center mt-1">
+                  <code className="text-blue-400 font-mono text-sm">
+                    {createdCredentials.email}
+                  </code>
+                  <button
+                    onClick={() => handleCopy(createdCredentials.email)}
+                    className="text-slate-400 hover:text-white"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="p-4 bg-slate-900 rounded-xl text-left">
+                <label className="text-[12px] text-slate-500 font-bold uppercase tracking-widest">
+                  Temporary Password
+                </label>
+                <div className="flex justify-between items-center mt-1">
+                  <code className="text-green-400 font-mono text-sm">
+                    {createdCredentials.password}
+                  </code>
+                  <button
+                    onClick={() => handleCopy(createdCredentials.password)}
+                    className="text-slate-400 hover:text-white"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
 
-          {/* Buttons */}
-          <div className="flex justify-end gap-3 mt-4">
             <button
-              type="button"
               onClick={() => setShowModal(false)}
-              className="px-4 py-2 border rounded text-gray-600 hover:bg-gray-100"
+              className="w-full py-4 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-900 transition-all"
             >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading || departmentsLoading}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
-            >
-              {loading ? "Adding user..." : "Add User"}
+              Done & Return
             </button>
           </div>
-        </form>
+        )}
       </div>
     </div>
   );

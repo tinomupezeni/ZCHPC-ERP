@@ -3,7 +3,7 @@ import { Plus, Download, Search, Filter } from "lucide-react";
 import AddEmployee from "./AddEmployee";
 import EmployeeList from "./EmployeeList";
 import EmployeeDetailModal from "./EmployeeDetailModal";
-import { getEmployees } from "@/server/employees.services";
+import { getEmployees } from "@/services/employees.services";
 
 const Employees = () => {
   // Data States

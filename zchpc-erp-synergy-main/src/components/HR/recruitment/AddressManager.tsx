@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Addresses from "./Addresses"; // Your table component
 import AddressModal from "./AddressModal";       // The new modal
-import * as addressService from "../../../server/address.services"; // The API
+import * as addressService from "../../../services/address.services"; // The API
 import { Address } from "../types";
 import { toast } from "sonner"; // Or your preferred notification library
 

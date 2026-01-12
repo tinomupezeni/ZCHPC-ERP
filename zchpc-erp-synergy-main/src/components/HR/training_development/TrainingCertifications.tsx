@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { format, parseISO, isValid } from "date-fns";
 import Modal from "@/components/ui/Modal";
-import Server from "@/server/Server";
+import Server from "@/services/Server";
 import { useToast } from "@/hooks/use-toast";
 
 interface Certification {

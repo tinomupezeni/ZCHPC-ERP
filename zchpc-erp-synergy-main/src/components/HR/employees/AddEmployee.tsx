@@ -2,13 +2,13 @@ import { Loader, X, Plus, Check, X as CancelIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import TaxAndDeductionsDropdown from "./TaxAndDeductions";
-import { addEmployee } from "@/server/employees.services";
+import { addEmployee } from "@/services/employees.services";
 import {
   addPosition,
   getPositions,
-  addDepartMethod,
+  addDepartment,
   getDepartment, 
-} from "@/server/hr.services";
+} from "@/services/hr.services";
 
 export default function AddEmployee({ setShowModal, fetchEmployees }) {
   const [loading, setLoading] = useState(false);
@@ -108,7 +108,7 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
     setDeptLoading(true);
     try {
       // Create in DB
-      const newDept = await addDepartMethod({ name: newDeptName });
+      const newDept = await addDepartment({ name: newDeptName });
       
       // Update local list
       const updatedList = [...departments, newDept];

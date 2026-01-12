@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import PostJobModal from "./recruitment/PostJobModal";
-import * as jobService from "../../server/jobs.services";
-import { getDepartment } from "@/server/hr.services"; // Import this
+import * as jobService from "../../services/jobs.services";
+import { getDepartment } from "@/services/hr.services"; // Import this
 
 import {
   Search,

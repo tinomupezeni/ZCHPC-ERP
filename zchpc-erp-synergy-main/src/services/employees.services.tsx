@@ -1,4 +1,4 @@
-import { apiClient } from "@/server/apiClient";
+import apiClient  from "@/services/apiClient";
 
 export const addEmployee = (payload) => {
   return apiClient.post("/hr/employees/", payload);

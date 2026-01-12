@@ -4,7 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-import { getDeductionTypes, addDeductionType } from "@/server/hr.services";
+import { getDeductionTypes, addDeductionType } from "@/services/hr.services";
 import { toast } from "sonner";
 
 export default function TaxAndDeductionsDropdown({ onSelect }) {

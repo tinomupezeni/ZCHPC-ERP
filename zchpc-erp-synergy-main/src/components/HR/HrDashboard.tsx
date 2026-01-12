@@ -18,8 +18,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import Server from "../../server/Server"; // Make sure to import your Server utility
-import { hrDashboard } from "@/server/hr.services";
+import Server from "../../services/Server"; // Make sure to import your Server utility
+import { hrDashboard } from "@/services/hr.services";
 import { useNavigate } from "react-router-dom";
 
 // Define a type or interface for the data to ensure consistency and help with autocompletion

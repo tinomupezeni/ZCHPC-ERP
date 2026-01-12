@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { DollarSign, Search, PlusCircle, Loader, XCircle, Calendar, X } from "lucide-react";
-import Server from "@/server/Server";
+import Server from "@/services/Server";
 import { toast } from "sonner";
 import { formatUSD, formatZIG } from "../ui/utils";
 

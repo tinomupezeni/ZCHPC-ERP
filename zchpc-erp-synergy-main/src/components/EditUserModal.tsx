@@ -5,7 +5,7 @@ import { Input } from "./ui/input";
 import { toast } from "sonner";
 import { Label } from "./ui/label";
 import { Button } from "./ui/button";
-import Server from "@/server/Server";
+import Server from "@/services/Server";
 
 const EditUserModal = ({ closeModal, userId }) => {
   const [userData, setUserData] = useState({});

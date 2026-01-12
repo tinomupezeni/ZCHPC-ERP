@@ -12,7 +12,7 @@ import {
   Search,
   Clock,
 } from "lucide-react";
-import Server from "@/server/Server";
+import Server from "@/services/Server";
 import { format, addMonths, subMonths } from "date-fns";
 import { formatUSD, formatZIG } from "../ui/utils";
 import { toast } from "sonner";

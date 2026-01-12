@@ -1,6 +1,6 @@
 
 import { API_BASE_URL } from "./api";
-import { apiClient } from "./apiClient";
+import apiClient  from "./apiClient";
 
 const api_url = API_BASE_URL
 

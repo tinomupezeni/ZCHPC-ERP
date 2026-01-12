@@ -14,7 +14,7 @@ import {
 import { Badge } from "../ui/badge";
 import { RefreshCw, ShieldAlert, LogIn } from "lucide-react";
 import { format } from "date-fns";
-import Server from "@/server/Server";
+import Server from "@/services/Server";
 
 export const Logs = ({ fetchLogs }) => {
   const [logs, setLogs] = useState([]);

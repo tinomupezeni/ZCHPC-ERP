@@ -26,8 +26,8 @@ import {
   approvePayslip, 
   processPayroll,
   PayrollRecord 
-} from "@/server/payroll.services";
-import { getDepartment } from "@/server/hr.services";
+} from "@/services/payroll.services";
+import { getDepartment } from "@/services/hr.services";
 
 const PayrollDashboard = () => {
   // State

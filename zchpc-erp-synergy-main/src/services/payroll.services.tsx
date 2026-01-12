@@ -1,4 +1,4 @@
-import { apiClient } from "./apiClient";
+import apiClient  from "./apiClient";
 
 // --- Types ---
 
@@ -68,4 +68,4 @@ export const getPayrollSummary = async (period: string) => {
     params: { period }
   });
   return response.data;
-};
+}; 

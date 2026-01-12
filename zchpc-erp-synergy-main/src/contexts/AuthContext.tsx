@@ -1,47 +1,59 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User } from '../types';
-import * as authService from '../server/auth.services';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
+import { User } from "../types/index";
+import * as authService from "../services/auth.services";
 
-// Define the shape of your context
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<User>;
   logout: () => void;
-  checkPermission: (requiredRoles: string[]) => boolean;
+  checkPermission: (requiredModules: string[]) => boolean;
 }
 
-// Create the context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Create the provider component
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // Start as true on app load
+  const [isLoading, setIsLoading] = useState(true);
 
-  // On initial app load, check if the user is already logged in
+  const logout = () => {
+    authService.clearTokens();
+    setUser(null);
+    window.location.href = "/login";
+  };
+
   useEffect(() => {
+    const handleGlobalLogout = () => logout();
+    window.addEventListener("auth:logout", handleGlobalLogout);
+
     const checkAuthStatus = async () => {
-      setIsLoading(true);
-      const token = localStorage.getItem('accessToken');
-      
+      const token = localStorage.getItem("accessToken");
       if (token) {
-        const userProfile = await authService.getProfile();
-        if (userProfile) {
-          setUser(userProfile);
-        } else {
-          // Token was invalid or expired
-          authService.logout();
+        try {
+          const userProfile = await authService.getProfile();
+          if (userProfile) {
+            setUser(userProfile);
+          } else {
+            logout();
+          }
+        } catch (err) {
+          logout();
         }
       }
-      setIsLoading(false);
+      setIsLoading(false); // Critical: Loading ends after fetch
     };
-    
+
     checkAuthStatus();
+    return () => window.removeEventListener("auth:logout", handleGlobalLogout);
   }, []);
 
-  // Login function for the context
   const login = async (email: string, password: string) => {
     try {
       const loggedInUser = await authService.login(email, password);
@@ -49,51 +61,46 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return loggedInUser;
     } catch (error) {
       setUser(null);
-      throw error; // Re-throw for the login page to handle
+      throw error;
     }
   };
 
-  // Logout function for the context
-  const logout = () => {
-    authService.logout();
-    setUser(null);
-    location.reload()
-  };
+  const checkPermission = (requiredModules: string[]) => {
+    if (!user) return false;
 
-  // Permission check (using the correct nested 'role')
-  const checkPermission = (requiredRoles: string[]) => {
-    // 1. Get the user's actual role from the profile
-    const userRole = user?.employee_profile?.role; // e.g., "ADMIN"
+    // 1. System Admins (Django Superusers) see everything
+    if (user.is_staff || user.is_superuser) return true;
 
-    // 2. If no user or no role, they have no permission
-    if (!userRole) {
-      return false;
-    }
+    // 2. Get permissions from the profile (sent by the backend serializer)
+    const userPermissions: string[] =
+      user?.employee_profile?.role_permissions || [];
 
-    // 3. Check if the user's role is in the required list
-    // We compare in uppercase to be safe and match the database
-    return requiredRoles.some(
-      (role) => role.toLowerCase() === userRole.toLowerCase()
+    // 3. Normalize to Uppercase for matching
+    const normalizedUserPerms = userPermissions.map((p) => p.toUpperCase());
+
+    return requiredModules.some((mod) =>
+      normalizedUserPerms.includes(mod.toUpperCase())
     );
   };
 
-  const value = {
-    user,
-    isLoading,
-    isAuthenticated: !!user,
-    login,
-    logout,
-    checkPermission,
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        isLoading,
+        isAuthenticated: !!user,
+        login,
+        logout,
+        checkPermission,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
-// Create the custom hook for components to use
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error("useAuth must be used within AuthProvider");
   return context;
 };

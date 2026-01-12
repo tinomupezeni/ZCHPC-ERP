@@ -3,7 +3,7 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.contrib.auth import get_user_model
-
+from rest_framework.permissions import IsAuthenticated
 from ..serializers.user_serializer import CustomUserSerializer
 
 User = get_user_model()
@@ -16,6 +16,19 @@ class CustomUserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by('-date_joined')
     serializer_class = CustomUserSerializer
     permission_classes = [permissions.IsAuthenticated]
+    
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        
+        # The serializer now includes 'temp_password' in its output
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            serializer.data, 
+            status=status.HTTP_201_CREATED, 
+            headers=headers
+        )
 
     def get_queryset(self):
         """
@@ -27,12 +40,8 @@ class CustomUserViewSet(viewsets.ModelViewSet):
             return User.objects.all().order_by('-date_joined')
         return User.objects.filter(id=user.id)
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def me(self, request):
-        """
-        Get the profile of the currently authenticated user.
-        Endpoint: /api/users/me/
-        """
         serializer = self.get_serializer(request.user)
         return Response(serializer.data)
 

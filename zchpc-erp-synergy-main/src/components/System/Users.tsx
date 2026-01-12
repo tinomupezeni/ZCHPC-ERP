@@ -20,7 +20,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UserPlus, Search, Edit, Trash2, User as UserIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns"; 
-import {deleteUserMethod} from '@/server/hr.services'
+import {deleteUserMethod} from '@/services/hr.services'
 
 export default function Users({ setAddUser, users }) {
   const [searchTerm, setSearchTerm] = useState("");

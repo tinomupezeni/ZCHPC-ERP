@@ -3,16 +3,18 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { BarChart3, Eye, EyeClosed, Lock, Mail } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext"; // 1. Import only this
+  BarChart3,
+  Eye,
+  EyeOff,
+  Lock,
+  Mail,
+  ShieldCheck,
+  Zap,
+} from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 const LoginPage = () => {
   const [email, setEmail] = useState("");
@@ -20,129 +22,177 @@ const LoginPage = () => {
   const [viewPassword, setViewPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
-  
-  // 2. Destructure 'login' from the hook. 
-  // This version of login automatically handles setUser internally.
-  const { login } = useAuth(); 
+  const { login } = useAuth();
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     try {
-      // 3. Call the Context login (not the service directly)
-      const user = await login(email, password); 
-      
-      console.log("Login Successful, User:", user);
+      const user = await login(email, password);
 
-      // 4. Now route based on the profile
-      if (user && user.employee_profile) {
-        const role = user.employee_profile.role?.toLowerCase();
-        
-        switch (role) {
-          case "admin":
-            navigate("/dashboard");
-            break;
-          case "hr":
-            navigate("/hr");
-            break;
-          case "accountant":
-            navigate("/accounting");
-            break;
-          case "sales":
-            navigate("/sales");
-            break;
-          default:
-            navigate("/dashboard");
-        }
+      // Check for role either in employee_profile OR directly on user object
+      const userRole = user?.employee_profile?.role || user?.role;
+
+      if (userRole) {
+        const role = userRole.toLowerCase();
+        const routes: Record<string, string> = {
+          admin: "/dashboard",
+          hr: "/hr",
+          accountant: "/accounting",
+          sales: "/sales",
+        };
+
+        toast.success(`Welcome back, ${user.first_name}!`);
+        navigate(routes[role] || "/dashboard");
       } else {
-        // Fallback if no profile exists
-        navigate("/dashboard");
+        toast.error("User profile incomplete. Contact Admin.");
       }
     } catch (error) {
-      console.error("Login failed:", error);
+      toast.error("Authentication failed. Please check your credentials.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md space-y-8 animate-fade-in">
-        <div className="text-center">
-          <div className="flex justify-center mb-3">
-            <div className="p-3 rounded-full bg-primary/10 text-primary">
-              <BarChart3 className="h-8 w-8" />
+    <div className="min-h-screen w-full flex overflow-hidden bg-[#0a0a0b]">
+      {/* Left Side: Brand & Visuals (The "outstanding" part) */}
+      <div className="hidden lg:flex lg:w-1/2 relative bg-blue-600 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-blue-700 to-indigo-950 z-10 opacity-90" />
+
+        {/* Abstract "Neural Network" background effect */}
+        <div className="absolute inset-0 z-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
+
+        <div className="relative z-20 w-full flex flex-col justify-between p-12 text-white">
+          <div className="flex items-center gap-2">
+            <div className="bg-white/10 backdrop-blur-md p-2 rounded-lg border border-white/20">
+              <Zap className="h-8 w-8 text-blue-300" />
+            </div>
+            <span className="text-2xl font-bold tracking-tighter">ZCHPC</span>
+          </div>
+
+          <div className="space-y-6">
+            <h2 className="text-5xl font-extrabold leading-tight tracking-tight">
+              Enterprise Resource <br />
+              <span className="text-blue-300">Intelligent Management.</span>
+            </h2>
+            <p className="text-lg text-blue-100/80 max-w-md leading-relaxed">
+              Securely access Zimbabwe's premier high-performance computing ERP
+              infrastructure. Unified data for HR, Payroll, and Operations.
+            </p>
+            <div className="flex gap-4 pt-4">
+              <div className="flex items-center gap-2 bg-white/5 backdrop-blur-sm px-4 py-2 rounded-full border border-white/10">
+                <ShieldCheck className="h-4 w-4 text-green-400" />
+                <span className="text-sm">Bank-grade Security</span>
+              </div>
+              <div className="flex items-center gap-2 bg-white/5 backdrop-blur-sm px-4 py-2 rounded-full border border-white/10">
+                <BarChart3 className="h-4 w-4 text-blue-300" />
+                <span className="text-sm">Real-time Analytics</span>
+              </div>
             </div>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            ZCHPC ERP System
-          </h1>
-          <p className="mt-2 text-muted-foreground">
-            Sign in to access your dashboard
+
+          <div className="text-sm text-blue-200/50">
+            © 2025 ZCHPC. All rights reserved.
+          </div>
+        </div>
+      </div>
+
+      {/* Right Side: Login Form */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-background relative">
+        {/* Subtle glow effect behind the card */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-blue-500/10 rounded-full blur-[120px]" />
+
+        <div className="w-full max-w-sm space-y-8 relative z-10">
+          <div className="text-center lg:text-left">
+            <h1 className="text-3xl font-bold text-foreground tracking-tight">
+              Welcome Back
+            </h1>
+            <p className="text-muted-foreground mt-2">
+              Enter your corporate credentials to continue
+            </p>
+          </div>
+
+          <Card className="border-border/50 bg-card/50 backdrop-blur-xl shadow-2xl">
+            <form onSubmit={handleSubmit}>
+              <CardContent className="pt-6 space-y-5">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Work Email</Label>
+                  <div className="relative group">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="admin@zchpc.com"
+                      className="pl-10 h-12 bg-background/50"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password">Password</Label>
+                    <a
+                      href="#"
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Forgot password?
+                    </a>
+                  </div>
+                  <div className="relative group">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                    <Input
+                      id="password"
+                      type={viewPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      className="pl-10 h-12 bg-background/50"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setViewPassword(!viewPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary"
+                    >
+                      {viewPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full h-12 text-md font-semibold bg-blue-600 hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <span className="flex items-center gap-2">
+                      <Zap className="h-4 w-4 animate-pulse text-blue-200" />{" "}
+                      Authenticating...
+                    </span>
+                  ) : (
+                    "Sign In to ERP"
+                  )}
+                </Button>
+              </CardContent>
+            </form>
+          </Card>
+
+          <p className="text-center text-sm text-muted-foreground">
+            Problems logging in?{" "}
+            <span className="text-primary cursor-pointer font-medium hover:underline">
+              Contact IT Support
+            </span>
           </p>
         </div>
-
-        <Card className="subtle-shadow">
-          <CardHeader>
-            <CardTitle>Sign In</CardTitle>
-            <CardDescription>
-              Enter your credentials to access your account
-            </CardDescription>
-          </CardHeader>
-          <form onSubmit={handleSubmit}>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="name@company.com"
-                    className="pl-10"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Password</Label>
-                </div>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    type={viewPassword ? "text" : "password"}
-                    placeholder="••••••••"
-                    className="pl-10"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                  {viewPassword ? (
-                    <Eye
-                      className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground cursor-pointer"
-                      onClick={() => setViewPassword(!viewPassword)}
-                    />
-                  ) : (
-                    <EyeClosed
-                      className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground cursor-pointer"
-                      onClick={() => setViewPassword(!viewPassword)}
-                    />
-                  )}
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? "Signing in..." : "Sign In"}
-              </Button>
-            </CardFooter>
-          </form>
-        </Card>
       </div>
     </div>
   );

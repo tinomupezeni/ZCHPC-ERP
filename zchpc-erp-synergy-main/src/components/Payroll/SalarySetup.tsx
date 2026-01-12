@@ -9,10 +9,11 @@ import {
   X,
   Loader,
 } from "lucide-react"; // ChevronDown removed as not used
-import Server from "@/server/Server"; // Assuming Server.fetchEmployees() and Server.updateSalary() are here
-import { getAllowanceTypes, getDeductionTypes, updateSalary } from '../../server/api'; // Import new API functions
+import Server from "@/services/Server"; // Assuming Server.fetchEmployees() and Server.updateSalary() are here
+import { getAllowanceTypes, getDeductionTypes, updateSalary } from '../../services/api'; // Import new API functions
 import { formatUSD, formatZIG } from "../ui/utils";
 import { toast } from "sonner";
+import { getEmployees } from "@/services/employees.services";
 
 const SalarySetup = () => {
   const [employees, setEmployees] = useState([]);
@@ -38,7 +39,7 @@ const SalarySetup = () => {
   const [selectedAllowanceTypeId, setSelectedAllowanceTypeId] = useState("");
   const [selectedDeductionTypeId, setSelectedDeductionTypeId] = useState("");
 
-  // Fetch initial data on mount (employees, allowance types, deduction types)
+  // Fetch initial data on mount (employees, allowance types, deduction types)0
   useEffect(() => {
     fetchInitialData();
   }, []);
@@ -48,7 +49,7 @@ const SalarySetup = () => {
     try {
       const [employeesResponse, allowancesResponse, deductionsResponse] =
         await Promise.all([
-          Server.fetchEmployees(), // Fetches employee data, including their linked allowances/deductions
+          getEmployees() ,// Fetches employee data, including their linked allowances/deductions
           getAllowanceTypes(),      // Fetches all available allowance types with their preset amounts
           getDeductionTypes(),      // Fetches all available deduction types with their preset amounts
         ]);

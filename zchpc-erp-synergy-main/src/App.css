@@ -1,8 +1,20 @@
+/* 1. Import Inter from Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  /* 2. Define a clean, professional font stack */
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: light dark;
+}
+
 #root {
   max-width: 1280px;
   margin: 0 auto;
   padding: 2rem;
-  text-align: center;
+  /* Changed to left for ERP utility, but keep center if you prefer the landing page look */
+  text-align: left; 
 }
 
 .logo {
@@ -11,20 +23,18 @@
   will-change: filter;
   transition: filter 300ms;
 }
+
 .logo:hover {
   filter: drop-shadow(0 0 2em #646cffaa);
 }
+
 .logo.react:hover {
   filter: drop-shadow(0 0 2em #61dafbaa);
 }
 
 @keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -35,8 +45,12 @@
 
 .card {
   padding: 2em;
+  border-radius: 8px;
+  background-color: #f9f9f9; /* Subtle background for ERP cards */
+  border: 1px solid #e5e7eb;
 }
 
 .read-the-docs {
-  color: #888;
+  color: #6b7280; /* Slightly darker gray for accessibility */
+  font-size: 0.875rem;
 }

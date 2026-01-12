@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Search, Mail, Download, X, Eye, Loader, Check, AlertCircle, ChevronDown } from "lucide-react";
-import Server from "@/server/Server";
+import Server from "@/services/Server";
 import { toast } from "sonner";
 import PayslipTemplate from "./ProcessPayroll";
 import { PDFDownloadLink, PDFViewer } from "@react-pdf/renderer";

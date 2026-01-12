@@ -14,6 +14,7 @@ from .views.department_views import DepartmentListCreateView, DepartmentDetailVi
 from .views.org_views import PositionViewSet, DeductionTypeViewSet
 from .views.recruitment_views import JobViewSet, JobApplicationViewSet
 from .views.report_views import LeaveBalanceReportViewSet, PayrollReportViewSet
+from .views.roles_views import RoleViewSet
 
 router = DefaultRouter()
 router.register(r'payrolls', PayrollViewSet, basename='payroll')
@@ -22,6 +23,7 @@ router.register(r'paye', PAYEReportViewSet, basename='paye')
 router.register(r'nssa', NSSAReportViewSet, basename='nssa')
 router.register(r'allowances', AllowanceReportViewSet, basename='allowances')
 router.register(r'deductions', DeductionTypeViewSet, basename='deductions')
+router.register(r'roles', RoleViewSet)
 router.register(r'addresses', AddressViewSet, basename='address')
 router.register(r'training-programs', TrainingProgramViewSet, basename='training-program')
 router.register(r'training-sessions', TrainingSessionViewSet, basename='training-session')

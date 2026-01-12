@@ -35,12 +35,14 @@ import {
 import { toast } from "sonner";
 import AddUser from "@/components/AddUser";
 import AddDepartment from "@/components/AddDepartment";
-import Server from "@/server/Server";
+import Server from "@/services/Server";
 import EditUserModal from "@/components/EditUserModal";
 import Users from "@/components/System/Users";
 import { Logs } from "@/components/System/Logs";
-import { getDepartment, addDepartMethod } from "@/server/hr.services";
-import { getUsers } from "@/components/System/auth.services";
+import { getDepartment, addDepartment, getRoles } from "@/services/hr.services";
+import { getUsers } from "@/services/auth.services";
+import AddRole from "@/components/AddRole";
+import EditPermissionsModal from "@/components/EditPermissionsModal";
 
 const SettingsPage = () => {
   // const { user } = useAuth();
@@ -49,9 +51,11 @@ const SettingsPage = () => {
   const [addUser, setAddUser] = useState(false);
   const [editUserModal, setEditUserModal] = useState(false);
   const [addDepartment, setAddDepartment] = useState(false);
-  const [editEmployeeId, setEditEmployeeId] = useState('')
+  const [editEmployeeId, setEditEmployeeId] = useState("");
   const [departments, setDepartments] = useState([]);
   const [roles, setRoles] = useState([]);
+  const [addRoleModal, setAddRoleModal] = useState(false);
+  const [editingPermissionsRole, setEditingPermissionsRole] = useState(null);
 
   // Settings state
   const [settings, setSettings] = useState({
@@ -81,7 +85,6 @@ const SettingsPage = () => {
       });
   };
 
- 
   const fetchUsers = () => {
     getUsers()
       .then((response) => {
@@ -93,9 +96,16 @@ const SettingsPage = () => {
       });
   };
 
+  const fetchRoles = () => {
+    getRoles()
+      .then((data) => setRoles(data))
+      .catch(() => toast.error("Failed to load roles"));
+  };
+
   useEffect(() => {
     fetchUsers();
     fetchDepartments();
+    fetchRoles(); // Add this
   }, []);
 
   return (
@@ -172,7 +182,7 @@ const SettingsPage = () => {
           <Card className="subtle-shadow">
             <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0 pb-2">
               <CardTitle>User Roles</CardTitle>
-              <Button>
+              <Button onClick={() => setAddRoleModal(true)}>
                 <Lock className="mr-2 h-4 w-4" />
                 Add Role
               </Button>
@@ -195,9 +205,25 @@ const SettingsPage = () => {
                         <TableCell className="font-medium">{role.id}</TableCell>
                         <TableCell>{role.name}</TableCell>
                         <TableCell>{role.users}</TableCell>
-                        <TableCell>{role.permissions}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {role.permissions?.map((p) => (
+                              <Badge
+                                key={p}
+                                variant="secondary"
+                                className="text-[10px]"
+                              >
+                                {p}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="sm">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditingPermissionsRole(role)}
+                          >
                             Edit Permissions
                           </Button>
                         </TableCell>
@@ -440,13 +466,31 @@ const SettingsPage = () => {
           </Card>
         </TabsContent>
       </Tabs>
+      {editingPermissionsRole && (
+        <EditPermissionsModal
+          role={editingPermissionsRole}
+          onClose={() => setEditingPermissionsRole(null)}
+          onSuccess={() => fetchRoles()}
+        />
+      )}
+      {addRoleModal && (
+        <AddRole
+          setShowModal={() => setAddRoleModal(false)}
+          onSuccess={() => fetchRoles()}
+        />
+      )}
       {addUser && (
         <AddUser
           setShowModal={() => setAddUser(false)}
           onSuccess={() => fetchUsers()}
         />
       )}
-      {editUserModal && <EditUserModal  closeModal={() => setEditUserModal(false)} userId={editEmployeeId} />}
+      {editUserModal && (
+        <EditUserModal
+          closeModal={() => setEditUserModal(false)}
+          userId={editEmployeeId}
+        />
+      )}
       {addDepartment && (
         <AddDepartment
           setShowModal={() => setAddDepartment(false)}

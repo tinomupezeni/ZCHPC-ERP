@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import {toast} from "sonner";
-import { addDepartMethod } from "@/server/hr.services";
+import { addDepartment } from "@/services/hr.services";
 
 export default function AddDepartment({ setShowModal, onSuccess }) {
   // Use state to manage department data
@@ -24,7 +24,7 @@ export default function AddDepartment({ setShowModal, onSuccess }) {
     setLoading(true);
 
     // Call the new addDepartment method from your Server class
-    addDepartMethod(department)
+    addDepartment(department)
       .then(() => {
         toast.success("New department successfully added.");
         setLoading(false);

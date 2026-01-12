@@ -1,6 +1,6 @@
 // src/components/PayrollConfig.js
 import React, { useState, useEffect } from 'react';
-import { getPayrollPeriods, createPayrollPeriod, updatePayrollPeriod, deletePayrollPeriod } from '../../server/api';
+import { getPayrollPeriods, createPayrollPeriod, updatePayrollPeriod, deletePayrollPeriod } from '../../services/api';
 
 const PayrollConfig = () => {
     const [payrollPeriods, setPayrollPeriods] = useState([]);

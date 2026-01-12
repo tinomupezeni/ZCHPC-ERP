@@ -17,10 +17,10 @@ import { toast } from "sonner";
 import {
   getDepartment,
   getPositions,
-  addDepartMethod,
+  addDepartment,
   addPosition,
-} from "@/server/hr.services";
-import { createJob, updateJob } from "@/server/jobs.services";
+} from "@/services/hr.services";
+import { createJob, updateJob } from "@/services/jobs.services";
 
 // Define the shape of the form data
 export type JobListing = {
@@ -162,7 +162,7 @@ const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
     if (!newDeptName.trim()) return;
     setMiniLoading(true);
     try {
-      const newDept = await addDepartMethod({ name: newDeptName });
+      const newDept = await addDepartment({ name: newDeptName });
       setDepartments([...departments, newDept]);
       handleChange("department_id", newDept.id);
       toast.success("Department added");

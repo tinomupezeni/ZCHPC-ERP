@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchReportData } from "@/server/reports.services";
+import { fetchReportData } from "@/services/reports.services";
 import { Loader } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 

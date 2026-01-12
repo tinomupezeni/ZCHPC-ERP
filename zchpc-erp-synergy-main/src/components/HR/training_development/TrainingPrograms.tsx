@@ -5,7 +5,7 @@ import { Separator } from "@/components/ui/separator";
 import Modal from "@/components/ui/Modal";
 import { TrainingProgramCard, TrainingProgram } from "@/components/ui/training-program-card";
 import { SearchFilterBar } from "@/components/ui/search-filter";
-import Server from "@/server/Server";
+import Server from "@/services/Server";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
