@@ -1,7 +1,21 @@
 import { Briefcase, Loader, Plus } from "lucide-react";
 import React from "react";
 
-export default function ListedJobs({loading, filteredJobs, currentJobs, indexOfFirstItem, indexOfLastItem, totalPages, currentPage, itemsPerPage, paginate, searchTerm, getStatusBadge, handleActionSelect, setShowPostJobModal}) {
+export default function ListedJobs({
+  loading,
+  filteredJobs,
+  currentJobs,
+  indexOfFirstItem,
+  indexOfLastItem,
+  totalPages,
+  currentPage,
+  itemsPerPage,
+  paginate,
+  searchTerm,
+  getStatusBadge,
+  handleActionSelect,
+  setShowPostJobModal,
+}) {
   return (
     <div>
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -16,11 +30,9 @@ export default function ListedJobs({loading, filteredJobs, currentJobs, indexOfF
                   Department
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Posted Date
+                  Closing Date
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Applicants
-                </th>
+
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
@@ -57,10 +69,7 @@ export default function ListedJobs({loading, filteredJobs, currentJobs, indexOfF
                         day: "numeric",
                       })}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <span className="font-medium">{job.applicants}</span>{" "}
-                      applicants
-                    </td>
+
                     <td className="px-6 py-4 whitespace-nowrap">
                       {getStatusBadge(job.status)}
                     </td>

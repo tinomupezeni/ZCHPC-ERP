@@ -1,5 +1,3 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,47 +11,19 @@ import {
   ShieldCheck,
   Zap,
 } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
+import { useLogin } from "@/hooks/useLogin";
 
 const LoginPage = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [viewPassword, setViewPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const navigate = useNavigate();
-  const { login } = useAuth();
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-
-    try {
-      const user = await login(email, password);
-
-      // Check for role either in employee_profile OR directly on user object
-      const userRole = user?.employee_profile?.role || user?.role;
-
-      if (userRole) {
-        const role = userRole.toLowerCase();
-        const routes: Record<string, string> = {
-          admin: "/dashboard",
-          hr: "/hr",
-          accountant: "/accounting",
-          sales: "/sales",
-        };
-
-        toast.success(`Welcome back, ${user.first_name}!`);
-        navigate(routes[role] || "/dashboard");
-      } else {
-        toast.error("User profile incomplete. Contact Admin.");
-      }
-    } catch (error) {
-      toast.error("Authentication failed. Please check your credentials.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const {
+    email,
+    setEmail,
+    password,
+    setPassword,
+    viewPassword,
+    setViewPassword,
+    isSubmitting,
+    handleLogin,
+  } = useLogin();
 
   return (
     <div className="min-h-screen w-full flex overflow-hidden bg-[#0a0a0b]">
@@ -115,7 +85,7 @@ const LoginPage = () => {
           </div>
 
           <Card className="border-border/50 bg-card/50 backdrop-blur-xl shadow-2xl">
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleLogin}>
               <CardContent className="pt-6 space-y-5">
                 <div className="space-y-2">
                   <Label htmlFor="email">Work Email</Label>

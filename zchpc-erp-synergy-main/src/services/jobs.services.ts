@@ -1,49 +1,7 @@
+import { JobListing } from "@/types/postJob";
 import apiClient  from "./apiClient";
 
-// --- Types ---
 
-export interface JobListing {
-  id?: number;
-  title: string;
-  
-  // Department: Read as string, Write as ID
-  department?: string; 
-  department_id?: number | string; 
-  
-  status: "Open" | "Closed" | "Draft" | "Pending";
-  location: string;
-  
-  // Detailed Fields
-  description: string;
-  responsibilities: string[]; // Handled as JSON list by backend
-  qualifications: string[];   // Handled as JSON list by backend
-  notes?: string;
-
-  // Mapped Fields (Backend Serializer maps these camelCase keys to snake_case columns)
-  postedDate: string;       // Maps to posted_date
-  salaryRange: string;      // Maps to salary_range
-  contactEmail: string;     // Maps to contact_email
-  applicationProcess: string; // Maps to application_process
-  
-  // Read Only
-  applicants?: number;
-  created_at?: string;
-}
-
-export interface JobApplication {
-  id?: number;
-  job: number; // Job ID
-  candidate_name: string; // You might need to expand this based on your Candidate model
-  status: "Pending" | "Shortlisted" | "Interview" | "Offered" | "Hired" | "Rejected";
-  applied_on: string;
-}
-
-// --- Job Services ---
-
-/**
- * Fetch all job listings.
- * Can filter by status: getJobs('Open')
- */
 export const getJobs = async (statusFilter?: string) => {
   let url = "/hr/jobs/";
   if (statusFilter && statusFilter !== "All") {

@@ -3,13 +3,7 @@ import PostJobModal from "./recruitment/PostJobModal";
 import * as jobService from "../../services/jobs.services";
 import { getDepartment } from "@/services/hr.services"; // Import this
 
-import {
-  Search,
-  Plus,
-  Loader,
-  ChevronDown,
-  Download,
-} from "lucide-react";
+import { Search, Plus, Loader, ChevronDown, Download } from "lucide-react";
 import { toast } from "sonner";
 import ListedJobs from "./recruitment/ListedJobs";
 import Candidates from "./recruitment/Candidates";
@@ -52,16 +46,17 @@ const Recruitment = () => {
   const [activeTab, setActiveTab] = useState("jobs");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
-  
+
   // Filter State
   const [departments, setDepartments] = useState<string[]>(["All Departments"]);
-  const [selectedDepartment, setSelectedDepartment] = useState("All Departments");
+  const [selectedDepartment, setSelectedDepartment] =
+    useState("All Departments");
   const [selectedStatus, setSelectedStatus] = useState("All Statuses");
-  
+
   const [showPostJobModal, setShowPostJobModal] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
 
-  // Removed unused applicants modal state as it's handled inside ListedJobs usually, 
+  // Removed unused applicants modal state as it's handled inside ListedJobs usually,
   // or needs a separate ApplicantsModal component
 
   useEffect(() => {
@@ -79,17 +74,19 @@ const Recruitment = () => {
   // Fetch real departments for the filter
   const fetchDepartmentFilter = async () => {
     try {
-        const data = await getDepartment();
-        // Map to strings for the filter dropdown
-        const deptNames = data.map((d: any) => d.name);
-        setDepartments(["All Departments", ...deptNames]);
+      const data = await getDepartment();
+      // Map to strings for the filter dropdown
+      const deptNames = data.map((d: any) => d.name);
+      setDepartments(["All Departments", ...deptNames]);
     } catch (e) {
-        console.error("Failed to load departments for filter");
+      console.error("Failed to load departments for filter");
     }
   };
 
-
-  const handleToggleJobStatus = async (jobId: number, currentStatus: string) => {
+  const handleToggleJobStatus = async (
+    jobId: number,
+    currentStatus: string
+  ) => {
     try {
       // Simple toggle logic
       const newStatus = currentStatus === "Open" ? "Closed" : "Open";
@@ -122,7 +119,7 @@ const Recruitment = () => {
     postedDate: job.postedDate,
     applicants: job.applicants || 0,
     description: job.description,
-    requirements: (job.qualifications || []).join('\n'), // Convert list to string for simple view if needed
+    requirements: (job.qualifications || []).join("\n"), // Convert list to string for simple view if needed
     location: job.location,
     salaryRange: job.salaryRange,
     // Add other fields if needed by your components
@@ -142,20 +139,26 @@ const Recruitment = () => {
     }
   };
 
-  // ... (Filter logic remains the same) ...
   const filteredJobs = jobListings.filter((job) => {
-    const matchesSearch = job.title.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesDepartment = selectedDepartment === "All Departments" || job.department === selectedDepartment;
-    const matchesStatus = selectedStatus === "All Statuses" || job.status === selectedStatus;
+    const matchesSearch = job.title
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+    const matchesDepartment =
+      selectedDepartment === "All Departments" ||
+      job.department === selectedDepartment;
+    const matchesStatus =
+      selectedStatus === "All Statuses" || job.status === selectedStatus;
     return matchesSearch && matchesDepartment && matchesStatus;
   });
 
-  // ... (Pagination & CSV export logic remains the same) ...
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentJobs = filteredJobs.slice(indexOfFirstItem, indexOfLastItem);
   const currentCandidates = candidates.slice(indexOfFirstItem, indexOfLastItem); // Ensure filteredCandidates is defined if used
-  const totalPages = Math.ceil((activeTab === "jobs" ? filteredJobs.length : candidates.length) / itemsPerPage);
+  const totalPages = Math.ceil(
+    (activeTab === "jobs" ? filteredJobs.length : candidates.length) /
+      itemsPerPage
+  );
 
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
 
@@ -189,7 +192,7 @@ const Recruitment = () => {
         paginate={paginate}
         searchTerm={searchTerm}
         // Pass simple badge renderer or use component's internal one
-        getStatusBadge={(status) => <span className="badge">{status}</span>} 
+        getStatusBadge={(status) => <span className="badge">{status}</span>}
         handleActionSelect={handleActionSelect}
         setShowPostJobModal={setShowPostJobModal}
       />
@@ -203,72 +206,77 @@ const Recruitment = () => {
         loading={loading}
       />
     );
-  } else if (activeTab === "addresses") {
-    activeComponent = <AddressManager />;
   }
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
-      
       {/* Notification Toast */}
       {notification && (
         <div className="fixed top-4 right-4 z-50 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-lg animate-in slide-in-from-right">
           <p>{notification}</p>
         </div>
       )}
-      
+
       <div className="flex gap-3 mb-4 items-start justify-between">
-         <div className="flex gap-4">
-            {['jobs',  'addresses'].map(tab => (
-                <button 
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`px-4 py-2 text-sm font-medium border-b-2 capitalize transition-colors ${activeTab === tab ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'}`}
-                >
-                    {tab}
-                </button>
-            ))}
-         </div>
-         
-         {activeTab === "jobs" && (
+        <div className="flex gap-4">
+          {["jobs"].map((tab) => (
             <button
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-sm"
-                onClick={() => {
-                    setJobBeingEdited(null); // Ensure we are in "Create" mode
-                    setShowPostJobModal(true);
-                }}
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 capitalize transition-colors ${
+                activeTab === tab
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500"
+              }`}
             >
-                <Plus className="h-5 w-5" /> Post a Job
+              {tab}
             </button>
-         )}
+          ))}
+        </div>
+
+        {activeTab === "jobs" && (
+          <button
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-sm"
+            onClick={() => {
+              setJobBeingEdited(null); // Ensure we are in "Create" mode
+              setShowPostJobModal(true);
+            }}
+          >
+            <Plus className="h-5 w-5" /> Post a Job
+          </button>
+        )}
       </div>
 
       {/* Filters (Only show for Jobs/Candidates) */}
-      {activeTab !== 'addresses' && (
-          <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6 flex gap-4">
-             <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <input 
-                    type="text" 
-                    placeholder="Search..." 
-                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
-                />
-             </div>
-             {activeTab === 'jobs' && (
-                 <div className="relative">
-                    <select 
-                        className="pl-3 pr-8 py-2 border rounded-lg appearance-none bg-white focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={selectedDepartment}
-                        onChange={e => setSelectedDepartment(e.target.value)}
-                    >
-                        {departments.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                 </div>
-             )}
+      {activeTab !== "addresses" && (
+        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6 flex gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <input
+              type="text"
+              placeholder="Search..."
+              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
+          {activeTab === "jobs" && (
+            <div className="relative">
+              <select
+                className="pl-3 pr-8 py-2 border rounded-lg appearance-none bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                value={selectedDepartment}
+                onChange={(e) => setSelectedDepartment(e.target.value)}
+              >
+                {departments.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+            </div>
+          )}
+        </div>
       )}
 
       {/* Content */}
@@ -278,16 +286,15 @@ const Recruitment = () => {
       <PostJobModal
         isOpen={showPostJobModal}
         onClose={() => {
-            setShowPostJobModal(false);
-            setJobBeingEdited(null);
+          setShowPostJobModal(false);
+          setJobBeingEdited(null);
         }}
         onSave={() => {
-            fetchJobListings(); // Refresh list after save
-            setShowPostJobModal(false);
+          fetchJobListings(); // Refresh list after save
+          setShowPostJobModal(false);
         }}
         job={jobBeingEdited} // Pass the job to edit if exists
       />
-
     </div>
   );
 };

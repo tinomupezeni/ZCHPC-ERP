@@ -65,17 +65,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const checkPermission = (requiredModules: string[]) => {
+  console.log(user);
+  
+
+ const checkPermission = (requiredModules: string[]) => {
     if (!user) return false;
 
-    // 1. System Admins (Django Superusers) see everything
+    // 1. System Admins (Django Superusers/Staff) see everything
     if (user.is_staff || user.is_superuser) return true;
 
-    // 2. Get permissions from the profile (sent by the backend serializer)
+    // 2. Check the Role field explicitly
+    // This catches the 'ADMIN' role from your JSON data
+    const userRole = user.employee_profile?.role?.toUpperCase();
+    if (userRole === "ADMIN") return true;
+
+    // 3. Get specific permissions from the profile array
     const userPermissions: string[] =
       user?.employee_profile?.role_permissions || [];
 
-    // 3. Normalize to Uppercase for matching
+    // 4. Normalize to Uppercase for matching
     const normalizedUserPerms = userPermissions.map((p) => p.toUpperCase());
 
     return requiredModules.some((mod) =>

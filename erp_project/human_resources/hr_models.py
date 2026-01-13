@@ -140,7 +140,12 @@ class Employees(models.Model):
     # --- Contact Info ---
     email = models.EmailField(unique=True, help_text="Work or personal email")
     phone = models.CharField(max_length=15, blank=True)
-    role = models.CharField(max_length=50, choices=ROLE_CHOICES, default="STAFF")
+    role = models.ForeignKey(
+    Role, 
+    on_delete=models.PROTECT, 
+    related_name='employees',
+    # We will handle the default in the save method or via a helper function
+)
 
     # --- Contract & Status ---
     date_joined = models.DateField(default=timezone.localdate)
@@ -189,7 +194,16 @@ class Employees(models.Model):
                 if not Employees.objects.filter(employee_id=new_id).exists():
                     self.employee_id = new_id
                     break
-        
+        if not self.role_id:  # If no role is assigned
+            try:
+                # Try to find the 'STAFF' role
+                default_role = Role.objects.get(name="STAFF")
+                self.role = default_role
+            except Role.DoesNotExist:
+                # Fallback: create it or pick the first available if STAFF doesn't exist
+                first_role = Role.objects.first()
+                if first_role:
+                    self.role = first_role
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -318,9 +332,9 @@ class EmployeePayrollConfig(models.Model):
     def __str__(self):
         return f"Payroll Config for {self.employee} ({self.currency})"
 
-# ---------------------------------
-# 5. RECRUITMENT MODELS
-# ---------------------------------
+
+# In hr/models.py - Update the Job model
+
 class Job(models.Model):
     """
     A job posting for recruitment.
@@ -335,18 +349,46 @@ class Job(models.Model):
     # Derived from Position usually, but editable
     title = models.CharField(max_length=200)
     
-    # Link to Department
-    department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True)
+    # Link to Department and Position
+    department = models.ForeignKey(
+        Department, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True
+    )
+    position = models.ForeignKey(
+        Position,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='job_postings'
+    )
     
     # Job Details
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Open')
     location = models.CharField(max_length=100, default="Harare")
     salary_range = models.CharField(max_length=100, blank=True, null=True)
     
+    # NEW: Reports To and Internal Flag
+    reports_to = models.CharField(
+        max_length=200, 
+        default="ZCHPC Director",
+        help_text="Who this position reports to"
+    )
+    is_internal = models.BooleanField(
+        default=False,
+        help_text="If True, only visible to internal staff"
+    )
+    
     # Rich Text / Lists (Using JSONField to store arrays ["Item 1", "Item 2"])
     description = models.TextField(blank=True, help_text="General summary")
     responsibilities = models.JSONField(default=list, blank=True)
     qualifications = models.JSONField(default=list, blank=True)
+    competencies = models.JSONField(
+        default=list, 
+        blank=True,
+        help_text="Required competencies for the role"
+    )
     
     # Application Info
     application_process = models.TextField(blank=True, null=True)
@@ -355,6 +397,7 @@ class Job(models.Model):
     
     posted_date = models.DateField(default=timezone.localdate)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         ordering = ['-created_at']
@@ -366,6 +409,11 @@ class Job(models.Model):
     def applicants_count(self):
         return self.applications.count()
     
+    def save(self, *args, **kwargs):
+        # Auto-set department from position if not set
+        if self.position and not self.department:
+            self.department = self.position.department
+        super().save(*args, **kwargs)
     
 class Candidate(models.Model):
     """

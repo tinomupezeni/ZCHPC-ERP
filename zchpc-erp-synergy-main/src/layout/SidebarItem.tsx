@@ -24,6 +24,7 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
   setExpandedItems,
   level = 0,
   onNavigate,
+  ...props
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -94,11 +95,13 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
       {hasSubItems && isExpanded && !collapsed && (
         <div className="mt-1 ml-4 border-l-2 border-slate-100 pl-2 space-y-0.5">
           {item.subItems!.map((subItem) => (
-            <SidebarItem
+          <SidebarItem
               key={subItem.path}
               item={subItem}
               collapsed={collapsed}
-              {...props}
+              expandedItems={expandedItems} // Explicitly pass these
+              setExpandedItems={setExpandedItems}
+              {...props} // Pass the rest
             />
           ))}
         </div>

@@ -1,5 +1,6 @@
+from datetime import timezone
 from rest_framework import serializers
-from ..hr_models import Job, Department, JobApplication, Candidate
+from ..hr_models import Job, Department, JobApplication, Candidate, Position
 
 class JobSerializer(serializers.ModelSerializer):
     # 1. Read as String (e.g. "IT Department")
@@ -13,15 +14,41 @@ class JobSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
-
-    # 3. Map Frontend fields to Backend fields
-    # The source='field_name' tells DRF where to find the data in the model
-    postedDate = serializers.DateField(source='posted_date')
+    
+    # 3. Position handling
+    position_id = serializers.PrimaryKeyRelatedField(
+        queryset=Position.objects.all(),
+        source='position',
+        write_only=True,
+        required=False,
+        allow_null=True
+    )
+    
+    # 4. Map Frontend camelCase fields to Backend snake_case fields
+    postedDate = serializers.DateField(source='posted_date', required=False)
     salaryRange = serializers.CharField(source='salary_range', required=False, allow_blank=True)
-    contactEmail = serializers.EmailField(source='contact_email')
+    contactEmail = serializers.EmailField(source='contact_email', required=False)
     applicationProcess = serializers.CharField(source='application_process', required=False, allow_blank=True)
+    reportsTo = serializers.CharField(source='reports_to', required=False, allow_blank=True)
+    isInternal = serializers.BooleanField(source='is_internal', required=False)
     
     # JSONFields are handled automatically as Lists by DRF
+    # But we'll be explicit for clarity
+    responsibilities = serializers.ListField(
+        child=serializers.CharField(allow_blank=False),
+        required=False,
+        allow_empty=True
+    )
+    qualifications = serializers.ListField(
+        child=serializers.CharField(allow_blank=False),
+        required=False,
+        allow_empty=True
+    )
+    competencies = serializers.ListField(
+        child=serializers.CharField(allow_blank=False),
+        required=False,
+        allow_empty=True
+    )
     
     applicants = serializers.IntegerField(source='applicants_count', read_only=True)
 
@@ -30,25 +57,73 @@ class JobSerializer(serializers.ModelSerializer):
         fields = [
             'id', 
             'title', 
-            'department', 'department_id', # Read & Write
+            'department', 
+            'department_id',
+            'position_id',
             'status', 
             'location',
             'description',
-            'responsibilities', # JSON List
-            'qualifications',   # JSON List
+            'responsibilities',
+            'qualifications',
+            'competencies',
             'notes',
-            # Mapped Fields
+            # Mapped Fields (camelCase for frontend)
             'postedDate', 
             'salaryRange',
             'contactEmail',
             'applicationProcess',
+            'reportsTo',
+            'isInternal',
             'applicants'
         ]
+    
+    def validate(self, data):
+        """
+        Custom validation to ensure data integrity
+        """
+        # Filter out empty strings from list fields
+        for field in ['responsibilities', 'qualifications', 'competencies']:
+            if field in data:
+                data[field] = [item.strip() for item in data[field] if item and item.strip()]
+        
+        return data
+    
+    def create(self, validated_data):
+        """
+        Handle creation with proper defaults
+        """
+        # Set defaults if not provided
+        if 'posted_date' not in validated_data:
+            validated_data['posted_date'] = timezone.localdate()
+        
+        if 'contact_email' not in validated_data:
+            validated_data['contact_email'] = 'hroffice@zchpc.ac.zw'
+        
+        if 'reports_to' not in validated_data:
+            validated_data['reports_to'] = 'ZCHPC Director'
+        
+        if 'is_internal' not in validated_data:
+            validated_data['is_internal'] = False
+        
+        return super().create(validated_data)
+    
+    def update(self, instance, validated_data):
+        """
+        Handle updates properly
+        """
+        # Update all fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        instance.save()
+        return instance
+
 
 class CandidateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Candidate
         fields = '__all__'
+
 
 class JobApplicationSerializer(serializers.ModelSerializer):
     candidate = CandidateSerializer(read_only=True)

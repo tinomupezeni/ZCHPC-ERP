@@ -31,8 +31,11 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
     return filterItems(navItems);
   }, [user, isLoading, checkPermission]); // Dependency on 'user' is key for refresh fix
 
+  console.log(user);
+  
+
   const userName = `${user?.first_name || ""} ${user?.last_name || ""}`;
-  const userRole = user?.employee_profile?.role_name || "Staff";
+  const userRole = user?.employee_profile?.role || "Staff";
   const userFallback =
     (user?.first_name?.[0] || "U") + (user?.last_name?.[0] || "");
 

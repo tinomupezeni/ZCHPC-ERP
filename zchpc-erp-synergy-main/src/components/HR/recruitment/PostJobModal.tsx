@@ -12,227 +12,81 @@ import {
   Plus,
   Loader,
   Check,
+  ShieldCheck,
+  Users,
 } from "lucide-react";
-import { toast } from "sonner";
-import {
-  getDepartment,
-  getPositions,
-  addDepartment,
-  addPosition,
-} from "@/services/hr.services";
-import { createJob, updateJob } from "@/services/jobs.services";
 
-// Define the shape of the form data
-export type JobListing = {
-  id?: number;
-  title: string; // Derived from Position Title
-  department_id: string | number; // ID for backend
-  position_id: string | number; // ID for local logic
-  status: string;
-  postedDate: string;
-  description: string;
-  qualifications: string[];
-  applicationProcess: string;
-  location: string;
-  salaryRange: string;
-  contactEmail: string;
-  responsibilities: string[];
-  notes?: string;
-};
-
-type Props = {
-  isOpen: boolean;
-  job: JobListing | null;
-  onClose: () => void;
-  onSave: (updated: JobListing) => void;
-};
+import { PostJobModalProps } from "@/types/postJob";
+import { usePostJob } from "@/hooks/usePostJob";
+import { Input } from "@/components/ui/input";
 
 const STATUS_OPTIONS = ["Open", "Closed", "Draft", "Pending"];
 
-const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
-  const [formData, setFormData] = useState<JobListing | null>(null);
-  const [loading, setLoading] = useState(false);
+const PostJobModal: React.FC<PostJobModalProps> = ({
+  isOpen,
+  job,
+  onClose,
+  onSave,
+}) => {
+  const {
+    formData,
+    loading,
+    departments,
+    positions,
+    miniLoading,
+    isAddingDept,
+    setIsAddingDept,
+    newDeptName,
+    setNewDeptName,
+    isAddingPos,
+    setIsAddingPos,
+    newPosTitle,
+    setNewPosTitle,
+    handleChange,
+    handleListChange,
+    handleCreateDept,
+    handleCreatePos,
+    handleSubmit,
+    addListItem,
+    removeListItem,
+  } = usePostJob(isOpen, job, onClose);
 
-  // Data Sources
-  const [departments, setDepartments] = useState<
-    { id: number; name: string }[]
-  >([]);
-  const [positions, setPositions] = useState<{ id: number; title: string }[]>(
-    []
-  );
+  // Enhanced add item handler that ensures the array exists
+  const handleAddItem = (field: keyof typeof formData) => {
+    if (!formData) return;
 
-  // Inline Add States
-  const [isAddingDept, setIsAddingDept] = useState(false);
-  const [newDeptName, setNewDeptName] = useState("");
-  const [isAddingPos, setIsAddingPos] = useState(false);
-  const [newPosTitle, setNewPosTitle] = useState("");
-  const [miniLoading, setMiniLoading] = useState(false);
+    const currentList = (formData[field] as string[]) || [];
+    const updatedList = [...currentList, ""];
 
-  // 1. Initialize & Fetch Departments
-  useEffect(() => {
-    if (isOpen) {
-      getDepartment()
-        .then((res) => setDepartments(res.data))
-        .catch(console.error);
-
-      if (job) {
-        setFormData({
-          ...job,
-          // Ensure arrays exist
-          responsibilities: job.responsibilities?.length
-            ? job.responsibilities
-            : [""],
-          qualifications: job.qualifications?.length
-            ? job.qualifications
-            : [""],
-        });
-        // If editing, we might need to load positions immediately if dept is set
-        if (job.department_id) {
-          getPositions(job.department_id).then(setPositions);
-        }
-      } else {
-        setFormData({
-          title: "",
-          department_id: "",
-          position_id: "",
-          status: "Open",
-          postedDate: new Date().toISOString().split("T")[0],
-          description: "",
-          qualifications: [""],
-          applicationProcess: "",
-          location: "Harare",
-          salaryRange: "",
-          contactEmail: "hroffice@zchpc.ac.zw",
-          responsibilities: [""],
-        });
-      }
-    }
-  }, [isOpen, job]);
-
-  // 2. Cascading: Fetch Positions when Department Changes
-  useEffect(() => {
-    if (formData?.department_id) {
-      getPositions(formData.department_id)
-        .then(setPositions)
-        .catch(() => setPositions([]));
-    } else {
-      setPositions([]);
-    }
-  }, [formData?.department_id]);
-
-  if (!isOpen || !formData) return null;
-
-  const handleChange = (field: keyof JobListing, value: any) => {
-    setFormData((prev) => (prev ? { ...prev, [field]: value } : null));
+    handleChange(field, updatedList);
   };
 
-  // --- List Handlers (Responsibilities/Qualifications) ---
-  const handleListChange = (
-    field: "responsibilities" | "qualifications",
+  // Enhanced remove item handler
+  const handleRemoveItem = (field: keyof typeof formData, index: number) => {
+    if (!formData) return;
+
+    const currentList = (formData[field] as string[]) || [];
+    const updatedList = currentList.filter((_, i) => i !== index);
+
+    handleChange(field, updatedList);
+  };
+
+  // Enhanced list change handler
+  const handleLocalListChange = (
+    field: keyof typeof formData,
     index: number,
     value: string
   ) => {
-    setFormData((prev) => {
-      if (!prev) return null;
-      const list = [...prev[field]];
-      list[index] = value;
-      return { ...prev, [field]: list };
-    });
+    if (!formData) return;
+
+    const currentList = (formData[field] as string[]) || [];
+    const updatedList = [...currentList];
+    updatedList[index] = value;
+
+    handleChange(field, updatedList);
   };
 
-  const addListItem = (field: "responsibilities" | "qualifications") => {
-    setFormData((prev) =>
-      prev ? { ...prev, [field]: [...prev[field], ""] } : null
-    );
-  };
-
-  const removeListItem = (
-    field: "responsibilities" | "qualifications",
-    index: number
-  ) => {
-    setFormData((prev) => {
-      if (!prev) return null;
-      const list = prev[field].filter((_, i) => i !== index);
-      return { ...prev, [field]: list.length ? list : [""] };
-    });
-  };
-
-  // --- Inline Creation Handlers ---
-  const handleCreateDept = async () => {
-    if (!newDeptName.trim()) return;
-    setMiniLoading(true);
-    try {
-      const newDept = await addDepartment({ name: newDeptName });
-      setDepartments([...departments, newDept]);
-      handleChange("department_id", newDept.id);
-      toast.success("Department added");
-      setIsAddingDept(false);
-      setNewDeptName("");
-    } catch (e) {
-      toast.error("Failed to add department");
-    } finally {
-      setMiniLoading(false);
-    }
-  };
-
-  const handleCreatePos = async () => {
-    if (!newPosTitle.trim() || !formData.department_id) return;
-    setMiniLoading(true);
-    try {
-      const newPos = await addPosition({
-        title: newPosTitle,
-        department_id: formData.department_id,
-      });
-      setPositions([...positions, newPos]);
-      handleChange("position_id", newPos.id);
-      // Auto-set the Job Title to match Position
-      handleChange("title", newPos.title);
-      toast.success("Position added");
-      setIsAddingPos(false);
-      setNewPosTitle("");
-    } catch (e) {
-      toast.error("Failed to add position");
-    } finally {
-      setMiniLoading(false);
-    }
-  };
-
-  // --- Submit ---
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      // Find the selected position object to get the title string
-      const selectedPos = positions.find((p) => p.id == formData.position_id);
-      const jobTitle = selectedPos ? selectedPos.title : formData.title;
-
-      const cleanData = {
-        ...formData,
-        title: jobTitle, // Use Position Title as Job Title
-        department_id: formData.department_id || formData.department,
-        responsibilities: formData.responsibilities.filter((r) => r.trim()),
-        qualifications: formData.qualifications.filter((q) => q.trim()),
-      };
-
-      // Mock call - replace with actual API call
-      // await addJob(cleanData);
-
-      if (job?.id) {
-        // Update existing
-        await updateJob(job.id, cleanData);
-      } else {
-        // Create new
-        await createJob(cleanData);
-      }
-      toast.success(job ? "Job updated" : "Job posted successfully");
-      onClose();
-    } catch (error) {
-      toast.error("Failed to save job");
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -289,7 +143,7 @@ const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
                       <button
                         type="button"
                         onClick={handleCreateDept}
-                        className="p-2 bg-green-600 text-white rounded-lg"
+                        className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                       >
                         {miniLoading ? (
                           <Loader className="h-4 w-4 animate-spin" />
@@ -300,7 +154,7 @@ const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
                       <button
                         type="button"
                         onClick={() => setIsAddingDept(false)}
-                        className="p-2 bg-gray-200 rounded-lg"
+                        className="p-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
                       >
                         <X className="h-4 w-4" />
                       </button>
@@ -309,7 +163,7 @@ const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
                     <div className="flex gap-2">
                       <select
                         required
-                        value={formData.department_id}
+                        value={formData?.department_id || ""}
                         onChange={(e) =>
                           handleChange("department_id", e.target.value)
                         }
@@ -325,7 +179,7 @@ const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
                       <button
                         type="button"
                         onClick={() => setIsAddingDept(true)}
-                        className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg border"
+                        className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg border transition-colors"
                       >
                         <Plus className="h-4 w-4 text-gray-600" />
                       </button>
@@ -350,7 +204,7 @@ const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
                       <button
                         type="button"
                         onClick={handleCreatePos}
-                        className="p-2 bg-green-600 text-white rounded-lg"
+                        className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                       >
                         {miniLoading ? (
                           <Loader className="h-4 w-4 animate-spin" />
@@ -361,7 +215,7 @@ const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
                       <button
                         type="button"
                         onClick={() => setIsAddingPos(false)}
-                        className="p-2 bg-gray-200 rounded-lg"
+                        className="p-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
                       >
                         <X className="h-4 w-4" />
                       </button>
@@ -370,7 +224,7 @@ const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
                     <div className="flex gap-2">
                       <select
                         required
-                        value={formData.position_id}
+                        value={formData?.position_id || ""}
                         onChange={(e) => {
                           handleChange("position_id", e.target.value);
                           // Auto-fill Title for display
@@ -379,7 +233,7 @@ const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
                           );
                           if (p) handleChange("title", p.title);
                         }}
-                        disabled={!formData.department_id}
+                        disabled={!formData?.department_id}
                         className="flex-1 p-2 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                       >
                         <option value="">Select Position</option>
@@ -392,19 +246,60 @@ const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
                       <button
                         type="button"
                         onClick={() => setIsAddingPos(true)}
-                        disabled={!formData.department_id}
-                        className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg border disabled:opacity-50"
+                        disabled={!formData?.department_id}
+                        className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg border disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         <Plus className="h-4 w-4 text-gray-600" />
                       </button>
                     </div>
                   )}
-                  {!formData.department_id && (
+                  {!formData?.department_id && (
                     <p className="text-xs text-gray-500 mt-1">
                       Select a department first
                     </p>
                   )}
                 </div>
+
+                {/* Internal Staff Toggle - FIXED */}
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-gray-600" />
+                    <span className="text-sm font-medium text-gray-700">
+                      Internal Staff Only
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleChange("isInternal", !formData?.isInternal);
+                    }}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      formData?.isInternal ? "bg-blue-600" : "bg-gray-300"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        formData?.isInternal ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                  <span className="text-sm text-gray-500">
+                    {formData?.isInternal
+                      ? "Visible only to internal staff"
+                      : "Public posting"}
+                  </span>
+                </div>
+                <span className="text-sm font-medium text-gray-700">
+                  Reports To
+                </span>
+                <Input
+                  label="Reports To"
+                  value={formData?.reportsTo || ""}
+                  onChange={(v) => handleChange("reportsTo", v)}
+                  placeholder="e.g.  Director"
+                />
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -412,7 +307,7 @@ const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
                       Status
                     </label>
                     <select
-                      value={formData.status}
+                      value={formData?.status || "Open"}
                       onChange={(e) => handleChange("status", e.target.value)}
                       className="w-full p-2 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
                     >
@@ -425,11 +320,11 @@ const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Posted Date
+                      Closing Date
                     </label>
                     <input
                       type="date"
-                      value={formData.postedDate}
+                      value={formData?.postedDate || ""}
                       onChange={(e) =>
                         handleChange("postedDate", e.target.value)
                       }
@@ -447,11 +342,12 @@ const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
                       <MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
                       <input
                         type="text"
-                        value={formData.location}
+                        value={formData?.location || ""}
                         onChange={(e) =>
                           handleChange("location", e.target.value)
                         }
                         className="w-full pl-9 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g. Harare, Zimbabwe"
                       />
                     </div>
                   </div>
@@ -463,7 +359,7 @@ const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
                       <DollarSign className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
                       <input
                         type="text"
-                        value={formData.salaryRange}
+                        value={formData?.salaryRange || ""}
                         onChange={(e) =>
                           handleChange("salaryRange", e.target.value)
                         }
@@ -476,7 +372,63 @@ const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
               </div>
             </div>
 
-            {/* Section: Responsibilities */}
+            {/* Section: Competencies - FIXED */}
+            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 space-y-4">
+              <div className="flex items-center justify-between border-b pb-2">
+                <div className="flex items-center gap-2 text-green-600 font-medium">
+                  <ShieldCheck className="h-4 w-4" /> Competencies
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleAddItem("competencies");
+                  }}
+                  className="text-xs text-blue-600 hover:underline flex items-center gap-1 hover:text-blue-700 transition-colors"
+                >
+                  <Plus className="h-3 w-3" /> Add Item
+                </button>
+              </div>
+              <div className="space-y-2">
+                {formData?.competencies?.map((item, idx) => (
+                  <div key={idx} className="flex gap-2 items-start">
+                    <input
+                      type="text"
+                      value={item}
+                      onChange={(e) =>
+                        handleLocalListChange(
+                          "competencies",
+                          idx,
+                          e.target.value
+                        )
+                      }
+                      className="flex-1 p-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                      placeholder="e.g. Excellent communication skills"
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleRemoveItem("competencies", idx);
+                      }}
+                      className="text-gray-400 hover:text-red-500 pt-2 transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+                {(!formData?.competencies ||
+                  formData.competencies.length === 0) && (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    No competencies added yet. Click "Add Item" to start.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Section: Responsibilities - FIXED */}
             <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 space-y-4">
               <div className="flex items-center justify-between border-b pb-2">
                 <div className="flex items-center gap-2 text-orange-600 font-medium">
@@ -484,23 +436,27 @@ const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => addListItem("responsibilities")}
-                  className="text-xs flex items-center gap-1 text-blue-600 hover:underline"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleAddItem("responsibilities");
+                  }}
+                  className="text-xs text-blue-600 hover:underline flex items-center gap-1 hover:text-blue-700 transition-colors"
                 >
                   <Plus className="h-3 w-3" /> Add Item
                 </button>
               </div>
               <div className="space-y-2">
-                {formData.responsibilities.map((resp, idx) => (
+                {formData?.responsibilities?.map((item, idx) => (
                   <div key={idx} className="flex gap-2">
                     <span className="text-gray-400 pt-2 text-xs">
                       {idx + 1}.
                     </span>
                     <textarea
                       rows={2}
-                      value={resp}
+                      value={item}
                       onChange={(e) =>
-                        handleListChange(
+                        handleLocalListChange(
                           "responsibilities",
                           idx,
                           e.target.value
@@ -511,17 +467,27 @@ const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
                     />
                     <button
                       type="button"
-                      onClick={() => removeListItem("responsibilities", idx)}
-                      className="text-gray-400 hover:text-red-500 pt-2"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleRemoveItem("responsibilities", idx);
+                      }}
+                      className="text-gray-400 hover:text-red-500 pt-2 transition-colors"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
                 ))}
+                {(!formData?.responsibilities ||
+                  formData.responsibilities.length === 0) && (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    No responsibilities added yet. Click "Add Item" to start.
+                  </p>
+                )}
               </div>
             </div>
 
-            {/* Section: Qualifications */}
+            {/* Section: Qualifications - FIXED */}
             <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 space-y-4">
               <div className="flex items-center justify-between border-b pb-2">
                 <div className="flex items-center gap-2 text-purple-600 font-medium">
@@ -529,34 +495,52 @@ const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => addListItem("qualifications")}
-                  className="text-xs flex items-center gap-1 text-blue-600 hover:underline"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleAddItem("qualifications");
+                  }}
+                  className="text-xs text-blue-600 hover:underline flex items-center gap-1 hover:text-blue-700 transition-colors"
                 >
                   <Plus className="h-3 w-3" /> Add Item
                 </button>
               </div>
               <div className="space-y-2">
-                {formData.qualifications.map((qual, idx) => (
+                {formData?.qualifications?.map((item, idx) => (
                   <div key={idx} className="flex gap-2 items-center">
                     <div className="h-1.5 w-1.5 rounded-full bg-purple-400 shrink-0" />
                     <input
                       type="text"
-                      value={qual}
+                      value={item}
                       onChange={(e) =>
-                        handleListChange("qualifications", idx, e.target.value)
+                        handleLocalListChange(
+                          "qualifications",
+                          idx,
+                          e.target.value
+                        )
                       }
                       className="flex-1 p-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
                       placeholder="e.g. Bachelor's Degree..."
                     />
                     <button
                       type="button"
-                      onClick={() => removeListItem("qualifications", idx)}
-                      className="text-gray-400 hover:text-red-500"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleRemoveItem("qualifications", idx);
+                      }}
+                      className="text-gray-400 hover:text-red-500 transition-colors"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
                 ))}
+                {(!formData?.qualifications ||
+                  formData.qualifications.length === 0) && (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    No qualifications added yet. Click "Add Item" to start.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -572,11 +556,12 @@ const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
                   </label>
                   <input
                     type="email"
-                    value={formData.contactEmail}
+                    value={formData?.contactEmail || ""}
                     onChange={(e) =>
                       handleChange("contactEmail", e.target.value)
                     }
                     className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="hr@example.com"
                   />
                 </div>
                 <div>
@@ -585,7 +570,7 @@ const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
                   </label>
                   <textarea
                     rows={3}
-                    value={formData.applicationProcess}
+                    value={formData?.applicationProcess || ""}
                     onChange={(e) =>
                       handleChange("applicationProcess", e.target.value)
                     }
@@ -611,7 +596,7 @@ const PostJobModal: React.FC<Props> = ({ isOpen, job, onClose, onSave }) => {
             type="submit"
             form="jobForm"
             disabled={loading}
-            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-md transition-all flex items-center gap-2 disabled:opacity-70"
+            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-md transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
           >
             {loading && <Loader className="h-4 w-4 animate-spin" />}
             {job ? "Update Listing" : "Publish Job"}
