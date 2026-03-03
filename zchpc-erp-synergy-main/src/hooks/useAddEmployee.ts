@@ -32,6 +32,7 @@ export const useAddEmployee = (
 
   const [selectedDeductions, setSelectedDeductions] = useState<Deduction[]>([]);
   const [employee, setEmployee] = useState<EmployeeFormState>({
+    ecNumber: "",
     firstname: "",
     surname: "",
     nationalId: "",
@@ -132,7 +133,7 @@ export const useAddEmployee = (
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const payload = {
+    const payload: any = {
       first_name: employee.firstname,
       surname: employee.surname,
       national_id: employee.nationalId,
@@ -159,18 +160,28 @@ export const useAddEmployee = (
       deductions_data: selectedDeductions,
     };
 
+    // Only include employee_id if provided (otherwise backend auto-generates)
+    if (employee.ecNumber.trim()) {
+      payload.employee_id = employee.ecNumber.trim();
+    }
+
     try {
       await addEmployee(payload);
       toast.success("Employee added successfully");
       setShowModal(false);
       fetchEmployees();
     } catch (error: any) {
-      const msg = error.response?.data?.email
-        ? "Email exists."
-        : error.response?.data?.national_id
-        ? "ID exists."
+      const errData = error.response?.data;
+      const msg = errData?.employee_id
+        ? "EC Number already exists."
+        : errData?.email
+        ? "Email already exists."
+        : errData?.national_id
+        ? "National ID already exists."
+        : errData?.position_id
+        ? errData.position_id
         : "Check inputs.";
-      toast.error(msg);
+      toast.error(typeof msg === 'string' ? msg : "Check inputs.");
     } finally {
       setLoading(false);
     }

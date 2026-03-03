@@ -21,7 +21,15 @@ interface TrainingProgramUpdateData {
 
 class Server {
   static getCurrencyRates() {
-    return apiClient.get(`${api_url}rates/`);
+    return apiClient.get(`${api_url}payroll/rates/`);
+  }
+
+  static addCurrencyRate(data: { date: string; zigRate: number }) {
+    return apiClient.post(`${api_url}payroll/rates/`, data);
+  }
+
+  static fetchLatestRate() {
+    return apiClient.post(`${api_url}payroll/rates/fetch_latest/`);
   }
   static login = (email, password) => {
     // This POST request should go to your login endpoint
@@ -246,6 +254,20 @@ static approvePayslip = (id, period) => {
   // Admin Dashboard Data
   static fetchDashboardData = () => {
     return apiClient.get(`${api_url}dashboard-data/`, {
+      headers: getAuthHeaders(),
+    });
+  };
+
+  // Update employee deductions
+  static updateEmployeeDeductions = (employeeId: number | string, data: any) => {
+    return apiClient.post(`${api_url}hr/employees/${employeeId}/deductions/`, data, {
+      headers: getAuthHeaders(),
+    });
+  };
+
+  // Update employee allowances
+  static updateEmployeeAllowances = (employeeId: number | string, data: any) => {
+    return apiClient.post(`${api_url}hr/employees/${employeeId}/allowances/`, data, {
       headers: getAuthHeaders(),
     });
   };

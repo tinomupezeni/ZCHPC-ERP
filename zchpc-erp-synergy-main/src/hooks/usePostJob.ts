@@ -9,6 +9,39 @@ import {
 import { createJob, updateJob } from "@/services/jobs.services";
 import { JobListing, Option } from "@/types/postJob";
 
+// Helper: safe date (yyyy-mm-dd)
+const todayISO = () => new Date().toISOString().split("T")[0];
+
+// Helper: normalize/ensure arrays exist
+const ensureList = (v: any) => (Array.isArray(v) ? v : []);
+
+// Helper: robust string compare
+const norm = (s: any) => String(s ?? "").trim().toLowerCase();
+
+// Helper: fresh empty form for "Create"
+const makeEmptyForm = (): JobListing =>
+  ({
+    title: "",
+    department_id: "",
+    position_id: "",
+    status: "Open",
+    postedDate: todayISO(),
+    description: "",
+    qualifications: [],
+    applicationProcess: "",
+    location: "Harare",
+    salaryRange: "",
+    salaryUsdMin: null,
+    salaryUsdMax: null,
+    salaryZigMin: null,
+    salaryZigMax: null,
+    contactEmail: "hroffice@zchpc.ac.zw",
+    responsibilities: [],
+    reportsTo: "ZCHPC Director",
+    competencies: [],
+    isInternal: false,
+  } as unknown as JobListing);
+
 export const usePostJob = (
   isOpen: boolean,
   job: JobListing | null,
@@ -26,60 +59,142 @@ export const usePostJob = (
   const [newPosTitle, setNewPosTitle] = useState("");
   const [miniLoading, setMiniLoading] = useState(false);
 
+  /**
+   * 1) When modal opens: load departments + initialize formData
+   *    - If editing: hydrate fields, ensure arrays, set sane defaults.
+   *    - IMPORTANT: your incoming job sometimes has `department` (name) but no `department_id`.
+   *      We resolve ids later once departments/positions are fetched.
+   */
   useEffect(() => {
-    if (isOpen) {
-      getDepartment()
-        .then((res) => setDepartments(res.data))
-        .catch(console.error);
+    if (!isOpen) return;
 
-      if (job) {
-        setFormData({
-          ...job,
-          responsibilities: job.responsibilities || [],
-          qualifications: job.qualifications || [],
-          competencies: job.competencies || [],
-          reportsTo: job.reportsTo || "ZCHPC Director",
-          isInternal: job.isInternal || false,
-        });
-        if (job.department_id) {
-          getPositions(job.department_id)
-            .then((res) => setPositions(res))
-            .catch(() => setPositions([]));
-        }
-      } else {
-        setFormData({
-          title: "",
-          department_id: "",
-          position_id: "",
-          status: "Open",
-          postedDate: new Date().toISOString().split("T")[0],
-          description: "",
-          qualifications: [],
-          applicationProcess: "",
-          location: "Harare",
-          salaryRange: "",
-          contactEmail: "hroffice@zchpc.ac.zw",
-          responsibilities: [],
-          reportsTo: "ZCHPC Director",
-          competencies: [],
-          isInternal: false,
-        });
-      }
+    // reset inline add state every open (prevents weird UI leftovers)
+    setIsAddingDept(false);
+    setNewDeptName("");
+    setIsAddingPos(false);
+    setNewPosTitle("");
+
+    // Always fetch departments on open
+    getDepartment()
+      .then((res) => setDepartments(res.data))
+      .catch((e) => {
+        console.error(e);
+        setDepartments([]);
+      });
+
+    if (job) {
+      setFormData({
+        ...job,
+        // guarantee lists
+        responsibilities: ensureList(job.responsibilities),
+        qualifications: ensureList(job.qualifications),
+        competencies: ensureList(job.competencies),
+
+        // defaults
+        reportsTo: job.reportsTo || "ZCHPC Director",
+        isInternal: !!job.isInternal,
+        location: job.location || "Harare",
+        contactEmail: job.contactEmail || "hroffice@zchpc.ac.zw",
+        applicationProcess: job.applicationProcess || "",
+        description: job.description || "",
+        salaryRange: job.salaryRange || "",
+        // Multi-currency salary fields
+        salaryUsdMin: job.salaryUsdMin ?? null,
+        salaryUsdMax: job.salaryUsdMax ?? null,
+        salaryZigMin: job.salaryZigMin ?? null,
+        salaryZigMax: job.salaryZigMax ?? null,
+        status: job.status || "Open",
+        postedDate: job.postedDate || todayISO(),
+
+        // IDs: if missing, keep empty for now (we'll resolve below)
+        department_id: (job as any).department_id || "",
+        position_id: (job as any).position_id || "",
+      });
+    } else {
+      setFormData(makeEmptyForm());
     }
   }, [isOpen, job]);
 
+  /**
+   * 2) Resolve department_id when editing and we have departments loaded
+   *    If backend provided department name string (job.department) but not id,
+   *    we map it here.
+   */
   useEffect(() => {
-    if (formData?.department_id) {
-      getPositions(formData.department_id)
-        .then((res) => setPositions(res))
-        .catch(() => setPositions([]));
-    } else {
+    if (!isOpen || !job || !formData) return;
+    if (formData.department_id) return; // already resolved
+
+    const deptName = (job as any).department; // your job array has `department: "Administration"`
+    if (!deptName || !departments.length) return;
+
+    const match = departments.find((d) => norm(d.name) === norm(deptName));
+    if (!match) return;
+
+    setFormData((prev) => (prev ? { ...prev, department_id: match.id } : prev));
+  }, [isOpen, job, formData, departments]);
+
+  /**
+   * 3) Whenever department_id changes, fetch positions for that dept.
+   *    Also, if dept changes (user edit), clear position_id & title to prevent stale selections.
+   */
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const deptId = formData?.department_id;
+    if (!deptId) {
       setPositions([]);
+      return;
     }
-  }, [formData?.department_id]);
+
+    getPositions(deptId)
+      .then((res) => setPositions(res))
+      .catch(() => setPositions([]));
+  }, [isOpen, formData?.department_id]);
+
+  /**
+   * 4) Resolve position_id when editing after positions load
+   *    If backend didn’t supply position_id, try to match by title string.
+   */
+  useEffect(() => {
+    if (!isOpen || !job || !formData) return;
+    if (formData.position_id) return; // already set
+    if (!positions.length) return;
+
+    const title = (job as any).title;
+    if (!title) return;
+
+    const match = positions.find((p) => norm(p.title) === norm(title));
+    if (!match) return;
+
+    setFormData((prev) =>
+      prev
+        ? {
+            ...prev,
+            position_id: match.id,
+            // keep title consistent with the matched position
+            title: match.title,
+          }
+        : prev
+    );
+  }, [isOpen, job, formData, positions]);
 
   const handleChange = (field: keyof JobListing, value: any) => {
-    setFormData((prev) => (prev ? { ...prev, [field]: value } : null));
+    setFormData((prev) => {
+      if (!prev) return null;
+
+      // If user changes department manually, prevent stale position selection
+      if (field === "department_id") {
+        return {
+          ...prev,
+          department_id: value,
+          position_id: "",
+          // optional: clear title so it refills from position selection
+          // title: "",
+        };
+      }
+
+      return { ...prev, [field]: value };
+    });
   };
 
   const handleListChange = (
@@ -89,9 +204,9 @@ export const usePostJob = (
   ) => {
     setFormData((prev) => {
       if (!prev) return null;
-      const list = [...(prev[field] || [])];
+      const list = [...ensureList((prev as any)[field])];
       list[index] = value;
-      return { ...prev, [field]: list };
+      return { ...prev, [field]: list } as JobListing;
     });
   };
 
@@ -101,11 +216,23 @@ export const usePostJob = (
     try {
       const newDept = await addDepartment({ name: newDeptName });
       setDepartments((prev) => [...prev, newDept]);
-      handleChange("department_id", newDept.id);
+
+      // select it + reset dependent fields
+      setFormData((prev) =>
+        prev
+          ? {
+              ...prev,
+              department_id: newDept.id,
+              position_id: "",
+            }
+          : prev
+      );
+
       setIsAddingDept(false);
       setNewDeptName("");
       toast.success("Department added");
     } catch (e) {
+      console.error(e);
       toast.error("Failed to add department");
     } finally {
       setMiniLoading(false);
@@ -120,13 +247,24 @@ export const usePostJob = (
         title: newPosTitle,
         department_id: formData.department_id,
       });
+
       setPositions((prev) => [...prev, newPos]);
-      handleChange("position_id", newPos.id);
-      handleChange("title", newPos.title);
+
+      setFormData((prev) =>
+        prev
+          ? {
+              ...prev,
+              position_id: newPos.id,
+              title: newPos.title,
+            }
+          : prev
+      );
+
       setIsAddingPos(false);
       setNewPosTitle("");
       toast.success("Position added");
     } catch (e) {
+      console.error(e);
       toast.error("Failed to add position");
     } finally {
       setMiniLoading(false);
@@ -137,24 +275,42 @@ export const usePostJob = (
     e.preventDefault();
     if (!formData) return;
 
+    // basic validation (because your backend expects ids)
+    if (!formData.department_id) {
+      toast.error("Please select a department");
+      return;
+    }
+    if (!formData.position_id) {
+      toast.error("Please select a position");
+      return;
+    }
+
     setLoading(true);
     try {
       const selectedPos = positions.find((p) => p.id == formData.position_id);
 
-      // Clean and prepare data for submission
       const cleanData = {
         ...formData,
+
+        // Always keep title in sync with selected position if possible
         title: selectedPos ? selectedPos.title : formData.title,
-        department_id: formData.department_id || formData.department,
-        // Filter out empty strings from arrays
-        responsibilities: (formData.responsibilities || []).filter((r) =>
-          r.trim()
-        ),
-        qualifications: (formData.qualifications || []).filter((q) => q.trim()),
-        competencies: (formData.competencies || []).filter((c) => c.trim()),
-        // Ensure boolean is properly set
-        isInternal: formData.isInternal || false,
-        // Ensure other fields are included
+
+        // IMPORTANT: keep department_id as ID only (don’t fall back to name)
+        // This line in your old code was a bug:
+        // department_id: formData.department_id || formData.department,
+        department_id: formData.department_id,
+
+        responsibilities: ensureList(formData.responsibilities)
+          .map((r) => String(r).trim())
+          .filter(Boolean),
+        qualifications: ensureList(formData.qualifications)
+          .map((q) => String(q).trim())
+          .filter(Boolean),
+        competencies: ensureList(formData.competencies)
+          .map((c) => String(c).trim())
+          .filter(Boolean),
+
+        isInternal: !!formData.isInternal,
         reportsTo: formData.reportsTo || "ZCHPC Director",
         location: formData.location || "Harare",
         contactEmail: formData.contactEmail || "hroffice@zchpc.ac.zw",
@@ -162,8 +318,7 @@ export const usePostJob = (
         description: formData.description || "",
         salaryRange: formData.salaryRange || "",
         status: formData.status || "Open",
-        postedDate:
-          formData.postedDate || new Date().toISOString().split("T")[0],
+        postedDate: formData.postedDate || todayISO(),
       };
 
       if (job?.id) {
@@ -172,9 +327,7 @@ export const usePostJob = (
         await createJob(cleanData);
       }
 
-      toast.success(
-        job ? "Job updated successfully" : "Job posted successfully"
-      );
+      toast.success(job ? "Job updated successfully" : "Job posted successfully");
       onClose();
     } catch (error) {
       console.error("Error saving job:", error);
@@ -187,18 +340,17 @@ export const usePostJob = (
   const addListItem = (field: keyof JobListing) => {
     setFormData((prev) => {
       if (!prev) return null;
-      const currentList = (prev[field] as string[]) || [];
-      return { ...prev, [field]: [...currentList, ""] };
+      const currentList = ensureList((prev as any)[field]);
+      return { ...prev, [field]: [...currentList, ""] } as JobListing;
     });
   };
 
   const removeListItem = (field: keyof JobListing, index: number) => {
     setFormData((prev) => {
       if (!prev) return null;
-      const currentList = (prev[field] as string[]) || [];
-      const filteredList = currentList.filter((_, i) => i !== index);
-      // Keep empty array instead of adding empty string back
-      return { ...prev, [field]: filteredList };
+      const currentList = ensureList((prev as any)[field]);
+      const filteredList = currentList.filter((_: any, i: number) => i !== index);
+      return { ...prev, [field]: filteredList } as JobListing;
     });
   };
 

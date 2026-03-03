@@ -1,6 +1,6 @@
 # payroll_app/management/commands/seed_payroll_periods.py
 from django.core.management.base import BaseCommand
-from ...models import PayrollPeriod
+from payroll.payroll_models import PayrollPeriod
 
 class Command(BaseCommand):
     help = 'Seeds the database with common payroll period types.'
@@ -21,4 +21,4 @@ class Command(BaseCommand):
             PayrollPeriod.objects.create(**data)
         self.stdout.write(self.style.SUCCESS(f'Successfully seeded {len(periods_data)} payroll period types.'))
 
-        self.stdout.write(self.style.SUCCESS('Payroll period seeding complete! 📅'))
+        self.stdout.write(self.style.SUCCESS('Payroll period seeding complete!'))

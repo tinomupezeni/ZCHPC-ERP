@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { navItems } from "./navConfig";
 import { SidebarItem } from "./SidebarItem";
-import { LogOut, BarChart3 } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
@@ -35,7 +35,11 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
   
 
   const userName = `${user?.first_name || ""} ${user?.last_name || ""}`;
-  const userRole = user?.employee_profile?.role || "Staff";
+  // Get role display name - check multiple sources
+  const userRole = user?.employee_profile?.role_display_name
+    || user?.employee_profile?.role
+    || user?.role
+    || "Staff";
   const userFallback =
     (user?.first_name?.[0] || "U") + (user?.last_name?.[0] || "");
 
@@ -47,10 +51,10 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
           collapsed ? "w-[70px]" : "w-[260px]"
         )}
       >
-        <div className="flex h-16 items-center px-6 border-b">
-          <BarChart3 className="h-6 w-6 text-blue-600 mr-2" />
+        <div className="flex h-16 items-center px-4 border-b">
+          <img src="/logo.png" alt="ZCHPC" className="h-10 w-auto" />
           {!collapsed && (
-            <span className="font-bold text-slate-900">ZCHPC ERP</span>
+            <span className="font-bold text-slate-900 ml-2">ZCHPC ERP</span>
           )}
         </div>
 

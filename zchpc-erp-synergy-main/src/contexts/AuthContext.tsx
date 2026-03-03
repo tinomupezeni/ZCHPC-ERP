@@ -54,13 +54,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => window.removeEventListener("auth:logout", handleGlobalLogout);
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<User> => {
+    setIsLoading(true);
     try {
       const loggedInUser = await authService.login(email, password);
       setUser(loggedInUser);
+      setIsLoading(false);
       return loggedInUser;
     } catch (error) {
       setUser(null);
+      setIsLoading(false);
       throw error;
     }
   };
@@ -74,20 +77,43 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // 1. System Admins (Django Superusers/Staff) see everything
     if (user.is_staff || user.is_superuser) return true;
 
-    // 2. Check the Role field explicitly
-    // This catches the 'ADMIN' role from your JSON data
-    const userRole = user.employee_profile?.role?.toUpperCase();
-    if (userRole === "ADMIN") return true;
+    // 2. Get the user's role - check both direct and nested structure
+    const rawRole = user.employee_profile?.role || user.role || "";
+    const userRole = (typeof rawRole === 'string' ? rawRole : "").toUpperCase();
 
-    // 3. Get specific permissions from the profile array
-    const userPermissions: string[] =
-      user?.employee_profile?.role_permissions || [];
+    // 3. Check if user is admin
+    if (userRole === "ADMIN" || userRole === "SYSTEM_ADMINISTRATOR") return true;
 
-    // 4. Normalize to Uppercase for matching
-    const normalizedUserPerms = userPermissions.map((p) => p.toUpperCase());
+    // 4. Role name mappings - map database role names to navConfig permission names
+    // These map to the permission arrays in navConfig.tsx
+    const roleToPermissionMap: Record<string, string[]> = {
+      "HUMAN_RESOURCES": ["hr"],  // HR sees HR and Payroll (both accept "hr")
+      "HR": ["hr"],
+      "ACCOUNTANT": ["accountant"],
+      "PROCUREMENT": ["procurement"],
+      "PROCUREMENT_OFFICER": ["procurement"],
+      "SALES": ["sales"],
+      "SALES_REPRESENTATIVE": ["sales"],
+      "MANAGER": ["hr", "accountant"],  // Manager sees HR, Payroll, Accounting
+      "DEPARTMENT_MANAGER": ["hr", "accountant"],
+      "STAFF": [],  // Staff has no sidebar access
+      "REGULAR_STAFF": [],
+      "INTERN": [],
+      "INVENTORY": ["inventory"],
+    };
 
+    // 5. Get the permissions this role grants
+    const rolePermissions = roleToPermissionMap[userRole] || [];
+
+    // 6. Also include any explicit role_permissions from the backend
+    const backendPermissions: string[] = user?.employee_profile?.role_permissions || [];
+
+    // 7. Combine all permissions
+    const allUserPermissions = [...rolePermissions, ...backendPermissions].map(p => p.toLowerCase());
+
+    // 8. Check if user has any of the required permissions
     return requiredModules.some((mod) =>
-      normalizedUserPerms.includes(mod.toUpperCase())
+      allUserPermissions.includes(mod.toLowerCase())
     );
   };
 

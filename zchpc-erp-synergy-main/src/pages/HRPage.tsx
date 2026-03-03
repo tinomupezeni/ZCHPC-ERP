@@ -12,6 +12,8 @@ import TrainingEnrollmentsPage from "@/components/HR/training_development/Traini
 import TrainingCertificationsPage from "@/components/HR/training_development/TrainingCertifications";
 import { Card } from "@/components/ui/card";
 import HrReports from "@/components/HR/HrReports";
+import CompanyCalendar from "@/components/HR/CompanyCalendar";
+import LeaveApplications from "@/components/HR/LeaveApplications";
 
 // HRPage.tsx
 interface HRPageProps {
@@ -53,6 +55,10 @@ const HRPage = ({ openTab }: HRPageProps) => {
         return <TrainingCertificationsPage />;
       case "/hr/hr-reports":
         return <HrReports />;
+      case "/hr/hr-calendar":
+        return <CompanyCalendar />;
+      case "/hr/hr-leave":
+        return <LeaveApplications />;
       default:
         return <HrDashboard />;
     }

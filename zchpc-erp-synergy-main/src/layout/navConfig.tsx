@@ -80,6 +80,16 @@ export const navItems: SidebarItemConfig[] = [
         path: "/hr/hr-reports",
         permission: ["hr"],
       },
+      {
+        title: "Company Calendar",
+        path: "/hr/hr-calendar",
+        permission: ["hr"],
+      },
+      {
+        title: "Leave Applications",
+        path: "/hr/hr-leave",
+        permission: ["hr"],
+      },
     ],
   },
   {

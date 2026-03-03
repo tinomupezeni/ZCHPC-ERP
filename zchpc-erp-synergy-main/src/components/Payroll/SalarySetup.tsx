@@ -70,13 +70,14 @@ const SalarySetup = () => {
   // Filter employees by search term
   const filteredEmployees = employees.filter(
     (emp) =>
+      emp.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       emp.surname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.employeeid?.toLowerCase().includes(searchTerm.toLowerCase())
+      emp.employee_id?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Toggle edit mode for an employee
   const handleEdit = (employee) => {
-    setEditMode(employee.employeeid);
+    setEditMode(employee.employee_id);
     setFormData({
       usd_salary: employee.usd_salary || "",
       zig_salary: employee.zig_salary || "",
@@ -282,18 +283,18 @@ const SalarySetup = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">
-                        {employee.firstname
+                        {(employee.first_name || "")
                           .split(" ")
                           .map((n) => n[0])
                           .join("")}
-                        {employee.surname
+                        {(employee.surname || "")
                           .split(" ")
                           .map((n) => n[0])
                           .join("")}
                       </div>
                       <div className="ml-4">
                         <div className="text-sm font-medium text-gray-900">
-                          {employee.firstname} {employee.surname}
+                          {employee.first_name} {employee.surname}
                         </div>
                         <div className="text-sm text-gray-500">
                           {employee.position} • {employee.department}
@@ -304,7 +305,7 @@ const SalarySetup = () => {
 
                   {/* Base Salary */}
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {editMode === employee.employeeid ? (
+                    {editMode === employee.employee_id ? (
                       <div className="flex flex-col gap-2">
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-500">USD</span>
@@ -349,7 +350,7 @@ const SalarySetup = () => {
 
                   {/* Allowances */}
                   <td className="px-6 py-4">
-                    {editMode === employee.employeeid ? (
+                    {editMode === employee.employee_id ? (
                       <div className="space-y-2">
                         {/* Display existing allowances for editing */}
                         {formData.allowances.map((allowance) => (
@@ -407,7 +408,7 @@ const SalarySetup = () => {
 
                   {/* Deductions */}
                   <td className="px-6 py-4">
-                    {editMode === employee.employeeid ? (
+                    {editMode === employee.employee_id ? (
                       <div className="space-y-2">
                         {/* Display existing deductions for editing */}
                         {formData.deductions.map((deduction) => (
@@ -465,10 +466,10 @@ const SalarySetup = () => {
 
                   {/* Actions */}
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    {editMode === employee.employeeid ? (
+                    {editMode === employee.employee_id ? (
                       <div className="flex justify-end gap-2">
                         <button
-                          onClick={() => handleSave(employee.employeeid)}
+                          onClick={() => handleSave(employee.employee_id)}
                           disabled={loading}
                           className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700 disabled:opacity-50"
                         >

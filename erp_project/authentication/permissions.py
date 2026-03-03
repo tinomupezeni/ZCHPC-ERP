@@ -1,37 +1,90 @@
+# HR role permissions - used by both "HR" and "HUMAN_RESOURCES" role names
+_HR_PERMISSIONS = [
+    "hr.*",  # All HR endpoints
+    "human_resources.*",  # All human_resources app endpoints
+    "payroll.*",  # All payroll endpoints
+    "employees.*",
+    "authentication.*",  # Auth endpoints
+    "administration.*",  # Dashboard access
+    "employee_portal.*",  # Employee portal access
+]
+
+# Employee portal permissions - all employees can access their own portal
+_EMPLOYEE_PORTAL_PERMISSIONS = [
+    "employee_portal.*",  # Employee portal endpoints
+    "authentication.*",
+]
+
 ROLE_PERMISSIONS = {
     "ADMIN": ["*"],  # Full access
-    "HR": [
-        "employees.view",
-        "employees.add",
-        "employees.update",
-        "payroll.view"
-    ],
+    "SYSTEM_ADMINISTRATOR": ["*"],  # Alias for ADMIN
+    "HR": _HR_PERMISSIONS,
+    "HUMAN_RESOURCES": _HR_PERMISSIONS,  # Alias for HR
     "ACCOUNTANT": [
-        "payroll.view",
-        "payroll.update",
-        "invoices.view"
+        "payroll.*",  # All payroll endpoints
+        "accounts.*",  # All accounts endpoints
+        "authentication.*",
+        "administration.*",  # Dashboard access
+        "employee_portal.*",  # Employee portal access
     ],
     "PROCUREMENT": [
-        "procurement.view",
-        "procurement.add",
-        "procurement.update"
+        "procurement.*",  # All procurement endpoints
+        "authentication.*",
+        "administration.*",  # Dashboard access
+        "employee_portal.*",  # Employee portal access
+    ],
+    "PROCUREMENT_OFFICER": [  # Alias
+        "procurement.*",
+        "authentication.*",
+        "administration.*",
+        "employee_portal.*",
     ],
     "SALES": [
-        "sales.view",
-        "sales.add",
-        "sales.update"
+        "sales.*",
+        "authentication.*",
+        "administration.*",  # Dashboard access
+        "employee_portal.*",  # Employee portal access
+    ],
+    "SALES_REPRESENTATIVE": [  # Alias
+        "sales.*",
+        "authentication.*",
+        "administration.*",
+        "employee_portal.*",
     ],
     "MANAGER": [
-        "reports.view",
-        "employees.view",
-        "projects.view"
+        "hr.*",
+        "payroll.*",
+        "reports.*",
+        "employees.*",
+        "authentication.*",
+        "administration.*",  # Dashboard access
+        "employee_portal.*",  # Employee portal access
+    ],
+    "DEPARTMENT_MANAGER": [  # Alias
+        "hr.*",
+        "payroll.*",
+        "reports.*",
+        "employees.*",
+        "authentication.*",
+        "administration.*",
+        "employee_portal.*",
     ],
     "STAFF": [
-        "self.view",
-        "self.update"
+        "authentication.*",
+        "self.*",
+        "administration.*",  # Allow dashboard access
+        "employee_portal.*",  # Employee portal access
+    ],
+    "REGULAR_STAFF": [  # Alias
+        "authentication.*",
+        "self.*",
+        "administration.*",
+        "employee_portal.*",
     ],
     "INTERN": [
-        "self.view"
+        "authentication.*",
+        "self.*",
+        "employee_portal.*",  # Employee portal access
     ],
 }
 

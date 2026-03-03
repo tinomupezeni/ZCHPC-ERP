@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import PostJobModal from "./recruitment/PostJobModal";
+import ApplicantsModal from "./recruitment/ApplicantsModal";
 import * as jobService from "../../services/jobs.services";
-import { getDepartment } from "@/services/hr.services"; // Import this
+import { getDepartment } from "@/services/hr.services";
 
 import { Search, Plus, Loader, ChevronDown, Download } from "lucide-react";
 import { toast } from "sonner";
@@ -14,13 +15,30 @@ interface JobListing {
   id: number;
   title: string;
   department: string;
+  department_id?: string | number;
+  position_id?: string | number;
   status: "Open" | "Closed" | "Draft" | "Pending";
   postedDate: string;
   applicants: number;
   description: string;
   requirements: string;
   location: string;
-  salaryRange: string;
+  salaryRange?: string;
+  // Multi-currency salary fields
+  salaryUsdMin?: number | null;
+  salaryUsdMax?: number | null;
+  salaryZigMin?: number | null;
+  salaryZigMax?: number | null;
+  // Array fields for editing
+  competencies?: string[];
+  responsibilities?: string[];
+  qualifications?: string[];
+  // Other fields
+  contactEmail?: string;
+  applicationProcess?: string;
+  reportsTo?: string;
+  isInternal?: boolean;
+  notes?: string;
 }
 
 interface Candidate {
@@ -54,6 +72,8 @@ const Recruitment = () => {
   const [selectedStatus, setSelectedStatus] = useState("All Statuses");
 
   const [showPostJobModal, setShowPostJobModal] = useState(false);
+  const [showApplicantsModal, setShowApplicantsModal] = useState(false);
+  const [selectedJobForApplicants, setSelectedJobForApplicants] = useState<JobListing | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
 
   // Removed unused applicants modal state as it's handled inside ListedJobs usually,
@@ -111,10 +131,17 @@ const Recruitment = () => {
     }
   };
 
+  const handleViewApplicants = (job: JobListing) => {
+    setSelectedJobForApplicants(job);
+    setShowApplicantsModal(true);
+  };
+
   const formatBackendJob = (job: any): JobListing => ({
     id: job.id,
     title: job.title,
     department: job.department, // This comes as string "IT" from serializer
+    department_id: job.department_id,
+    position_id: job.position_id,
     status: job.status, // "Open", "Closed", etc.
     postedDate: job.postedDate,
     applicants: job.applicants || 0,
@@ -122,13 +149,30 @@ const Recruitment = () => {
     requirements: (job.qualifications || []).join("\n"), // Convert list to string for simple view if needed
     location: job.location,
     salaryRange: job.salaryRange,
-    // Add other fields if needed by your components
+    // Multi-currency salary fields
+    salaryUsdMin: job.salaryUsdMin,
+    salaryUsdMax: job.salaryUsdMax,
+    salaryZigMin: job.salaryZigMin,
+    salaryZigMax: job.salaryZigMax,
+    // Include array fields for editing
+    competencies: job.competencies || [],
+    responsibilities: job.responsibilities || [],
+    qualifications: job.qualifications || [],
+    // Include other fields needed for editing
+    contactEmail: job.contactEmail,
+    applicationProcess: job.applicationProcess,
+    reportsTo: job.reportsTo,
+    isInternal: job.isInternal,
+    notes: job.notes,
   });
 
   const fetchJobListings = async () => {
     setLoading(true);
     try {
       const data = await jobService.getJobs();
+
+      console.log(data);
+      
       const formatted = data.map(formatBackendJob);
       setJobListings(formatted);
     } catch (err) {
@@ -172,7 +216,9 @@ const Recruitment = () => {
       case "toggle":
         handleToggleJobStatus(job.id, job.status);
         break;
-      // Add other cases like 'applicants'
+      case "applicants":
+        handleViewApplicants(job);
+        break;
     }
   };
 
@@ -191,10 +237,19 @@ const Recruitment = () => {
         itemsPerPage={itemsPerPage}
         paginate={paginate}
         searchTerm={searchTerm}
-        // Pass simple badge renderer or use component's internal one
-        getStatusBadge={(status) => <span className="badge">{status}</span>}
+        getStatusBadge={(status) => (
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+            status === 'Open' ? 'bg-green-100 text-green-700' :
+            status === 'Closed' ? 'bg-red-100 text-red-700' :
+            status === 'Draft' ? 'bg-gray-100 text-gray-700' :
+            'bg-yellow-100 text-yellow-700'
+          }`}>
+            {status}
+          </span>
+        )}
         handleActionSelect={handleActionSelect}
         setShowPostJobModal={setShowPostJobModal}
+        onViewApplicants={handleViewApplicants}
       />
     );
   } else if (activeTab === "candidates") {
@@ -294,6 +349,15 @@ const Recruitment = () => {
           setShowPostJobModal(false);
         }}
         job={jobBeingEdited} // Pass the job to edit if exists
+      />
+
+      <ApplicantsModal
+        isOpen={showApplicantsModal}
+        job={selectedJobForApplicants}
+        onClose={() => {
+          setShowApplicantsModal(false);
+          setSelectedJobForApplicants(null);
+        }}
       />
     </div>
   );

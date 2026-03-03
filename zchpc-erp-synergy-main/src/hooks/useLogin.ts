@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -9,29 +9,42 @@ export const useLogin = () => {
   const [password, setPassword] = useState("");
   const [viewPassword, setViewPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
 
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, user, isAuthenticated } = useAuth();
+  const hasNavigated = useRef(false);
+
+  // Navigate when user state is updated after login
+  useEffect(() => {
+    if (pendingNavigation && isAuthenticated && user && !hasNavigated.current) {
+      hasNavigated.current = true;
+      navigate(pendingNavigation);
+      setPendingNavigation(null);
+    }
+  }, [pendingNavigation, isAuthenticated, user, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    hasNavigated.current = false;
 
     try {
-      const user = await login(email, password);
-      const rawRole = user?.employee_profile?.role || user?.role;
+      const loggedInUser = await login(email, password);
+      const rawRole = loggedInUser?.employee_profile?.role || loggedInUser?.role;
 
       if (rawRole) {
         const roleKey = rawRole.toLowerCase();
-        toast.success(`Welcome back, ${user.first_name}!`);
-        // Navigate to mapped route or default to dashboard
-        navigate(ROLE_ROUTES[roleKey] || "/dashboard");
+        toast.success(`Welcome back, ${loggedInUser.first_name}!`);
+        // Set pending navigation - useEffect will handle actual navigation
+        const targetRoute = ROLE_ROUTES[roleKey] || "/dashboard";
+        setPendingNavigation(targetRoute);
       } else {
         toast.error("User profile incomplete. Contact Admin.");
+        setIsSubmitting(false);
       }
     } catch (error) {
       toast.error("Authentication failed. Please check your credentials.");
-    } finally {
       setIsSubmitting(false);
     }
   };

@@ -14,11 +14,107 @@ import {
   Building,
   CreditCard,
   ShieldCheck,
-  AlertCircle,
+  LucideIcon,
 } from "lucide-react";
 import { differenceInYears, differenceInMonths } from "date-fns";
 import { useEmployeeDetail } from "@/hooks/useEmployeeDetail";
-import { FieldProps } from "@/types/employee";
+import { DropdownOption } from "@/types/employee";
+
+// Field component defined OUTSIDE the main component to prevent re-creation on each render
+interface FieldProps {
+  icon?: LucideIcon;
+  label: string;
+  name: string;
+  type?: string;
+  options?: DropdownOption[] | null;
+  value: any;
+  displayValue: any;
+  isEditing: boolean;
+  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
+}
+
+const Field: React.FC<FieldProps> = ({
+  icon: Icon,
+  label,
+  name,
+  type = "text",
+  options = null,
+  value,
+  displayValue,
+  isEditing,
+  onChange,
+}) => {
+  const safeOptions = Array.isArray(options) ? options : [];
+
+  return (
+    <div className="group">
+      <label className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase mb-1.5">
+        {Icon && <Icon className="h-3 w-3" />} {label}
+      </label>
+      {isEditing ? (
+        options ? (
+          <select
+            name={name}
+            value={value ?? ""}
+            onChange={onChange}
+            className="w-full p-2 bg-white border border-gray-300 rounded-md text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
+          >
+            <option value="" className="text-gray-500">
+              Select {label}
+            </option>
+            {safeOptions.map((opt: any) => (
+              <option
+                key={opt.value || opt.id}
+                value={opt.value || opt.id}
+                className="text-gray-900"
+              >
+                {opt.label || opt.name || opt.title || opt.value}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type={type}
+            name={name}
+            value={value ?? ""}
+            onChange={onChange}
+            className="w-full p-2 bg-white border border-gray-300 rounded-md text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
+          />
+        )
+      ) : (
+        <div className="text-sm font-medium text-gray-900 py-1 border-b border-transparent group-hover:border-gray-100 transition-colors">
+          {displayValue || <span className="text-gray-400 italic">--</span>}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Small Layout Helpers
+const StatItem = ({ label, value, icon: Icon }: any) => (
+  <div>
+    <p className="text-xs text-blue-300 uppercase font-semibold tracking-wider">
+      {label}
+    </p>
+    <p className="text-lg font-medium mt-0.5 flex items-center gap-2">
+      {Icon && <Icon className="h-4 w-4 text-blue-400" />} {value}
+    </p>
+  </div>
+);
+
+const Section = ({
+  title,
+  icon: Icon,
+  children,
+  color = "text-blue-500",
+}: any) => (
+  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-6 animate-in fade-in slide-in-from-bottom-4">
+    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 border-b pb-3">
+      <Icon className={`h-5 w-5 ${color}`} /> {title}
+    </h3>
+    {children}
+  </div>
+);
 
 export default function EmployeeDetailModal({
   employee: initialEmployee,
@@ -49,54 +145,30 @@ export default function EmployeeDetailModal({
     return years > 0 ? `${years}y ${months}m` : `${months}m`;
   };
 
-  // Internal Field Component to access hook state via closure
-  const Field: React.FC<FieldProps> = ({
-    icon: Icon,
-    label,
-    name,
-    type = "text",
-    options = null,
-  }) => {
-    const value = formData[name];
-    const displayValue = employee[name];
-
-    const safeOptions = Array.isArray(options) ? options : [];
-
+  // Helper to render a field with the correct props
+  const renderField = (
+    label: string,
+    name: string,
+    options?: {
+      icon?: LucideIcon;
+      type?: string;
+      options?: DropdownOption[] | null;
+      editName?: string;
+    }
+  ) => {
+    const fieldName = isEditing && options?.editName ? options.editName : name;
     return (
-      <div className="group">
-        <label className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase mb-1.5">
-          {Icon && <Icon className="h-3 w-3" />} {label}
-        </label>
-        {isEditing ? (
-          options ? (
-            <select
-              name={name}
-              value={value || ""}
-              onChange={handleChange}
-              className="w-full p-2 bg-white border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-            >
-              <option value="">Select {label}</option>
-              {safeOptions.map((opt: any) => (
-                <option key={opt.value || opt.id} value={opt.value || opt.id}>
-                  {opt.label || opt.name || opt.title}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              type={type}
-              name={name}
-              value={value || ""}
-              onChange={handleChange}
-              className="w-full p-2 bg-white border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-            />
-          )
-        ) : (
-          <div className="text-sm font-medium text-gray-900 py-1 border-b border-transparent group-hover:border-gray-100 transition-colors">
-            {displayValue || <span className="text-gray-400 italic">--</span>}
-          </div>
-        )}
-      </div>
+      <Field
+        label={label}
+        name={fieldName}
+        icon={options?.icon}
+        type={options?.type}
+        options={options?.options}
+        value={formData[fieldName]}
+        displayValue={employee[name]}
+        isEditing={isEditing}
+        onChange={handleChange}
+      />
     );
   };
 
@@ -230,35 +302,27 @@ export default function EmployeeDetailModal({
                 {(activeTab === "overview" || activeTab === "personal") && (
                   <Section title="Personal Details" icon={User}>
                     <div className="grid grid-cols-2 gap-x-8 gap-y-6">
-                      <Field label="First Name" name="first_name" />
-                      <Field label="Surname" name="surname" />
-                      <Field label="Email" name="email" type="email" />
-                      <Field label="Phone" name="phone" icon={Phone} />
-                      <Field
-                        label="National ID"
-                        name="national_id"
-                        icon={ShieldCheck}
-                      />
-                      <Field
-                        label="Date of Birth"
-                        name="date_of_birth"
-                        type="date"
-                        icon={Calendar}
-                      />
-                      <Field
-                        label="Gender"
-                        name="gender"
-                        options={[{ value: "Male" }, { value: "Female" }]}
-                      />
-                      <Field
-                        label="Marital Status"
-                        name="marital_status"
-                        options={[
+                      {renderField("First Name", "first_name")}
+                      {renderField("Surname", "surname")}
+                      {renderField("Email", "email", { type: "email" })}
+                      {renderField("Phone", "phone", { icon: Phone })}
+                      {renderField("National ID", "national_id", {
+                        icon: ShieldCheck,
+                      })}
+                      {renderField("Date of Birth", "date_of_birth", {
+                        type: "date",
+                        icon: Calendar,
+                      })}
+                      {renderField("Gender", "gender", {
+                        options: [{ value: "Male" }, { value: "Female" }],
+                      })}
+                      {renderField("Marital Status", "marital_status", {
+                        options: [
                           { value: "Single" },
                           { value: "Married" },
                           { value: "Divorced" },
-                        ]}
-                      />
+                        ],
+                      })}
                     </div>
                   </Section>
                 )}
@@ -266,33 +330,27 @@ export default function EmployeeDetailModal({
                 {(activeTab === "overview" || activeTab === "job") && (
                   <Section title="Employment Information" icon={Briefcase}>
                     <div className="grid grid-cols-2 gap-x-8 gap-y-6">
-                      <Field
-                        label="Department"
-                        name={isEditing ? "department_id" : "department"}
-                        icon={Building}
-                        options={departments}
-                      />
-                      <Field
-                        label="Position"
-                        name={isEditing ? "position_id" : "position"}
-                        icon={MapPin}
-                        options={positions}
-                      />
-                      <Field
-                        label="Type"
-                        name="employee_type"
-                        options={[
+                      {renderField("Department", "department", {
+                        icon: Building,
+                        options: departments,
+                        editName: "department_id",
+                      })}
+                      {renderField("Position", "position", {
+                        icon: MapPin,
+                        options: positions,
+                        editName: "position_id",
+                      })}
+                      {renderField("Type", "employee_type", {
+                        options: [
                           { value: "Full-time" },
                           { value: "Part-time" },
                           { value: "Contract" },
-                        ]}
-                      />
-                      <Field
-                        label="Date Joined"
-                        name="date_joined"
-                        type="date"
-                        icon={Calendar}
-                      />
+                        ],
+                      })}
+                      {renderField("Date Joined", "date_joined", {
+                        type: "date",
+                        icon: Calendar,
+                      })}
                     </div>
                   </Section>
                 )}
@@ -305,29 +363,19 @@ export default function EmployeeDetailModal({
                   >
                     <div className="grid grid-cols-2 gap-x-8 gap-y-6">
                       <div className="p-3 bg-green-50 border border-green-100 rounded-lg">
-                        <Field
-                          label="Salary (USD)"
-                          name="usd_salary"
-                          type="number"
-                        />
+                        {renderField("Salary (USD)", "usd_salary", {
+                          type: "number",
+                        })}
                       </div>
                       <div className="p-3 bg-yellow-50 border border-yellow-100 rounded-lg">
-                        <Field
-                          label="Salary (ZiG)"
-                          name="zig_salary"
-                          type="number"
-                        />
+                        {renderField("Salary (ZiG)", "zig_salary", {
+                          type: "number",
+                        })}
                       </div>
-                      <Field
-                        label="Bank Name"
-                        name="bank_name"
-                        icon={Building}
-                      />
-                      <Field
-                        label="Account Number"
-                        name="bank_account"
-                        icon={CreditCard}
-                      />
+                      {renderField("Bank Name", "bank_name", { icon: Building })}
+                      {renderField("Account Number", "bank_account", {
+                        icon: CreditCard,
+                      })}
                     </div>
                   </Section>
                 )}
@@ -339,29 +387,3 @@ export default function EmployeeDetailModal({
     </div>
   );
 }
-
-// Small Layout Helpers
-const StatItem = ({ label, value, icon: Icon }: any) => (
-  <div>
-    <p className="text-xs text-blue-300 uppercase font-semibold tracking-wider">
-      {label}
-    </p>
-    <p className="text-lg font-medium mt-0.5 flex items-center gap-2">
-      {Icon && <Icon className="h-4 w-4 text-blue-400" />} {value}
-    </p>
-  </div>
-);
-
-const Section = ({
-  title,
-  icon: Icon,
-  children,
-  color = "text-blue-500",
-}: any) => (
-  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-6 animate-in fade-in slide-in-from-bottom-4">
-    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 border-b pb-3">
-      <Icon className={`h-5 w-5 ${color}`} /> {title}
-    </h3>
-    {children}
-  </div>
-);

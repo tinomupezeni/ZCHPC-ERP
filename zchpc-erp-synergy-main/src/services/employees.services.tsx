@@ -12,7 +12,7 @@ export const getOneEmployee = (id) => {
   return apiClient.get(`/hr/employees/${id}/`);
 };
 export const updateEmployee = (id, data) => {
-  return apiClient.put(`/hr/employees/${id}/`, data);
+  return apiClient.patch(`/hr/employees/${id}/`, data);
 };
 
 export const deleteEmployee = (id) => {

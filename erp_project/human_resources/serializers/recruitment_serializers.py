@@ -31,6 +31,12 @@ class JobSerializer(serializers.ModelSerializer):
     applicationProcess = serializers.CharField(source='application_process', required=False, allow_blank=True)
     reportsTo = serializers.CharField(source='reports_to', required=False, allow_blank=True)
     isInternal = serializers.BooleanField(source='is_internal', required=False)
+
+    # Multi-currency salary fields (camelCase for frontend)
+    salaryUsdMin = serializers.DecimalField(source='salary_usd_min', max_digits=12, decimal_places=2, required=False, allow_null=True)
+    salaryUsdMax = serializers.DecimalField(source='salary_usd_max', max_digits=12, decimal_places=2, required=False, allow_null=True)
+    salaryZigMin = serializers.DecimalField(source='salary_zig_min', max_digits=12, decimal_places=2, required=False, allow_null=True)
+    salaryZigMax = serializers.DecimalField(source='salary_zig_max', max_digits=12, decimal_places=2, required=False, allow_null=True)
     
     # JSONFields are handled automatically as Lists by DRF
     # But we'll be explicit for clarity
@@ -55,12 +61,12 @@ class JobSerializer(serializers.ModelSerializer):
     class Meta:
         model = Job
         fields = [
-            'id', 
-            'title', 
-            'department', 
+            'id',
+            'title',
+            'department',
             'department_id',
             'position_id',
-            'status', 
+            'status',
             'location',
             'description',
             'responsibilities',
@@ -68,8 +74,12 @@ class JobSerializer(serializers.ModelSerializer):
             'competencies',
             'notes',
             # Mapped Fields (camelCase for frontend)
-            'postedDate', 
+            'postedDate',
             'salaryRange',
+            'salaryUsdMin',
+            'salaryUsdMax',
+            'salaryZigMin',
+            'salaryZigMax',
             'contactEmail',
             'applicationProcess',
             'reportsTo',

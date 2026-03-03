@@ -21,13 +21,14 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    "human_resources",
-    
+    "human_resources.app.HumanResourcesConfig",
+
     'authentication',
     "payroll",
     "procurement",
     "administration",
-    
+    "employee_portal",
+
     # Third-party apps
     'rest_framework',
     'rest_framework_simplejwt',
@@ -44,6 +45,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware', # <-- Kept only one
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'authentication.middleware.JWTAuthenticationMiddleware',  # JWT Auth before RBAC
     'authentication.middleware.RBACMiddleware',  # Custom RBAC Middleware
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',

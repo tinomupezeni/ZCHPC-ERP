@@ -80,9 +80,11 @@ const PayrollDashboard = () => {
   const loadDepartments = async () => {
     try {
       // Reusing the HR service we created earlier
-      const data = await getDepartment();
+      const response = await getDepartment();
+      // getDepartment may return axios response or array directly
+      const depts = Array.isArray(response) ? response : response.data || [];
       // Extract just the names for the filter dropdown
-      const deptNames = data.map((d: any) => d.name);
+      const deptNames = depts.map((d: any) => d.name);
       setDepartments(["All Departments", ...deptNames]);
     } catch (error) {
       console.error("Error fetching departments:", error);
@@ -95,12 +97,40 @@ const PayrollDashboard = () => {
     setProcessing(true);
     try {
       const period = format(selectedMonth, "yyyy-MM");
-      await processPayroll({ month: period });
-      toast.success(`Payroll processed for ${period}`);
+      const result = await processPayroll({ month: period });
+
+      console.log("Payroll processing result:", result);
+
+      // Show detailed feedback based on result
+      const details = result.details || result;
+      const processed = details.total_processed || 0;
+      const skipped = details.total_skipped || 0;
+      const errors = details.total_errors || 0;
+
+      if (processed > 0) {
+        toast.success(`Payroll processed: ${processed} employees`);
+      }
+      if (skipped > 0) {
+        toast.info(`${skipped} employees skipped (already processed for this period)`);
+      }
+      if (errors > 0) {
+        // Log full error details
+        console.error("Payroll errors details:");
+        details.errors?.forEach((err: any, i: number) => {
+          console.error(`  ${i + 1}. Employee ${err.employee_id}: ${err.error}`);
+        });
+        // Show first error in toast
+        const firstError = details.errors?.[0];
+        toast.error(`${errors} errors: ${firstError?.error || 'Check console'}`);
+      }
+      if (processed === 0 && skipped === 0 && errors === 0) {
+        toast.warning("No active employees found to process");
+      }
+
       loadData(); // Refresh list
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error("Failed to process payroll");
+      toast.error(error.response?.data?.error || "Failed to process payroll");
     } finally {
       setProcessing(false);
     }

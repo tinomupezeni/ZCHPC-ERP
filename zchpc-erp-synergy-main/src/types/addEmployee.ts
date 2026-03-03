@@ -4,6 +4,7 @@ export interface Deduction {
 }
 
 export interface EmployeeFormState {
+  ecNumber: string;
   firstname: string;
   surname: string;
   nationalId: string;

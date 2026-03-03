@@ -217,20 +217,22 @@ class Employees(models.Model):
 class AllowanceType(models.Model):
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True, null=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Default amount for this allowance type")
 
     class Meta:
         ordering = ['name']
     def __str__(self):
-        return self.name
+        return f"{self.name} (${self.amount})"
 
 class DeductionType(models.Model):
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True, null=True)
-    
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Default amount for this deduction type")
+
     class Meta:
         ordering = ['name']
     def __str__(self):
-        return self.name
+        return f"{self.name} (${self.amount})"
 
 class MedicalAidPlan(models.Model):
     provider = models.CharField(max_length=100)
@@ -276,27 +278,33 @@ class EmployeeAllowance(models.Model):
     """
     Links a specific employee to an allowance type with a specific amount.
     """
+    CURRENCY_CHOICES = [('USD', 'US Dollar'), ('ZIG', 'Zimbabwean Gold')]
+
     employee = models.ForeignKey(Employees, on_delete=models.CASCADE, related_name='allowances')
     allowance_type = models.ForeignKey(AllowanceType, on_delete=models.PROTECT)
     amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
-    
+    currency = models.CharField(max_length=3, choices=CURRENCY_CHOICES, default='USD')
+
     class Meta:
         unique_together = ('employee', 'allowance_type')
     def __str__(self):
-        return f"{self.employee} - {self.allowance_type.name}: ${self.amount}"
+        return f"{self.employee} - {self.allowance_type.name}: {self.currency} {self.amount}"
 
 class EmployeeDeduction(models.Model):
     """
     Links a specific employee to a deduction type with a specific amount.
     """
+    CURRENCY_CHOICES = [('USD', 'US Dollar'), ('ZIG', 'Zimbabwean Gold')]
+
     employee = models.ForeignKey(Employees, on_delete=models.CASCADE, related_name='deductions')
     deduction_type = models.ForeignKey(DeductionType, on_delete=models.PROTECT)
     amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
-    
+    currency = models.CharField(max_length=3, choices=CURRENCY_CHOICES, default='USD')
+
     class Meta:
         unique_together = ('employee', 'deduction_type')
     def __str__(self):
-        return f"{self.employee} - {self.deduction_type.name}: ${self.amount}"
+        return f"{self.employee} - {self.deduction_type.name}: {self.currency} {self.amount}"
 
 class EmployeePayrollConfig(models.Model):
     """
@@ -367,7 +375,13 @@ class Job(models.Model):
     # Job Details
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Open')
     location = models.CharField(max_length=100, default="Harare")
-    salary_range = models.CharField(max_length=100, blank=True, null=True)
+    salary_range = models.CharField(max_length=100, blank=True, null=True)  # Legacy field
+
+    # Multi-currency salary fields
+    salary_usd_min = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    salary_usd_max = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    salary_zig_min = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    salary_zig_max = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     
     # NEW: Reports To and Internal Flag
     reports_to = models.CharField(
@@ -419,13 +433,25 @@ class Candidate(models.Model):
     """
     A person who has applied or is being considered for a job.
     """
+    id_number = models.CharField(
+        max_length=50,
+        unique=True,
+        null=True,
+        blank=True,
+        help_text="National ID number - used to prevent duplicate applications"
+    )
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
     phone = models.CharField(max_length=20, blank=True)
+    address = models.TextField(blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
     resume = models.FileField(upload_to='resumes/', null=True, blank=True)
+    qualifications = models.TextField(blank=True, help_text="Educational qualifications")
+    experience = models.TextField(blank=True, help_text="Work experience summary")
     notes = models.TextField(blank=True, null=True)
-    
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
 
@@ -441,16 +467,17 @@ class JobApplication(models.Model):
         ('Hired', 'Hired'),
         ('Rejected', 'Rejected'),
     ]
-    
+
     job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='applications')
     candidate = models.ForeignKey(Candidate, on_delete=models.CASCADE, related_name='applications')
+    cover_letter = models.TextField(blank=True, help_text="Cover letter or motivation")
     applied_on = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
-    
+
     class Meta:
         unique_together = ('job', 'candidate')
         ordering = ['-applied_on']
-    
+
     def __str__(self):
         return f"{self.candidate} for {self.job.title}"
 
@@ -588,3 +615,35 @@ class LeaveRequest(models.Model):
     def number_of_days(self):
         # Basic calculation, can be refined to exclude weekends/holidays
         return (self.end_date - self.start_date).days + 1
+
+
+class CompanyEvent(models.Model):
+    """
+    Company calendar events such as holidays, meetings, company events, etc.
+    """
+    EVENT_TYPE_CHOICES = [
+        ('Holiday', 'Public Holiday'),
+        ('Company', 'Company Event'),
+        ('Meeting', 'Meeting'),
+        ('Training', 'Training'),
+        ('Other', 'Other'),
+    ]
+
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    event_type = models.CharField(max_length=20, choices=EVENT_TYPE_CHOICES, default='Company')
+    start_date = models.DateField()
+    end_date = models.DateField()
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+    is_all_day = models.BooleanField(default=True)
+    location = models.CharField(max_length=200, blank=True)
+    created_by = models.ForeignKey(Employees, on_delete=models.SET_NULL, null=True, related_name='created_events')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['start_date', 'start_time']
+
+    def __str__(self):
+        return f"{self.title} ({self.start_date})"

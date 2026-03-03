@@ -16,10 +16,11 @@ User = get_user_model()
 
 class EmployeeDeductionSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source='deduction_type.name', read_only=True)
-    
+    deduction_type_id = serializers.IntegerField(source='deduction_type.id', read_only=True)
+
     class Meta:
         model = EmployeeDeduction
-        fields = ['id', 'name', 'amount']
+        fields = ['id', 'deduction_type_id', 'name', 'amount', 'currency']
 
 class EmployeeSerializer(serializers.ModelSerializer):
     # 1. READ ONLY (Returns "Human Resources")

@@ -7,6 +7,7 @@ import PayslipGeneration from "@/components/Payroll/PayslipGeneration";
 import ProcessPayroll from "@/components/Payroll/ProcessPayroll";
 import SalarySetup from "@/components/Payroll/SalarySetup";
 import TaxConfig from "@/components/TaxConfig";
+import PayrollReports from "@/components/Payroll/PayrollReports";
 
 // HRPage.tsx
 interface PayrollProps {
@@ -34,6 +35,8 @@ const PayrollPage = ({openTab} :PayrollProps) => {
         return <TaxConfig />
       case '/payroll/payroll-period':
         return <PayrollConfig />
+      case '/payroll/reports':
+        return <PayrollReports />
       default :
        return <PayrollDashboard />
     }

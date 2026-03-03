@@ -9,3 +9,7 @@ class HumanResourcesConfig(AppConfig):
         # Import the function here to avoid AppRegistryNotReady errors
         from .signals import create_default_roles
         post_migrate.connect(create_default_roles, sender=self)
+
+        # Import signals module to register all signal handlers
+        # This ensures the @receiver decorators are processed
+        from . import signals  # noqa: F401

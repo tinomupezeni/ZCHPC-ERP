@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "WebFetch(domain:www.rbz.co.zw)",
+      "WebSearch",
+      "WebFetch(domain:zimpricecheck.com)",
+      "WebFetch(domain:tradingeconomics.com)",
+      "Bash(python manage.py:*)",
+      "Bash(python:*)",
+      "Bash(npm create:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tailwindcss:*)",
+      "Bash(./node_modules/.bin/tailwindcss init -p)",
+      "Bash(dir:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm ls:*)",
+      "Bash(curl:*)",
+      "Bash(ls:*)"
+    ]
+  }
+}

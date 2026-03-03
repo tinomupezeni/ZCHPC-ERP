@@ -14,6 +14,8 @@ import {
   Heart,
 } from "lucide-react";
 import Server from "@/services/Server";
+import { getEmployees } from "@/services/employees.services";
+import { getDeductionTypes } from "@/services/api";
 import { formatUSD, formatZIG } from "../ui/utils";
 import { toast } from "sonner";
 
@@ -33,23 +35,33 @@ const Deductions = () => {
     fixedAmount: true,
   });
   const [activeTab, setActiveTab] = useState("statutory");
-
-  // Statutory deduction templates (Zimbabwe-specific)
-  const statutoryTemplates = [
-    { name: "PAYE", description: "Pay As You Earn Tax", fixedAmount: false },
-    { name: "NSSA", description: "Pension Contribution", fixedAmount: true, amount: 60 },
-    { name: "AIDS Levy", description: "1% of gross salary", fixedAmount: false },
-    { name: "ZIMDEF", description: "Skills Development Levy", fixedAmount: true, amount: 50 },
-  ];
+  const [deductionTypes, setDeductionTypes] = useState([]);
 
   useEffect(() => {
-    fetchEmployees();
+    fetchInitialData();
   }, []);
 
-  const fetchEmployees = async () => {
+  const fetchInitialData = async () => {
     setLoading(true);
     try {
-      const response = await Server.fetchEmployees();
+      const [employeesRes, deductionTypesRes] = await Promise.all([
+        getEmployees(),
+        getDeductionTypes()
+      ]);
+      setEmployees(employeesRes.data);
+      setDeductionTypes(deductionTypesRes.data || []);
+    } catch (error) {
+      toast.error("Failed to fetch data");
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchEmployeesData = async () => {
+    setLoading(true);
+    try {
+      const response = await getEmployees();
       setEmployees(response.data);
     } catch (error) {
       toast.error("Failed to fetch employee deductions");
@@ -60,15 +72,25 @@ const Deductions = () => {
   };
 
   const filteredEmployees = employees.filter((emp) =>
-    emp.firstname.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    emp.employeeid.toLowerCase().includes(searchTerm.toLowerCase())
+    emp.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    emp.surname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    emp.employee_id?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleEdit = (employee) => {
-    setEditMode(employee.employeeid);
+    setEditMode(employee.employee_id);
+    // Load existing deductions into statutory array (backend returns flat array)
+    const existingDeductions = (employee.deductions || []).map(d => ({
+      id: d.id,
+      deduction_type_id: d.deduction_type_id || d.id,
+      name: d.name,
+      amount: d.amount,
+      currency: d.currency || 'USD',
+      fixedAmount: true
+    }));
     setFormData({
-      statutory: employee.deductions?.statutory || [],
-      voluntary: employee.deductions?.voluntary || [],
+      statutory: existingDeductions,
+      voluntary: [],
     });
   };
 
@@ -83,9 +105,23 @@ const Deductions = () => {
   const handleSave = async (employeeId) => {
     setLoading(true);
     try {
-      await Server.updateEmployeeDeductions(employeeId, formData);
+      // Combine statutory and voluntary deductions into a single array
+      const allDeductions = [
+        ...formData.statutory.map(d => ({
+          deduction_type_id: d.id || d.deduction_type_id,
+          amount: parseFloat(d.amount) || 0,
+          currency: d.currency || 'USD'
+        })),
+        ...formData.voluntary.map(d => ({
+          deduction_type_id: d.id || d.deduction_type_id,
+          amount: parseFloat(d.amount) || 0,
+          currency: d.currency || 'USD'
+        }))
+      ];
+
+      await Server.updateEmployeeDeductions(employeeId, { deductions: allDeductions });
       toast.success("Deductions updated successfully");
-      fetchEmployees();
+      fetchEmployeesData();
       setEditMode(null);
     } catch (error) {
       toast.error("Failed to update deductions");
@@ -126,9 +162,9 @@ const Deductions = () => {
     setFormData({ ...formData, [type]: updatedDeductions });
   };
 
-  const addStatutoryTemplate = (template) => {
-    // Check if this template already exists
-    if (formData.statutory.some(d => d.name === template.name)) {
+  const addStatutoryTemplate = (deductionType) => {
+    // Check if this deduction type already exists
+    if (formData.statutory.some(d => d.id === deductionType.id)) {
       toast.error("This deduction already exists");
       return;
     }
@@ -136,10 +172,12 @@ const Deductions = () => {
     setFormData({
       ...formData,
       statutory: [...formData.statutory, {
-        name: template.name,
-        description: template.description,
-        amount: template.amount || 0,
-        fixedAmount: template.fixedAmount,
+        id: deductionType.id,
+        deduction_type_id: deductionType.id,
+        name: deductionType.name,
+        description: deductionType.description,
+        amount: deductionType.amount || 0,
+        fixedAmount: true,
         statutory: true
       }]
     });
@@ -220,41 +258,41 @@ const Deductions = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">
-                        {employee.firstname
+                        {(employee.first_name || "")
                           .split(" ")
                           .map((n) => n[0])
                           .join("")}
-                        {employee.surname
+                        {(employee.surname || "")
                           .split(" ")
                           .map((n) => n[0])
                           .join("")}
                       </div>
                       <div className="ml-4">
                         <div className="text-sm font-medium text-gray-900">
-                          {employee.firstname}  {employee.surname}
+                          {employee.first_name} {employee.surname}
                         </div>
                         <div className="text-sm text-gray-500">
-                          {employee.department} • {employee.employeeid}
+                          {employee.department} • {employee.employee_id}
                         </div>
                       </div>
                     </div>
                   </td>
 
                   <td className="px-6 py-4">
-                    {editMode === employee.employeeid ? (
+                    {editMode === employee.employee_id ? (
                       <div className="space-y-3">
                         {/* Statutory Deductions Editor */}
                         {activeTab === "statutory" && (
                           <>
                             <div className="flex flex-wrap gap-2 mb-3">
-                              {statutoryTemplates.map((template, index) => (
+                              {deductionTypes.map((deductionType) => (
                                 <button
-                                  key={index}
-                                  onClick={() => addStatutoryTemplate(template)}
+                                  key={deductionType.id}
+                                  onClick={() => addStatutoryTemplate(deductionType)}
                                   className="flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs hover:bg-gray-200"
                                 >
                                   <Plus className="h-3 w-3" />
-                                  {template.name}
+                                  {deductionType.name}
                                 </button>
                               ))}
                             </div>
@@ -376,33 +414,18 @@ const Deductions = () => {
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        {(activeTab === "statutory"
-                          ? employee.deductions?.statutory
-                          : employee.deductions?.voluntary
-                        )?.length > 0 ? (
-                          (activeTab === "statutory"
-                            ? employee.deductions.statutory
-                            : employee.deductions.voluntary
-                          ).map((deduction, index) => (
+                        {employee.deductions?.length > 0 ? (
+                          employee.deductions.map((deduction, index) => (
                             <div key={index} className="flex items-baseline gap-2">
                               <div className="text-sm">
                                 <span className="font-medium">{deduction.name}</span>:{" "}
-                                {deduction.fixedAmount ? (
-                                  <span>{formatUSD(deduction.amount)}</span>
-                                ) : (
-                                  <span>{deduction.amount}%</span>
-                                )}
+                                <span>{formatUSD(deduction.amount)}</span>
                               </div>
-                              {deduction.statutory && (
-                                <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded-full">
-                                  Statutory
-                                </span>
-                              )}
                             </div>
                           ))
                         ) : (
                           <span className="text-sm text-gray-400">
-                            No {activeTab === "statutory" ? "statutory" : "voluntary"} deductions
+                            No deductions configured
                           </span>
                         )}
                       </div>
@@ -410,7 +433,7 @@ const Deductions = () => {
                   </td>
 
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    {editMode === employee.employeeid ? (
+                    {editMode === employee.employee_id ? (
                       <div className="flex justify-end gap-2">
                         <button
                           onClick={() => handleSave(employee.id)}

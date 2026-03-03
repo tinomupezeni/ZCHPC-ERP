@@ -351,21 +351,82 @@ const PostJobModal: React.FC<PostJobModalProps> = ({
                       />
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Salary Range
+                </div>
+              </div>
+
+              {/* Multi-Currency Salary Section */}
+              <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
+                <div className="flex items-center gap-2 text-green-600 font-medium mb-3">
+                  <DollarSign className="h-4 w-4" /> Salary Range
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {/* USD Salary */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      USD Salary
                     </label>
-                    <div className="relative">
-                      <DollarSign className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-                      <input
-                        type="text"
-                        value={formData?.salaryRange || ""}
-                        onChange={(e) =>
-                          handleChange("salaryRange", e.target.value)
-                        }
-                        className="w-full pl-9 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-                        placeholder="e.g. $2k - $3k"
-                      />
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">Min</label>
+                        <input
+                          type="number"
+                          value={formData?.salaryUsdMin ?? ""}
+                          onChange={(e) =>
+                            handleChange("salaryUsdMin", e.target.value ? parseFloat(e.target.value) : null)
+                          }
+                          className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                          placeholder="0.00"
+                          step="0.01"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">Max</label>
+                        <input
+                          type="number"
+                          value={formData?.salaryUsdMax ?? ""}
+                          onChange={(e) =>
+                            handleChange("salaryUsdMax", e.target.value ? parseFloat(e.target.value) : null)
+                          }
+                          className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                          placeholder="0.00"
+                          step="0.01"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ZiG Salary */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      ZiG Salary
+                    </label>
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">Min</label>
+                        <input
+                          type="number"
+                          value={formData?.salaryZigMin ?? ""}
+                          onChange={(e) =>
+                            handleChange("salaryZigMin", e.target.value ? parseFloat(e.target.value) : null)
+                          }
+                          className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                          placeholder="0.00"
+                          step="0.01"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">Max</label>
+                        <input
+                          type="number"
+                          value={formData?.salaryZigMax ?? ""}
+                          onChange={(e) =>
+                            handleChange("salaryZigMax", e.target.value ? parseFloat(e.target.value) : null)
+                          }
+                          className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                          placeholder="0.00"
+                          step="0.01"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>

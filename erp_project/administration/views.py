@@ -4,7 +4,7 @@ from rest_framework import status
 from django.db.models.functions import Coalesce
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 
 # Import models from all your apps
 from human_resources.hr_models import Employees, AttendanceRecord
@@ -18,8 +18,9 @@ class AdminDashboardView(APIView):
     """
     A view to return all necessary aggregated data for the main Admin dashboard.
     """
-    # Only authenticated admin users can access this
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    # Only authenticated users can access this
+    # Role-based access is handled by RBACMiddleware
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         today = timezone.now().date()
@@ -46,9 +47,12 @@ class AdminDashboardView(APIView):
         # Payroll distribution by department (for the last processed period)
         latest_period = PayrollPeriod.objects.order_by('-end_date').first()
         payroll_dist = []
-        if latest_period:
-            payroll_dist = Payroll.objects.filter(period=latest_period) \
-                .annotate(dept_name=Coalesce('employee__department__name', Value('Unassigned'))) \
+        if latest_period and latest_period.start_date and latest_period.end_date:
+            # Filter by date range from the PayrollPeriod
+            payroll_dist = Payroll.objects.filter(
+                period__gte=latest_period.start_date,
+                period__lte=latest_period.end_date
+            ).annotate(dept_name=Coalesce('employee__department__name', Value('Unassigned'))) \
                 .values('dept_name') \
                 .annotate(
                     employee__department=F('dept_name'), # Match frontend key
@@ -57,6 +61,23 @@ class AdminDashboardView(APIView):
                 ) \
                 .values('employee__department', 'total_usd', 'total_zig') \
                 .order_by('-total_usd')
+        else:
+            # Fallback: get most recent month's payroll data
+            from django.db.models.functions import TruncMonth
+            latest_month = Payroll.objects.order_by('-period').values('period').first()
+            if latest_month:
+                payroll_dist = Payroll.objects.filter(
+                    period__year=latest_month['period'].year,
+                    period__month=latest_month['period'].month
+                ).annotate(dept_name=Coalesce('employee__department__name', Value('Unassigned'))) \
+                    .values('dept_name') \
+                    .annotate(
+                        employee__department=F('dept_name'),
+                        total_usd=Sum('net_salary_usd'),
+                        total_zig=Sum('net_salary_zig')
+                    ) \
+                    .values('employee__department', 'total_usd', 'total_zig') \
+                    .order_by('-total_usd')
 
         # --- 3. Lists ---
         

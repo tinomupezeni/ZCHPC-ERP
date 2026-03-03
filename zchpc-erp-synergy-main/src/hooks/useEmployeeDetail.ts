@@ -25,7 +25,7 @@ export const useEmployeeDetail = (initialEmployee: Employee, onUpdate: () => voi
         setFormData(data);
         
         const depts = await getDepartment();
-        setDepartments(depts);
+        setDepartments(depts.data);
       } catch (error) {
         toast.error("Could not load full employee details");
       } finally {
@@ -44,6 +44,26 @@ export const useEmployeeDetail = (initialEmployee: Employee, onUpdate: () => voi
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
+
+    // If department changes, clear position and reload positions
+    if (name === "department_id") {
+      setFormData((prev) => ({
+        ...prev,
+        department_id: value ? parseInt(value, 10) : undefined,
+        position_id: undefined, // Clear position when department changes
+      }));
+      return;
+    }
+
+    // If position changes, ensure it's stored as a number
+    if (name === "position_id") {
+      setFormData((prev) => ({
+        ...prev,
+        position_id: value ? parseInt(value, 10) : undefined,
+      }));
+      return;
+    }
+
     setFormData((prev) => ({
       ...prev,
       [name]: type === "number" ? parseFloat(value) : value,
@@ -53,17 +73,25 @@ export const useEmployeeDetail = (initialEmployee: Employee, onUpdate: () => voi
   const handleSave = async () => {
     setSaving(true);
     try {
-      await updateEmployee(employee.id, formData);
+      // Remove the read-only string fields from payload
+      const payload = { ...formData };
+      delete payload.department;
+      delete payload.position;
+
+      await updateEmployee(employee.id, payload);
       toast.success("Profile updated successfully");
-      
+
       const updated = await getOneEmployee(employee.id);
       setEmployee(updated.data);
       setFormData(updated.data);
-      
+
       onUpdate();
       setIsEditing(false);
-    } catch (error) {
-      toast.error("Update failed. Check your inputs.");
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.position_id ||
+                       error.response?.data?.department_id ||
+                       "Update failed. Check your inputs.";
+      toast.error(typeof errorMsg === 'string' ? errorMsg : "Update failed.");
     } finally {
       setSaving(false);
     }

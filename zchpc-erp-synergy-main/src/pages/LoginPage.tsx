@@ -35,10 +35,8 @@ const LoginPage = () => {
         <div className="absolute inset-0 z-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
 
         <div className="relative z-20 w-full flex flex-col justify-between p-12 text-white">
-          <div className="flex items-center gap-2">
-            <div className="bg-white/10 backdrop-blur-md p-2 rounded-lg border border-white/20">
-              <Zap className="h-8 w-8 text-blue-300" />
-            </div>
+          <div className="flex items-center gap-3">
+            <img src="/logo.png" alt="ZCHPC" className="h-14 w-auto" />
             <span className="text-2xl font-bold tracking-tighter">ZCHPC</span>
           </div>
 

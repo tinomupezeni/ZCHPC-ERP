@@ -23,7 +23,30 @@ class ExchangeRateRepository:
 class TaxRepository:
     @staticmethod
     def get_brackets(currency, period):
-        return TaxBracket.objects.filter(currency=currency, active_from=period).order_by("max_income")
+        """
+        Get the most recent tax brackets for the given currency that are active for this period.
+        Returns a list of tuples: (min_income, max_income, rate, deduction)
+        """
+        # First, find the most recent active_from date that is <= period
+        latest_bracket = TaxBracket.objects.filter(
+            currency=currency,
+            active_from__lte=period
+        ).order_by("-active_from").first()
+
+        if not latest_bracket:
+            return []
+
+        # Get all brackets with that active_from date
+        brackets = TaxBracket.objects.filter(
+            currency=currency,
+            active_from=latest_bracket.active_from
+        ).order_by("min_income")
+
+        # Return as list of tuples for calculate_tax function
+        return [
+            (b.min_income, b.max_income, b.rate, b.deduction)
+            for b in brackets
+        ]
     
 # class NSSARepository:
 #     @staticmethod

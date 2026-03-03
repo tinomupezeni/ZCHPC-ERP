@@ -1,5 +1,25 @@
 import { JobListing } from "@/types/postJob";
-import apiClient  from "./apiClient";
+import apiClient from "./apiClient";
+
+// Type definitions for applications
+interface Candidate {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  resume: string | null;
+  notes: string | null;
+}
+
+interface JobApplication {
+  id: number;
+  job: number;
+  job_title: string;
+  candidate: Candidate;
+  applied_on: string;
+  status: string;
+}
 
 
 export const getJobs = async (statusFilter?: string) => {

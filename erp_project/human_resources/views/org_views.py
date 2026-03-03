@@ -1,10 +1,19 @@
-from rest_framework import viewsets
-from ..hr_models import DeductionType, Department, Position
+from rest_framework import viewsets, serializers
+from ..hr_models import AllowanceType, DeductionType, Department, Position
 from ..serializers.reports_serializers import DeductionTypeSerializer, DepartmentSerializer, PositionSerializer
+
+
+class AllowanceTypeSerializer(serializers.ModelSerializer):
+    """Serializer for AllowanceType model"""
+    class Meta:
+        model = AllowanceType
+        fields = ['id', 'name', 'description', 'amount']
+
 
 class DepartmentViewSet(viewsets.ModelViewSet):
     queryset = Department.objects.all()
     serializer_class = DepartmentSerializer
+
 
 class PositionViewSet(viewsets.ModelViewSet):
     queryset = Position.objects.all()
@@ -20,7 +29,16 @@ class PositionViewSet(viewsets.ModelViewSet):
         if dept_id:
             queryset = queryset.filter(department_id=dept_id)
         return queryset
-    
+
+
+class AllowanceTypeViewSet(viewsets.ModelViewSet):
+    """
+    Manage Allowance Types (e.g., Housing, Transport, Lunch)
+    """
+    queryset = AllowanceType.objects.all()
+    serializer_class = AllowanceTypeSerializer
+
+
 class DeductionTypeViewSet(viewsets.ModelViewSet):
     """
     Manage Tax and Deduction Categories (e.g., NSSA, PAYE, Medical Aid)

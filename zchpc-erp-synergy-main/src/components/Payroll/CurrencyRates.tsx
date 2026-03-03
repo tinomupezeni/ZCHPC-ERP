@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { DollarSign, Search, PlusCircle, Loader, XCircle, Calendar, X } from "lucide-react";
+import { DollarSign, Search, PlusCircle, Loader, XCircle, Calendar, X, RefreshCw, Download } from "lucide-react";
 import Server from "@/services/Server";
 import { toast } from "sonner";
 import { formatUSD, formatZIG } from "../ui/utils";
@@ -12,6 +12,7 @@ const CurrencyRates = () => {
   const [newRate, setNewRate] = useState("");
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [isAdding, setIsAdding] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
@@ -49,7 +50,6 @@ const CurrencyRates = () => {
     try {
       const rateData = {
         date: selectedDate,
-        usdRate: 1, // USD is the base currency
         zigRate: parseFloat(newRate),
       };
       await Server.addCurrencyRate(rateData);
@@ -63,6 +63,26 @@ const CurrencyRates = () => {
       console.error(error);
     } finally {
       setIsAdding(false);
+    }
+  };
+
+  const handleFetchLatestRate = async () => {
+    setIsFetching(true);
+    try {
+      const response = await Server.fetchLatestRate();
+      const result = response.data;
+
+      if (result.success) {
+        toast.success(`Rate fetched: 1 USD = ${result.rate} ZiG (Source: ${result.source})`);
+        fetchRates(); // Refresh the list
+      } else {
+        toast.warning(result.error || "Could not fetch rate automatically. Please add manually.");
+      }
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.response?.data?.error || "Failed to fetch latest rate.");
+    } finally {
+      setIsFetching(false);
     }
   };
 
@@ -90,6 +110,18 @@ const CurrencyRates = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
+          <button
+            onClick={handleFetchLatestRate}
+            disabled={isFetching}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+          >
+            {isFetching ? (
+              <Loader className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            Fetch Today's Rate
+          </button>
           <button
             onClick={() => setIsModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"

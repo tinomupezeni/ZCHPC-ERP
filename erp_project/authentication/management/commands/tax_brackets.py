@@ -1,6 +1,6 @@
 # payroll_app/management/commands/seed_tax_brackets.py
 from django.core.management.base import BaseCommand
-from ...models import TaxBracket
+from payroll.payroll_models import TaxBracket
 from datetime import date
 
 class Command(BaseCommand):
@@ -38,4 +38,4 @@ class Command(BaseCommand):
             TaxBracket.objects.create(**data)
         self.stdout.write(self.style.SUCCESS(f'Successfully seeded {len(usd_brackets_data)} USD tax brackets.'))
 
-        self.stdout.write(self.style.SUCCESS('Tax bracket seeding complete! ✨'))
+        self.stdout.write(self.style.SUCCESS('Tax bracket seeding complete!'))

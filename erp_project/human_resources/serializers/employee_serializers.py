@@ -74,7 +74,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
     Serializes the Employees model with relationships.
     Handles creating Employees AND their initial deductions.
     """
-    
+
     # --- Read-only fields (Strings) ---
     user = serializers.StringRelatedField(read_only=True)
     position = serializers.StringRelatedField(read_only=True)
@@ -95,6 +95,36 @@ class EmployeeSerializer(serializers.ModelSerializer):
         queryset=Employees.objects.all(), source='reports_to', write_only=True, allow_null=True, required=False
     )
 
+    def to_representation(self, instance):
+        """Add department_id and position_id to output for frontend dropdowns."""
+        data = super().to_representation(instance)
+        data['department_id'] = instance.department.id if instance.department else None
+        data['position_id'] = instance.position.id if instance.position else None
+        return data
+
+    def validate(self, attrs):
+        """
+        Validate that the position belongs to the selected department.
+        """
+        department = attrs.get('department')
+        position = attrs.get('position')
+
+        # If updating, get current values from instance if not provided
+        if self.instance:
+            if department is None and 'department' not in attrs:
+                department = self.instance.department
+            if position is None and 'position' not in attrs:
+                position = self.instance.position
+
+        # If both department and position are set, validate they match
+        if department and position:
+            if position.department != department:
+                raise serializers.ValidationError({
+                    'position_id': f'Position "{position.title}" does not belong to department "{department.name}". Please select a position from the chosen department.'
+                })
+
+        return attrs
+
     # --- NEW: Deductions List from Frontend ---
     # This accepts: [{ "id": 1, "name": "NSSA" }, ...]
     deductions_data = serializers.ListField(
@@ -106,7 +136,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employees
         fields = [
-            'id', 'employee_id', 'first_name', 'surname', 'email', 'phone', 
+            'id', 'employee_id', 'first_name', 'surname', 'email', 'phone',
             'national_id', 'date_of_birth', 'gender', 'marital_status',
             'user', 'position', 'department', 'reports_to',
             'user_id', 'position_id', 'department_id', 'reports_to_id',
@@ -116,9 +146,9 @@ class EmployeeSerializer(serializers.ModelSerializer):
             'bank_name', 'bank_account', 'pension_fund', 'nssa_number',
             'zimra_tax_number', 'paye_number', 'pays_aids_levy',
             'emergency_contact_name', 'emergency_contact_number', 'emergency_contact_relationship',
-            'deductions_data' # <--- Add this here
+            'deductions_data'
         ]
-        read_only_fields = ('employee_id',) 
+        # employee_id is optional - auto-generated if not provided 
 
     @transaction.atomic
     def create(self, validated_data):

@@ -1,4 +1,4 @@
-import { Briefcase, Loader, Plus } from "lucide-react";
+import { Briefcase, Loader, Plus, Users } from "lucide-react";
 import React from "react";
 
 export default function ListedJobs({
@@ -15,6 +15,7 @@ export default function ListedJobs({
   getStatusBadge,
   handleActionSelect,
   setShowPostJobModal,
+  onViewApplicants, // New prop for viewing applicants
 }) {
   return (
     <div>
@@ -32,7 +33,9 @@ export default function ListedJobs({
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Closing Date
                 </th>
-
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Applicants
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
@@ -44,7 +47,7 @@ export default function ListedJobs({
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center">
+                  <td colSpan={7} className="px-6 py-8 text-center">
                     <Loader className="h-8 w-8 animate-spin mx-auto text-blue-600" />
                     <p className="mt-2 text-sm text-gray-500">
                       Loading job listings...
@@ -69,7 +72,20 @@ export default function ListedJobs({
                         day: "numeric",
                       })}
                     </td>
-
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <button
+                        onClick={() => onViewApplicants?.(job)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                          job.applicants > 0
+                            ? "bg-blue-100 text-blue-700 hover:bg-blue-200 cursor-pointer"
+                            : "bg-gray-100 text-gray-500"
+                        }`}
+                        disabled={job.applicants === 0}
+                      >
+                        <Users className="h-4 w-4" />
+                        <span>{job.applicants || 0}</span>
+                      </button>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {getStatusBadge(job.status)}
                     </td>
@@ -104,7 +120,7 @@ export default function ListedJobs({
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center">
+                  <td colSpan={7} className="px-6 py-8 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <Briefcase className="h-12 w-12 text-gray-400" />
                       <h3 className="mt-2 text-sm font-medium text-gray-900">

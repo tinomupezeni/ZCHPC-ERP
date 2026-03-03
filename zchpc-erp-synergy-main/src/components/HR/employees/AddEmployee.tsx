@@ -167,6 +167,24 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
               Employment Details
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* EC Number (Employee ID) */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  EC Number (Employee ID)
+                </label>
+                <input
+                  type="text"
+                  name="ecNumber"
+                  value={employee.ecNumber}
+                  onChange={handleChange}
+                  placeholder="Leave blank to auto-generate (e.g., EMP0001)"
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+                <span className="text-xs text-gray-500">
+                  Optional - System will generate if not provided
+                </span>
+              </div>
+
               {/* --- Department Selection with Inline Add --- */}
               <div className="col-span-1">
                 <label className="block text-sm font-medium text-gray-700 mb-1">

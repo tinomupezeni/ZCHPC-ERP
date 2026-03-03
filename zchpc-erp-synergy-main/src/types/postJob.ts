@@ -9,7 +9,12 @@ export type JobListing = {
   qualifications: string[];
   applicationProcess: string;
   location: string;
-  salaryRange: string;
+  salaryRange?: string;  // Legacy field
+  // Multi-currency salary fields
+  salaryUsdMin?: number | string | null;
+  salaryUsdMax?: number | string | null;
+  salaryZigMin?: number | string | null;
+  salaryZigMax?: number | string | null;
   contactEmail: string;
   responsibilities: string[];
   notes?: string;
