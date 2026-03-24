@@ -2,7 +2,7 @@ import React, { useState, ChangeEvent, FormEvent, useEffect } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import Modal from "@/components/ui/Modal";
+import Modal from "@/components/ui/modal";
 import { TrainingProgramCard, TrainingProgram } from "@/components/ui/training-program-card";
 import { SearchFilterBar } from "@/components/ui/search-filter";
 import Server from "@/services/Server";

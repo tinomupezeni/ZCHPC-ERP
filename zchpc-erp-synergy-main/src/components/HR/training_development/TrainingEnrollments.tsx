@@ -4,7 +4,7 @@ import { Separator } from "@/components/ui/separator";
 import { ClipboardList, Plus, User, BookOpen, Calendar, Pencil, Trash2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import Modal from "@/components/ui/Modal";
+import Modal from "@/components/ui/modal";
 import Server from "@/services/Server";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";

@@ -8,13 +8,15 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 import { toast } from "sonner";
 
+const API_URL = import.meta.env.VITE_API_URL || '';
+
 export default function DeductionsReport() {
   const [deductionsData, setDeductionsData] = useState([]);
 
   useEffect(() => {
     const fetchDeductionsData = async () => {
       try {
-        const res = await fetch("http://localhost:8000/api/deductions/"); // Assumed endpoint for deductions
+        const res = await fetch(`${API_URL}/api/deductions/`);
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
         }

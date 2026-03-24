@@ -17,7 +17,13 @@
       "Bash(npm ls:*)",
       "Bash(curl:*)",
       "Bash(ls:*)",
-      "Bash(findstr \"^C.*\\\\\")"
+      "Bash(findstr \"^C.*\\\\\")",
+      "Bash(find src -type d -exec sh -c 'touch \"\"$1/__init__.py\"\"' _ {} ;)",
+      "Bash(find:*)",
+      "Bash(xargs ls:*)",
+      "Bash(findstr:*)",
+      "Bash(done)",
+      "Bash(wc:*)"
     ]
   }
 }

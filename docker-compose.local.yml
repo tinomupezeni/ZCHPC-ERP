@@ -1,0 +1,117 @@
+# =============================================================================
+# ZCHPC ERP - Local Development Docker Compose
+# =============================================================================
+# Use this for local debugging before pushing to production
+#
+# Usage:
+#   docker compose -f docker-compose.local.yml up --build
+#   docker compose -f docker-compose.local.yml down -v
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Database
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    container_name: zchpc_local_db
+    environment:
+      POSTGRES_DB: erp_db
+      POSTGRES_USER: erp_user
+      POSTGRES_PASSWORD: localdev123
+    ports:
+      - "5432:5432"
+    volumes:
+      - local_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U erp_user -d erp_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Django API (built locally)
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: ./erp_project
+      dockerfile: Dockerfile
+    container_name: zchpc_local_api
+    environment:
+      - DEBUG=True
+      - DB_HOST=db
+      - DB_NAME=erp_db
+      - DB_USER=erp_user
+      - DB_PASSWORD=localdev123
+      - DB_PORT=5432
+      - SECRET_KEY=local-dev-secret-key-not-for-production
+      - ALLOWED_HOSTS=localhost,127.0.0.1,api,host.docker.internal
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001
+      - CSRF_TRUSTED_ORIGINS=http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001
+      - DJANGO_SUPERUSER_EMAIL=admin@local.dev
+      - DJANGO_SUPERUSER_PASSWORD=admin123
+      - DJANGO_SUPERUSER_FIRSTNAME=Local
+      - DJANGO_SUPERUSER_LASTNAME=Admin
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      # Mount source code for live reloading (optional - comment out for production-like testing)
+      # - ./erp_project:/app
+      - local_static_files:/app/staticfiles
+      - local_media_files:/app/mediafiles
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/health/"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # Main ERP Frontend (built locally)
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./zchpc-erp-synergy-main
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8000
+    container_name: zchpc_local_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # Employee Portal (built locally)
+  # ---------------------------------------------------------------------------
+  portal:
+    build:
+      context: ./employee-portal
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8000
+    container_name: zchpc_local_portal
+    ports:
+      - "3001:80"
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  local_postgres_data:
+  local_static_files:
+  local_media_files:

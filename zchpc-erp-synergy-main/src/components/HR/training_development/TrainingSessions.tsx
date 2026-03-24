@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, CalendarCheck, Edit2, Trash2, User, MapPin, BookOpen, Clock, RotateCw, CheckCircle } from "lucide-react";
-import Modal from "@/components/ui/Modal";
+import Modal from "@/components/ui/modal";
 import { format, parseISO } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";

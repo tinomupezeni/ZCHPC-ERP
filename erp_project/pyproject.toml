@@ -1,0 +1,127 @@
+[project]
+name = "zchpc-erp"
+version = "1.0.0"
+description = "ZCHPC Enterprise Resource Planning System"
+requires-python = ">=3.10"
+
+# =============================================================================
+# Ruff - Fast Python Linter & Formatter
+# =============================================================================
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # do not perform function calls in argument defaults
+    "B905",   # zip() without an explicit strict= parameter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*" = ["ARG001"]  # Unused function args OK in tests (fixtures)
+"**/migrations/*" = ["ALL"]  # Ignore all rules in migrations
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+section-order = ["future", "standard-library", "django", "third-party", "first-party", "local-folder"]
+
+[tool.ruff.lint.isort.sections]
+django = ["django", "rest_framework"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# =============================================================================
+# MyPy - Static Type Checking
+# =============================================================================
+
+[tool.mypy]
+python_version = "3.10"
+plugins = [
+    "mypy_django_plugin.main",
+    "mypy_drf_plugin.main",
+]
+strict = false
+warn_return_any = true
+warn_unused_ignores = true
+show_error_codes = true
+namespace_packages = true
+explicit_package_bases = true
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = [
+    "*.migrations.*",
+]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = [
+    "factory.*",
+    "rest_framework.*",
+]
+ignore_missing_imports = true
+
+[tool.django-stubs]
+django_settings_module = "erp_root.settings"
+
+# =============================================================================
+# Coverage
+# =============================================================================
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "@abstractmethod",
+]
+fail_under = 80
+show_missing = true
+
+# =============================================================================
+# Pytest
+# =============================================================================
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "erp_root.settings"
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+testpaths = ["tests"]
+addopts = "-v --tb=short --strict-markers -ra"
+markers = [
+    "unit: Unit tests (no database)",
+    "integration: Integration tests (may use database)",
+    "e2e: End-to-end tests",
+    "slow: Slow tests",
+]

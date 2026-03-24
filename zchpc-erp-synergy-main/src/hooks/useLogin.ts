@@ -31,6 +31,15 @@ export const useLogin = () => {
 
     try {
       const loggedInUser = await login(email, password);
+      
+      // Check if user is admin/superuser first
+      if (loggedInUser?.is_superuser || loggedInUser?.is_staff) {
+        toast.success(`Welcome back, ${loggedInUser.first_name}!`);
+        setPendingNavigation("/dashboard"); // or your admin route
+        return;
+      }
+
+      // For regular users, check for employee profile and role
       const rawRole = loggedInUser?.employee_profile?.role || loggedInUser?.role;
 
       if (rawRole) {
@@ -40,6 +49,7 @@ export const useLogin = () => {
         const targetRoute = ROLE_ROUTES[roleKey] || "/dashboard";
         setPendingNavigation(targetRoute);
       } else {
+        // Regular user without role/profile - this is an error
         toast.error("User profile incomplete. Contact Admin.");
         setIsSubmitting(false);
       }

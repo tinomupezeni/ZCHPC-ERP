@@ -80,9 +80,9 @@ class Server {
     return apiClient.delete(`${api_url}delete/biometric/${id}/`);
   };
 
-  // delete biometric record
+  // fetch audit logs
   static fetchLogs = () => {
-    return apiClient.get(`${api_url}/auth/logs/`, {
+    return apiClient.get(`${api_url}auth/logs/`, {
       headers: getAuthHeaders(),
     });
   };

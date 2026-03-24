@@ -6,7 +6,7 @@ import { Award, Download, Search, BadgeCheck, Plus, Edit2, Trash2, RotateCw } fr
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { format, parseISO, isValid } from "date-fns";
-import Modal from "@/components/ui/Modal";
+import Modal from "@/components/ui/modal";
 import Server from "@/services/Server";
 import { useToast } from "@/hooks/use-toast";
 

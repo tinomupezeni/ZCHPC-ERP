@@ -1,39 +1,60 @@
-"""erp_project URL Configuration
+"""
+ZCHPC ERP URL Configuration
 
-The `urlpatterns` list routes URLs to views. For more information please see:
+All API endpoints are now available at /api/v2/*
+The legacy v1 API endpoints have been removed.
+
+For API documentation, see /api/v2/docs/ (OpenAPI/Swagger)
+
+For more information please see:
     https://docs.djangoproject.com/en/4.1/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
+from django.http import JsonResponse
 from django.urls import include, path
-from rest_framework.routers import DefaultRouter
-from human_resources.views.org_views import AllowanceTypeViewSet, DeductionTypeViewSet
-from payroll.payroll_views import TaxBracketViewSet, PayrollPeriodViewSet
 
-# Router for root-level API endpoints
-api_router = DefaultRouter()
-api_router.register(r'allowance-types', AllowanceTypeViewSet, basename='allowance-type')
-api_router.register(r'deduction-types', DeductionTypeViewSet, basename='deduction-type')
-api_router.register(r'tax-brackets', TaxBracketViewSet, basename='tax-bracket')
-api_router.register(r'payroll-periods', PayrollPeriodViewSet, basename='payroll-period')
+from modules.identity.api.views import AdminDashboardView
+
+
+def health_check(request):
+    """Health check endpoint for Docker/Kubernetes."""
+    return JsonResponse({'status': 'healthy', 'service': 'zchpc-erp'})
+
 
 urlpatterns = [
+    # =========================================================================
+    # Health Check (for Docker/load balancers)
+    # =========================================================================
+    path('api/v2/health/', health_check, name='health_check'),
+
+    # =========================================================================
+    # Django Admin
+    # =========================================================================
     path('admin/', admin.site.urls),
-    path('api/auth/', include('authentication.urls')),
-    path('api/payroll/', include('payroll.payroll_urls')),
-    path('api/hr/', include('human_resources.hr_urls')),
-    path('api/procurement/', include('procurement.urls')),
-    path('api/admin/', include('administration.urls')),
-    path('api/portal/', include('employee_portal.urls')),  # Employee portal API
-    path('api/', include(api_router.urls)),  # Root-level API routes
+
+    # =========================================================================
+    # Admin Dashboard API
+    # =========================================================================
+    path('api/v2/admin/dashboard/', AdminDashboardView.as_view(), name='admin_dashboard'),
+
+    # =========================================================================
+    # API v2 - Modular Architecture
+    # =========================================================================
+    # All API endpoints follow clean architecture principles with clear
+    # separation between modules.
+    # =========================================================================
+    path('api/v2/auth/', include('modules.identity.api.urls', namespace='identity')),
+    path('api/v2/hr/', include('modules.hr.api.urls', namespace='hr')),
+    path('api/v2/attendance/', include('modules.attendance.api.urls', namespace='attendance')),
+    path('api/v2/leave/', include('modules.leave.api.urls', namespace='leave')),
+    path('api/v2/recruitment/', include('modules.recruitment.api.urls', namespace='recruitment')),
+    path('api/v2/payroll/', include('modules.payroll.api.urls', namespace='payroll')),
+    path('api/v2/accounts/', include('modules.accounts.api.urls', namespace='accounts_v2')),
+    path('api/v2/procurement/', include('modules.procurement.api.urls', namespace='procurement_v2')),
+    path('api/v2/portal/', include('modules.portal.api.urls', namespace='portal_v2')),
+
+    # =========================================================================
+    # Development Tools
+    # =========================================================================
     path("__reload__/", include("django_browser_reload.urls")),
 ]

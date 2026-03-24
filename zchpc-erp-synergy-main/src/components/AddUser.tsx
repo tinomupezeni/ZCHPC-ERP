@@ -17,6 +17,7 @@ export default function AddUser({ setShowModal, onSuccess }) {
     role: "",
     email: "",
     department: "",
+    password: "",
   });
   const [createdCredentials, setCreatedCredentials] = useState(null);
 
@@ -285,6 +286,26 @@ export default function AddUser({ setShowModal, onSuccess }) {
                 className="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
               />
 
+              <div className="space-y-1">
+                <label className="text-[12px] font-bold text-slate-400 uppercase">
+                  Password
+                </label>
+                <input
+                  placeholder="Enter password (min 8 characters)"
+                  type="password"
+                  value={employee.password}
+                  onChange={(e) =>
+                    setEmployee({ ...employee, password: e.target.value })
+                  }
+                  required
+                  minLength={8}
+                  className="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="text-xs text-slate-400">
+                  This will be the user's login password
+                </p>
+              </div>
+
               <div className="flex justify-end pt-4">
                 <button
                   type="submit"
@@ -331,10 +352,16 @@ export default function AddUser({ setShowModal, onSuccess }) {
                   {getDeptName()}
                 </span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between border-b pb-2">
                 <span className="text-slate-500 text-sm">Email</span>
                 <span className="font-semibold text-slate-800">
                   {employee.email}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 text-sm">Password</span>
+                <span className="font-semibold text-slate-800">
+                  {"•".repeat(employee.password.length || 8)}
                 </span>
               </div>
             </div>
@@ -391,14 +418,14 @@ export default function AddUser({ setShowModal, onSuccess }) {
               </div>
               <div className="p-4 bg-slate-900 rounded-xl text-left">
                 <label className="text-[12px] text-slate-500 font-bold uppercase tracking-widest">
-                  Temporary Password
+                  Password
                 </label>
                 <div className="flex justify-between items-center mt-1">
                   <code className="text-green-400 font-mono text-sm">
-                    {createdCredentials.password}
+                    {employee.password || createdCredentials.password}
                   </code>
                   <button
-                    onClick={() => handleCopy(createdCredentials.password)}
+                    onClick={() => handleCopy(employee.password || createdCredentials.password)}
                     className="text-slate-400 hover:text-white"
                   >
                     <Copy className="h-4 w-4" />

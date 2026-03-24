@@ -32,7 +32,7 @@ export const attendanceService = {
    */
   async getQRToken(): Promise<QRTokenResponse> {
     // This endpoint is public, doesn't need auth
-    const baseUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api';
+    const baseUrl = import.meta.env.VITE_API_URL || '';
     const response = await axios.get<QRTokenResponse>(`${baseUrl}/portal/attendance/qr/token/`);
     return response.data;
   },

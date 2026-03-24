@@ -1,0 +1,3 @@
+"""
+Recruitment module tests.
+"""

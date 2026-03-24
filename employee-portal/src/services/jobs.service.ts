@@ -8,7 +8,7 @@ import type {
   ApplicationStatusResponse,
 } from '@/types/jobs.types';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 // Create axios instance without auth for public endpoints
 const publicApi = axios.create({
@@ -19,8 +19,8 @@ export const jobsService = {
   /**
    * Get all open jobs
    */
-  async getJobs(): Promise<JobsListResponse> {
-    const response = await publicApi.get<JobsListResponse>('/jobs/');
+  async getJobs(): Promise<Job[] | JobsListResponse> {
+    const response = await publicApi.get<Job[] | JobsListResponse>('/jobs/');
     return response.data;
   },
 

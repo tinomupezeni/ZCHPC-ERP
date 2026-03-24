@@ -8,12 +8,14 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 import { toast } from "sonner";
 
+const API_URL = import.meta.env.VITE_API_URL || '';
+
 export default function PAYEReport() {
   const [payeData, setPayeData] = useState([]);
 
   useEffect(() => {
     // Fetch PAYE data from your backend API
-    fetch("http://localhost:8000/api/paye/") // Correct endpoint for PAYE data
+    fetch(`${API_URL}/api/paye/`)
       .then((res) => {
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);

@@ -8,12 +8,14 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 import { toast } from "sonner";
 
+const API_URL = import.meta.env.VITE_API_URL || '';
+
 export default function LeaveBalanceReport() {
   const [leaveBalances, setLeaveBalances] = useState([]);
 
   useEffect(() => {
     // Fetch leave balance data from your backend API
-    fetch("http://localhost:8000/api/leavebalances/") // Correct endpoint for leave data
+    fetch(`${API_URL}/api/leavebalances/`)
       .then((res) => {
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);

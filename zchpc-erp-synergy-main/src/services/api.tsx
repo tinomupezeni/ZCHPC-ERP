@@ -1,10 +1,11 @@
 // src/api.js
 import axios from 'axios';
 
-export const API_BASE_URL = "http://127.0.0.1:8000/api/";
+const API_URL = import.meta.env.VITE_API_URL || '';
+export const API_BASE_URL = `${API_URL}/api/v2/`;
 
 const api = axios.create({
-  baseURL: 'http://127.0.0.1:8000/api',
+  baseURL: `${API_URL}/api/v2`,
 });
 
 // Automatically add the JWT token to every request

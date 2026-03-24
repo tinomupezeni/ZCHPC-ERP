@@ -1,0 +1,125 @@
+# =============================================================================
+# ZCHPC ERP - Production Deployment
+# =============================================================================
+# VM IP: 10.50.14.12
+#
+# Services:
+#   - API:             http://10.50.14.12:8000
+#   - Main ERP:        http://10.50.14.12:3000
+#   - Employee Portal: http://10.50.14.12:3001
+#
+# cPanel Reverse Proxy:
+#   zchpcerp.zchpc.ac.zw    -> http://10.50.14.12:3000
+#   employees.zchpc.ac.zw   -> http://10.50.14.12:3001
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # PostgreSQL Database
+  # ===========================================================================
+  db:
+    image: postgres:16-alpine
+    container_name: zchpc_db
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - erp_network
+
+  # ===========================================================================
+  # Django Backend API - Port 8000
+  # http://10.50.14.12:8000
+  # ===========================================================================
+  api:
+    image: tinotenda762/zchpc-erp-api:${IMAGE_TAG:-latest}
+    container_name: zchpc_api
+    restart: always
+    environment:
+      - DEBUG=False
+      - SECRET_KEY=${SECRET_KEY}
+      - ALLOWED_HOSTS=*,10.50.14.12,zchpcerp.zchpc.ac.zw,employees.zchpc.ac.zw
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB}
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - CORS_ALLOW_ALL_ORIGINS=False
+      - CORS_ALLOWED_ORIGINS=http://10.50.14.12:3000,http://10.50.14.12:3001,https://zchpcerp.zchpc.ac.zw,https://employees.zchpc.ac.zw,http://zchpcerp.zchpc.ac.zw,http://employees.zchpc.ac.zw
+      - CSRF_TRUSTED_ORIGINS=http://10.50.14.12:3000,http://10.50.14.12:3001,https://zchpcerp.zchpc.ac.zw,https://employees.zchpc.ac.zw,http://zchpcerp.zchpc.ac.zw,http://employees.zchpc.ac.zw
+      # Admin user (created on first startup)
+      - DJANGO_SUPERUSER_EMAIL=${ADMIN_EMAIL}
+      - DJANGO_SUPERUSER_PASSWORD=${ADMIN_PASSWORD}
+      - DJANGO_SUPERUSER_FIRSTNAME=${ADMIN_FIRSTNAME:-Admin}
+      - DJANGO_SUPERUSER_LASTNAME=${ADMIN_LASTNAME:-User}
+    volumes:
+      - api_static:/app/staticfiles
+      - api_media:/app/mediafiles
+    ports:
+      - "0.0.0.0:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - erp_network
+
+  # ===========================================================================
+  # Main ERP Frontend - Port 3000
+  # http://10.50.14.12:3000
+  # cPanel: zchpcerp.zchpc.ac.zw -> http://10.50.14.12:3000
+  # ===========================================================================
+  frontend:
+    image: tinotenda762/zchpc-erp-frontend:${IMAGE_TAG:-latest}
+    container_name: zchpc_frontend
+    restart: always
+    ports:
+      - "0.0.0.0:3000:80"
+    depends_on:
+      - api
+    networks:
+      - erp_network
+
+  # ===========================================================================
+  # Employee Portal - Port 3001
+  # http://10.50.14.12:3001
+  # cPanel: employees.zchpc.ac.zw -> http://10.50.14.12:3001
+  # ===========================================================================
+  portal:
+    image: tinotenda762/zchpc-erp-portal:${IMAGE_TAG:-latest}
+    container_name: zchpc_portal
+    restart: always
+    ports:
+      - "0.0.0.0:3001:80"
+    depends_on:
+      - api
+    networks:
+      - erp_network
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  postgres_data:
+  api_static:
+  api_media:
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  erp_network:
+    driver: bridge

@@ -7,13 +7,15 @@ import { motion } from "framer-motion";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 
+const API_URL = import.meta.env.VITE_API_URL || '';
+
 export default function BasicSalaryReport() {
   const [payrolls, setPayrolls] = useState([]);
   console.log('we in it');
-  
+
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/payrolls/") // adjust backend URL
+    fetch(`${API_URL}/api/payrolls/`)
       .then((res) => res.json())
       .then((data) => setPayrolls(data))
       .catch((err) => console.error("Error fetching payrolls:", err));

@@ -1,33 +1,93 @@
 """
-Django settings for erp_root project.
+Django settings for ZCHPC ERP project.
+
+Architecture:
+    This project follows a modular monolith architecture with clean architecture
+    principles. All API endpoints are at /api/v2/*
+
+    Modules (src/modules/):
+        - identity: CustomUser, AuditLog, JWT authentication
+        - hr: Employee, Department, Position, Role
+        - attendance: AttendanceRecord
+        - leave: LeaveType, LeaveBalance, LeaveRequest, CompanyEvent
+        - recruitment: Job, Candidate, JobApplication
+        - payroll: Payroll, TaxBracket, ExchangeRate
+        - accounts: Currency, AccountChart, Journal, AccountMove
+        - procurement: Vendor, PurchaseRequest, PurchaseOrder
+        - portal: ExpenseClaim, SupportTicket, Document, Notification
+
+    Each module follows clean architecture layers:
+        - api/: Views, serializers, URL routing
+        - application/: Use cases, services, commands, queries
+        - domain/: Entities, value objects, events, business rules
+        - infrastructure/: Repositories, external adapters, Django models
+
+Module Structure:
+    src/
+    ├── shared/           # Shared kernel (base classes, value objects)
+    └── modules/          # Feature modules
+
+For more details, see docs/ARCHITECTURE.md
 """
 
+import os
+import sys
 from pathlib import Path
-from datetime import timedelta  # <-- Moved to the top
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'django-insecure-!7q@p68fnw2-4_s%b_mk2qojko=p40^w131l#%2%v2jy4ghmv='
-DEBUG = True
-ALLOWED_HOSTS = ['0.0.0.0', 'localhost', '127.0.0.1', '192.168.80.92']
+# Add src directory to Python path for clean imports
+# This enables: from modules.hr.domain.entities import Employee
+SRC_DIR = BASE_DIR / 'src'
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+# --- Core Settings (from environment variables for Docker) ---
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-!7q@p68fnw2-4_s%b_mk2qojko=p40^w131l#%2%v2jy4ghmv=')
+DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
+
+# Production domains: zchpcerp.zchpc.ac.zw (main ERP), employees.zchpc.ac.zw (portal)
+DEFAULT_ALLOWED_HOSTS = ','.join([
+    'localhost',
+    '127.0.0.1',
+    '0.0.0.0',
+    'api',
+    'nginx',
+    'zchpcerp.zchpc.ac.zw',
+    'employees.zchpc.ac.zw',
+    '.zchpc.ac.zw',  # Wildcard for all subdomains
+])
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', DEFAULT_ALLOWED_HOSTS).split(',')
 
 # --- Application definition ---
 
 INSTALLED_APPS = [
+    # Django core apps
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    "human_resources.app.HumanResourcesConfig",
 
-    'authentication',
-    "payroll",
-    "procurement",
-    "administration",
-    "employee_portal",
+    # =========================================================================
+    # New Modular Architecture Apps (src/modules/)
+    # =========================================================================
+    # Each module contains its own models, views, serializers, and business logic.
+    # Models are in infrastructure/persistence/models.py with db_table set
+    # to match existing tables for backwards compatibility.
+    # =========================================================================
+    'modules.identity.apps.IdentityConfig',       # CustomUser, AuditLog
+    'modules.hr.apps.HrConfig',                   # Employee, Department, Position
+    'modules.attendance.apps.AttendanceConfig',   # AttendanceRecord
+    'modules.leave.apps.LeaveConfig',             # LeaveType, LeaveBalance, LeaveRequest
+    'modules.recruitment.apps.RecruitmentConfig', # Job, Candidate, JobApplication
+    'modules.payroll.apps.PayrollConfig',         # Payroll, TaxBracket, ExchangeRate
+    'modules.accounts.apps.AccountsConfig',       # Account, Journal, JournalEntry
+    'modules.procurement.apps.ProcurementConfig', # Vendor, PurchaseRequest, PurchaseOrder
+    'modules.portal.apps.PortalConfig',           # ExpenseClaim, SupportTicket, Document
 
     # Third-party apps
     'rest_framework',
@@ -41,19 +101,16 @@ INTERNAL_IPS = ["127.0.0.1"]
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',  # <-- Moved high up, before CommonMiddleware
-    'django.middleware.common.CommonMiddleware', # <-- Kept only one
+    'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'authentication.middleware.JWTAuthenticationMiddleware',  # JWT Auth before RBAC
-    'authentication.middleware.RBACMiddleware',  # Custom RBAC Middleware
+    'modules.identity.infrastructure.middleware.JWTAuthenticationMiddleware',  # JWT Auth
+    'modules.identity.infrastructure.middleware.RBACMiddleware',  # Role-based access control
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    "django_browser_reload.middleware.BrowserReloadMiddleware", # <-- Kept only one
+    "django_browser_reload.middleware.BrowserReloadMiddleware",
 ]
-
-# Set to True for development, but remove CORS_ALLOWED_ORIGINS
-CORS_ALLOW_ALL_ORIGINS = True
 
 ROOT_URLCONF = 'erp_root.urls'
 
@@ -68,7 +125,7 @@ TEMPLATES = [
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [
             BASE_DIR / 'erp_root/templates',
-            BASE_DIR / 'authentication/templates/registration', # Correct path
+            BASE_DIR / 'src/modules/identity/templates/registration',  # New modular location
         ],
         'APP_DIRS': True,
         'OPTIONS': {
@@ -85,31 +142,52 @@ TEMPLATES = [
 WSGI_APPLICATION = 'erp_root.wsgi.application'
 
 # --- Database ---
+# Uses environment variables for Docker deployment
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'erp_db',
-        'USER': 'erp_user',
-        'PASSWORD': 'erp@1234',
-        'HOST': 'localhost',      # Or the IP address of your DB server
-        'PORT': '5432',           # Default PostgreSQL port
+        'NAME': os.environ.get('DB_NAME', 'erp_db'),
+        'USER': os.environ.get('DB_USER', 'erp_user'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', 'erp@1234'),
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
     }
 }
 
 # --- CORS ---
-# This list is ignored because CORS_ALLOW_ALL_ORIGINS = True
-# CORS_ALLOWED_ORIGINS = [ ... ]
+# In production, set CORS_ALLOW_ALL_ORIGINS=False and use CORS_ALLOWED_ORIGINS
+CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'True').lower() in ('true', '1', 'yes')
 
-CORS_ALLOW_METHODS = [ 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', ]
-CORS_ALLOW_HEADERS = [ 'accept', 'authorization', 'content-type', 'origin', 'user-agent', 'x-csrftoken', 'x-requested-with', ]
-CORS_EXPOSE_HEADERS = [ 'Content-Type', 'X-CSRFToken', ]
+# Production CORS origins (used when CORS_ALLOW_ALL_ORIGINS=False)
+DEFAULT_CORS_ORIGINS = ','.join([
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:8080',
+    'http://localhost:8081',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001',
+    'http://127.0.0.1:8080',
+    'http://127.0.0.1:8081',
+    'https://zchpcerp.zchpc.ac.zw',
+    'https://employees.zchpc.ac.zw',
+    'http://zchpcerp.zchpc.ac.zw',
+    'http://employees.zchpc.ac.zw',
+])
+CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', DEFAULT_CORS_ORIGINS).split(',')
+
+# Allow credentials (cookies, authorization headers)
+CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOW_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
+CORS_ALLOW_HEADERS = ['accept', 'authorization', 'content-type', 'origin', 'user-agent', 'x-csrftoken', 'x-requested-with']
+CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
 
 
 # --- Authentication ---
-AUTH_USER_MODEL = 'authentication.CustomUser'
+AUTH_USER_MODEL = 'identity.CustomUser'  # New modular location
 
 AUTHENTICATION_BACKENDS = [
-    'authentication.authentication.EmailBackend',  # Corrected path
+    'modules.identity.infrastructure.authentication.EmailBackend',  # New modular location
     'django.contrib.auth.backends.ModelBackend',
 ]
 
@@ -143,6 +221,30 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-# --- Static & AutoField ---
-STATIC_URL = '/static/' # Kept the single, correct definition
+# --- Static & Media Files ---
+STATIC_URL = os.environ.get('STATIC_URL', '/static/')
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+MEDIA_URL = os.environ.get('MEDIA_URL', '/media/')
+MEDIA_ROOT = BASE_DIR / 'mediafiles'
+
+# --- CSRF Trusted Origins (for Docker/production) ---
+DEFAULT_CSRF_ORIGINS = ','.join([
+    'http://localhost',
+    'http://127.0.0.1',
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:8000',
+    'http://localhost:8080',
+    'http://localhost:8081',
+    'http://127.0.0.1:8080',
+    'http://127.0.0.1:8081',
+    'https://zchpcerp.zchpc.ac.zw',
+    'https://employees.zchpc.ac.zw',
+    'http://zchpcerp.zchpc.ac.zw',
+    'http://employees.zchpc.ac.zw',
+])
+CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', DEFAULT_CSRF_ORIGINS).split(',')
+
+# --- AutoField ---
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

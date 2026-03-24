@@ -1,0 +1,67 @@
+# =============================================================================
+# ZCHPC ERP - Development Override
+# =============================================================================
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# This override enables:
+#   - Hot-reload for Django
+#   - Source code mounting for live changes
+#   - Debug mode
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # Django API - Development Mode
+  # ===========================================================================
+  api:
+    build:
+      context: ./erp_project
+      dockerfile: Dockerfile
+      target: production
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=dev-secret-key-not-for-production
+      - ALLOWED_HOSTS=*
+    volumes:
+      - ./erp_project:/app
+      - /app/staticfiles
+      - /app/mediafiles
+      - /app/venv
+      - /app/__pycache__
+    command: >
+      sh -c "
+        python manage.py migrate --noinput &&
+        python manage.py runserver 0.0.0.0:8000
+      "
+
+  # ===========================================================================
+  # Frontend - Development Mode with hot-reload
+  # ===========================================================================
+  frontend:
+    build:
+      context: ./zchpc-erp-synergy-main
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./zchpc-erp-synergy-main:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    ports:
+      - "${FRONTEND_PORT:-3000}:5173"
+    command: npm run dev -- --host 0.0.0.0
+
+  # ===========================================================================
+  # Portal - Development Mode with hot-reload
+  # ===========================================================================
+  portal:
+    build:
+      context: ./employee-portal
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./employee-portal:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    ports:
+      - "${PORTAL_PORT:-3001}:5173"
+    command: npm run dev -- --host 0.0.0.0

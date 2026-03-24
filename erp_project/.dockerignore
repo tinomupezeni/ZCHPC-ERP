@@ -1,0 +1,81 @@
+# =============================================================================
+# ZCHPC ERP - Docker Ignore File
+# =============================================================================
+# Files and directories to exclude from the Docker build context
+
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+.env
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Development files
+*.sqlite3
+db.sqlite3
+*.log
+*.pot
+
+# Static and media (generated in container)
+staticfiles/
+mediafiles/
+
+# Docker files (already in context)
+docker-compose*.yml
+Dockerfile*
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Misc
+*.bak
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Node.js (if any frontend assets)
+node_modules/
+package-lock.json
+package.json
+tailwind.config.js
+
+# Local environment files
+.env
+.env.local
+.env.*.local
+
+# Claude/AI
+.claude/

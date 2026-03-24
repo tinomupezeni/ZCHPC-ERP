@@ -1,0 +1,162 @@
+# =============================================================================
+# ZCHPC ERP - Full Stack Docker Compose
+# =============================================================================
+# Includes: PostgreSQL, Django API, Main ERP Frontend, Employee Portal
+#
+# Usage:
+#   Production:  docker-compose up -d
+#   Development: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# Access:
+#   - Main ERP:        http://localhost (or http://localhost:3000)
+#   - Employee Portal: http://localhost:3001
+#   - API:             http://localhost:8000/api/v2/
+#   - API (via nginx): http://localhost/api/v2/
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # PostgreSQL Database
+  # ===========================================================================
+  db:
+    image: postgres:16-alpine
+    container_name: zchpc_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-erp_db}
+      POSTGRES_USER: ${POSTGRES_USER:-erp_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-erp@1234}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-erp_user} -d ${POSTGRES_DB:-erp_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - erp_network
+
+  # ===========================================================================
+  # Django Backend API
+  # ===========================================================================
+  api:
+    build:
+      context: ./erp_project
+      dockerfile: Dockerfile
+      target: production
+    container_name: zchpc_api
+    restart: unless-stopped
+    environment:
+      - DEBUG=${DEBUG:-False}
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,api,nginx}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-erp_db}
+      - DB_USER=${POSTGRES_USER:-erp_user}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-erp@1234}
+      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-http://localhost,http://127.0.0.1}
+    volumes:
+      - api_static:/app/staticfiles
+      - api_media:/app/mediafiles
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - erp_network
+
+  # ===========================================================================
+  # Main ERP Frontend (Admin Dashboard)
+  # ===========================================================================
+  frontend:
+    build:
+      context: ./zchpc-erp-synergy-main
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    container_name: zchpc_frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - erp_network
+
+  # ===========================================================================
+  # Employee Portal Frontend
+  # ===========================================================================
+  portal:
+    build:
+      context: ./employee-portal
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    container_name: zchpc_portal
+    restart: unless-stopped
+    ports:
+      - "${PORTAL_PORT:-3001}:80"
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - erp_network
+
+  # ===========================================================================
+  # Nginx Reverse Proxy (Production)
+  # ===========================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: zchpc_nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - api_static:/app/staticfiles:ro
+      - api_media:/app/mediafiles:ro
+    depends_on:
+      - api
+      - frontend
+      - portal
+    networks:
+      - erp_network
+    profiles:
+      - production
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  postgres_data:
+    name: zchpc_postgres_data
+  api_static:
+    name: zchpc_api_static
+  api_media:
+    name: zchpc_api_media
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  erp_network:
+    name: zchpc_network
+    driver: bridge

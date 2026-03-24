@@ -32,7 +32,9 @@ export function JobsListPage() {
     try {
       setIsLoading(true);
       const response = await jobsService.getJobs();
-      setJobs(response.jobs);
+      // Handle both array response and { jobs: [] } response
+      const jobsList = Array.isArray(response) ? response : (response.jobs || []);
+      setJobs(jobsList);
     } catch (err) {
       setError('Failed to load job listings. Please try again later.');
       console.error('Failed to load jobs:', err);

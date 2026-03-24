@@ -8,13 +8,15 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 import { toast } from "sonner";
 
+const API_URL = import.meta.env.VITE_API_URL || '';
+
 export default function NSSAReport() {
   const [nssaData, setNssaData] = useState([]);
 
   useEffect(() => {
     const fetchNSSAData = async () => {
       try {
-        const res = await fetch("http://localhost:8000/api/nssa/"); // Correct endpoint for NSSA data
+        const res = await fetch(`${API_URL}/api/nssa/`);
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
         }
