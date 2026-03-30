@@ -309,7 +309,7 @@ class DjangoEmployeeRepository(IEmployeeRepository):
             pension_fund=db_employee.pension_fund or "",
             emergency_contact=EmergencyContact(
                 name=db_employee.emergency_contact_name or "",
-                phone=db_employee.emergency_contact_number or "",
+                number=db_employee.emergency_contact_number or "",
                 relationship=db_employee.emergency_contact_relationship or "",
             ),
         )

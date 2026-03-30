@@ -292,12 +292,12 @@ class TestEmergencyContact:
         """Test creating emergency contact."""
         contact = EmergencyContact(
             name="John Doe",
-            phone="+263771234567",
+            number="+263771234567",
             relationship="Spouse",
         )
 
         assert contact.name == "John Doe"
-        assert contact.phone == "+263771234567"
+        assert contact.number == "+263771234567"
         assert contact.relationship == "Spouse"
         assert not contact.is_empty
 
@@ -307,15 +307,16 @@ class TestEmergencyContact:
 
         assert contact.is_empty
         assert contact.name == ""
-        assert contact.phone == ""
+        assert contact.number == ""
 
     def test_str_representation(self):
         """Test string representation."""
         contact = EmergencyContact(
             name="Jane Doe",
-            phone="+263771234567",
+            number="+263771234567",
             relationship="Sister",
         )
 
         assert "Jane Doe" in str(contact)
         assert "Sister" in str(contact)
+        assert "+263771234567" in str(contact)
