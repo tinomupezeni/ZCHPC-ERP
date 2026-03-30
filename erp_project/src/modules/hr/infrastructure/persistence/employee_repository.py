@@ -174,7 +174,7 @@ class DjangoEmployeeRepository(IEmployeeRepository):
             paye_number=employee.statutory_info.paye_number,
             pays_aids_levy=employee.statutory_info.pays_aids_levy,
             emergency_contact_name=employee.emergency_contact.name,
-            emergency_contact_number=employee.emergency_contact.phone,
+            emergency_contact_number=employee.emergency_contact.number,
             emergency_contact_relationship=employee.emergency_contact.relationship,
         )
         db_employee.save()
@@ -216,7 +216,7 @@ class DjangoEmployeeRepository(IEmployeeRepository):
             paye_number=employee.statutory_info.paye_number,
             pays_aids_levy=employee.statutory_info.pays_aids_levy,
             emergency_contact_name=employee.emergency_contact.name,
-            emergency_contact_number=employee.emergency_contact.phone,
+            emergency_contact_number=employee.emergency_contact.number,
             emergency_contact_relationship=employee.emergency_contact.relationship,
         )
 

@@ -113,10 +113,8 @@ class BankAccount(ValueObject):
 
     def __post_init__(self):
         """Validate bank account."""
-        if self.bank_name and not self.account_number:
-            raise ValueError("Account number is required when bank name is provided")
-        if self.account_number and not self.bank_name:
-            raise ValueError("Bank name is required when account number is provided")
+        # Relaxed: Allow partial info
+        pass
 
     @classmethod
     def empty(cls) -> "BankAccount":

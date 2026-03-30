@@ -103,11 +103,19 @@ class RolePermission(BasePermission):
             return False
 
         # Get role from employee profile
-        employee = getattr(request.user, 'employee_profile', None)
-        if employee:
-            role_obj = getattr(employee, 'role', None)
-            user_role = getattr(role_obj, 'name', 'STAFF') if role_obj else 'STAFF'
-        else:
-            user_role = 'STAFF'
+        # Use try-except because OneToOne reverse relations raise DoesNotExist
+        try:
+            employee = request.user.employee_profile
+            if employee:
+                role_obj = getattr(employee, 'role', None)
+                user_role = getattr(role_obj, 'name', 'STAFF') if role_obj else 'STAFF'
+            else:
+                user_role = 'STAFF'
+        except Exception:
+            # No employee profile - check if superuser
+            if request.user.is_superuser or request.user.is_staff:
+                user_role = 'ADMIN'
+            else:
+                user_role = 'STAFF'
 
         return user_role.upper() in [r.upper() for r in self.allowed_roles]

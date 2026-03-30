@@ -5,8 +5,9 @@ export const getDepartment = () => {
   return apiClient.get("/hr/departments/");
 };
 
-export const addDepartment = (payload) => {
-  return apiClient.post("/hr/departments/", payload);
+export const addDepartment = async (payload) => {
+  const response = await apiClient.post("/hr/departments/", payload);
+  return response.data;
 };
 
 export const updateRole = async (id, data) => {

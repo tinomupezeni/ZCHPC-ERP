@@ -2,6 +2,7 @@
 Employee ID value object with generation and validation.
 
 Handles employee identifiers in the format EMP0001, EMP0002, etc.
+Also supports UUID-based employee IDs for newer records.
 
 Example:
     emp_id = EmployeeId("EMP0001")
@@ -9,8 +10,10 @@ Example:
 """
 
 import re
+import uuid as uuid_module
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Union
+from uuid import UUID
 
 from shared.domain.base.value_object import ValueObject
 from shared.domain.exceptions import ValidationError
@@ -21,7 +24,9 @@ class EmployeeId(ValueObject):
     """
     Value object representing an employee identifier.
 
-    Format: EMP followed by zero-padded number (EMP0001, EMP0002, etc.)
+    Supports two formats:
+    - Legacy: EMP followed by zero-padded number (EMP0001, EMP0002, etc.)
+    - UUID: Standard UUID format
 
     Attributes:
         value: The employee ID string
@@ -39,6 +44,12 @@ class EmployeeId(ValueObject):
     # Employee ID pattern: EMP followed by digits
     EMPLOYEE_ID_PATTERN = re.compile(r"^EMP(\d{4,6})$", re.IGNORECASE)
 
+    # UUID pattern
+    UUID_PATTERN = re.compile(
+        r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        re.IGNORECASE
+    )
+
     # Prefix for employee IDs
     PREFIX = "EMP"
 
@@ -47,20 +58,34 @@ class EmployeeId(ValueObject):
 
     def __post_init__(self) -> None:
         """Validate and normalize employee ID on creation."""
-        if not self.value:
+        # Handle UUID objects by converting to string
+        raw_value = self.value
+        if isinstance(raw_value, UUID):
+            raw_value = str(raw_value)
+            object.__setattr__(self, "value", raw_value)
+
+        if not raw_value:
             raise ValidationError(
                 "Employee ID cannot be empty",
                 code="EMPTY_EMPLOYEE_ID",
             )
 
-        # Normalize: uppercase
-        normalized = self.value.strip().upper()
+        # Convert to string if needed
+        str_value = str(raw_value).strip()
+
+        # Check if it's a UUID format
+        if self.UUID_PATTERN.match(str_value):
+            object.__setattr__(self, "value", str_value.lower())
+            return
+
+        # Otherwise, normalize as legacy format: uppercase
+        normalized = str_value.upper()
         object.__setattr__(self, "value", normalized)
 
-        # Validate format
+        # Validate legacy format
         if not self.EMPLOYEE_ID_PATTERN.match(normalized):
             raise ValidationError(
-                f"Invalid Employee ID format: {self.value}. Expected format: EMP0001",
+                f"Invalid Employee ID format: {self.value}. Expected format: EMP0001 or UUID",
                 code="INVALID_EMPLOYEE_ID_FORMAT",
                 details={"employee_id": self.value},
             )
@@ -101,8 +126,15 @@ class EmployeeId(ValueObject):
         return cls(value=value)
 
     @property
+    def is_uuid(self) -> bool:
+        """Check if this is a UUID-based employee ID."""
+        return bool(self.UUID_PATTERN.match(self.value))
+
+    @property
     def numeric_part(self) -> int:
-        """Extract the numeric portion of the employee ID."""
+        """Extract the numeric portion of the employee ID (legacy format only)."""
+        if self.is_uuid:
+            return 0  # UUIDs don't have a numeric part
         match = self.EMPLOYEE_ID_PATTERN.match(self.value)
         if match:
             return int(match.group(1))

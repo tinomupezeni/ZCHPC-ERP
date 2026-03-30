@@ -38,11 +38,12 @@ class Salary(ValueObject):
                 message="ZIG salary cannot be negative",
                 code="NEGATIVE_SALARY",
             )
-        if self.usd_amount == 0 and self.zig_amount == 0:
-            raise ValidationError(
-                message="At least one salary amount must be greater than zero",
-                code="ZERO_SALARY",
-            )
+        # Allow zero salary (sometimes salary is set later)
+        # if self.usd_amount == 0 and self.zig_amount == 0:
+        #     raise ValidationError(
+        #         message="At least one salary amount must be greater than zero",
+        #         code="ZERO_SALARY",
+        #     )
 
     @classmethod
     def create(

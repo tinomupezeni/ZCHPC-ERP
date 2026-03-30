@@ -58,6 +58,7 @@ class CreateEmployeeCommand:
     date_joined: date | None = None
     contract_from: date | None = None
     contract_to: date | None = None
+    leave_days_entitled: int = 22
     usd_salary: Decimal | None = None
     zig_salary: Decimal | None = None
     pay_frequency: str = "Monthly"
@@ -69,7 +70,7 @@ class CreateEmployeeCommand:
     pays_aids_levy: bool = True
     pension_fund: str | None = None
     emergency_contact_name: str | None = None
-    emergency_contact_phone: str | None = None
+    emergency_contact_number: str | None = None
     emergency_contact_relationship: str | None = None
     user_id: UUID | None = None
 
@@ -93,6 +94,7 @@ class UpdateEmployeeCommand:
     reports_to_id: int | None = None
     contract_from: date | None = None
     contract_to: date | None = None
+    leave_days_entitled: int | None = None
     usd_salary: Decimal | None = None
     zig_salary: Decimal | None = None
     pay_frequency: str | None = None
@@ -104,7 +106,7 @@ class UpdateEmployeeCommand:
     pays_aids_levy: bool | None = None
     pension_fund: str | None = None
     emergency_contact_name: str | None = None
-    emergency_contact_phone: str | None = None
+    emergency_contact_number: str | None = None
     emergency_contact_relationship: str | None = None
 
 
@@ -203,6 +205,8 @@ class EmployeeService:
             date_joined=command.date_joined or date.today(),
             contract_from=command.contract_from,
             contract_to=command.contract_to,
+            leave_days_entitled=command.leave_days_entitled,
+            is_active=True,
             salary=salary,
             pay_frequency=PayFrequency.from_string(command.pay_frequency),
             bank_account=BankAccount(
@@ -218,7 +222,7 @@ class EmployeeService:
             pension_fund=command.pension_fund or "",
             emergency_contact=EmergencyContact(
                 name=command.emergency_contact_name or "",
-                phone=command.emergency_contact_phone or "",
+                number=command.emergency_contact_number or "",
                 relationship=command.emergency_contact_relationship or "",
             ),
         )
@@ -278,7 +282,7 @@ class EmployeeService:
             changes.append("contact_info")
 
         # Update employment
-        if any([command.department_id, command.position_id, command.role_id, command.employee_type, command.reports_to_id]):
+        if any([command.department_id, command.position_id, command.role_id, command.employee_type, command.reports_to_id, command.leave_days_entitled]):
             employee.update_employment(
                 department_id=command.department_id,
                 position_id=command.position_id,
@@ -286,6 +290,8 @@ class EmployeeService:
                 employee_type=EmploymentType.from_string(command.employee_type) if command.employee_type else None,
                 reports_to_id=command.reports_to_id,
             )
+            if command.leave_days_entitled is not None:
+                employee.leave_days_entitled = command.leave_days_entitled
             changes.append("employment")
 
         # Update salary
@@ -309,6 +315,34 @@ class EmployeeService:
                     new_zig_amount=new_salary.zig_amount,
                 )
             )
+
+        # Update statutory and emergency contact
+        if any([command.bank_name, command.bank_account, command.pension_fund, command.nssa_number, command.zimra_number, command.paye_number, command.pays_aids_levy, command.emergency_contact_name, command.emergency_contact_number, command.emergency_contact_relationship]):
+            if command.bank_name or command.bank_account:
+                employee.update_bank_account(BankAccount(
+                    bank_name=command.bank_name or employee.bank_account.bank_name,
+                    account_number=command.bank_account or employee.bank_account.account_number
+                ))
+            
+            if command.emergency_contact_name or command.emergency_contact_number or command.emergency_contact_relationship:
+                employee.update_emergency_contact(EmergencyContact(
+                    name=command.emergency_contact_name or employee.emergency_contact.name,
+                    number=command.emergency_contact_number or employee.emergency_contact.number,
+                    relationship=command.emergency_contact_relationship or employee.emergency_contact.relationship
+                ))
+            
+            if any([command.nssa_number, command.zimra_number, command.paye_number, command.pays_aids_levy is not None]):
+                employee.update_statutory_info(StatutoryInfo(
+                    nssa_number=command.nssa_number or employee.statutory_info.nssa_number,
+                    zimra_number=command.zimra_number or employee.statutory_info.zimra_number,
+                    paye_number=command.paye_number or employee.statutory_info.paye_number,
+                    pays_aids_levy=command.pays_aids_levy if command.pays_aids_levy is not None else employee.statutory_info.pays_aids_levy
+                ))
+            
+            if command.pension_fund is not None:
+                employee.pension_fund = command.pension_fund
+            
+            changes.append("statutory_and_banking")
 
         # Save
         self._employees.update(employee)

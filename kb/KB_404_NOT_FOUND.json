@@ -1,0 +1,61 @@
+{
+  "error_type": "404_NOT_FOUND",
+  "description": "Endpoint doesn't exist in URL configuration",
+  "priority_tags": {
+    "P0": "Check first - most common causes",
+    "P1": "Check second - common causes",
+    "P2": "Check last - rare causes"
+  },
+  "diagnostic_steps": [
+    {
+      "priority": "P0",
+      "step": "Search for URL path in backend urls.py",
+      "command": "grep 'endpoint_path' in urls.py files",
+      "rationale": "Confirms whether route exists at all"
+    },
+    {
+      "priority": "P0",
+      "step": "Check if view class exists and is imported",
+      "command": "Read views/__init__.py for imports",
+      "rationale": "URL may reference view that isn't exported"
+    },
+    {
+      "priority": "P1",
+      "step": "Verify parent URL includes",
+      "command": "Check main urls.py for include() statement",
+      "rationale": "Module URLs may not be included in root config"
+    },
+    {
+      "priority": "P2",
+      "step": "Check API version prefix",
+      "command": "Compare frontend URL vs backend prefix (/api/v2/ vs /api/v1/)",
+      "rationale": "Version mismatch common after upgrades"
+    }
+  ],
+  "common_bugs": [
+    {
+      "priority": "P0",
+      "pattern": "View not created",
+      "symptom": "Frontend calls endpoint that doesn't exist",
+      "cause": "Backend view never implemented",
+      "fix": "Create view class, register in urls.py and views/__init__.py"
+    },
+    {
+      "priority": "P0",
+      "pattern": "Server not restarted",
+      "symptom": "New endpoint returns 404 despite code being correct",
+      "cause": "Django dev server didn't reload after adding new URLs",
+      "fix": "Restart Django server: python manage.py runserver"
+    },
+    {
+      "priority": "P1",
+      "pattern": "URL path typo",
+      "symptom": "404 on valid-looking URL",
+      "cause": "Trailing slash mismatch or typo in path",
+      "fix": "Compare exact frontend URL with urls.py path definition"
+    }
+  ],
+  "fix_template": {
+    "create_view": "1. Create view in views/\n2. Add import to views/__init__.py\n3. Add path() to urls.py\n4. Restart server"
+  }
+}

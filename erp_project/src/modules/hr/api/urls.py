@@ -9,9 +9,14 @@ from django.urls import path
 from modules.hr.api.views import (
     DepartmentDetailView,
     DepartmentListCreateView,
+    DeductionTypeDetailView,
+    DeductionTypeListCreateView,
+    AllowanceTypeListCreateView,
+    AllowanceTypeDetailView,
     EmployeeDetailView,
     EmployeeListCreateView,
     EmployeeSalaryView,
+    HRDashboardView,
     PositionDetailView,
     PositionListCreateView,
     RoleDetailView,
@@ -21,6 +26,9 @@ from modules.hr.api.views import (
 app_name = "hr"
 
 urlpatterns = [
+    # Dashboard
+    path("dashboard/", HRDashboardView.as_view(), name="hr_dashboard"),
+
     # Employees
     path("employees/", EmployeeListCreateView.as_view(), name="employee_list"),
     path("employees/<int:employee_id>/", EmployeeDetailView.as_view(), name="employee_detail"),
@@ -37,4 +45,12 @@ urlpatterns = [
     # Roles
     path("roles/", RoleListCreateView.as_view(), name="role_list"),
     path("roles/<int:role_id>/", RoleDetailView.as_view(), name="role_detail"),
+
+    # Deductions
+    path("deductions/", DeductionTypeListCreateView.as_view(), name="deduction_list"),
+    path("deductions/<int:deduction_id>/", DeductionTypeDetailView.as_view(), name="deduction_detail"),
+
+    # Allowances
+    path("allowances/", AllowanceTypeListCreateView.as_view(), name="allowance_list"),
+    path("allowances/<int:allowance_id>/", AllowanceTypeDetailView.as_view(), name="allowance_detail"),
 ]

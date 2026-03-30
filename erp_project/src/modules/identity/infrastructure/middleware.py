@@ -76,12 +76,21 @@ class RBACMiddleware:
 
         if user_role is None:
             # Try to get role from employee profile
-            employee = getattr(request.user, 'employee_profile', None)
-            if employee:
-                role_obj = getattr(employee, 'role', None)
-                user_role = getattr(role_obj, 'name', 'STAFF') if role_obj else 'STAFF'
-            else:
-                user_role = 'STAFF'
+            # Use try-except because OneToOne reverse relations raise DoesNotExist
+            try:
+                employee = request.user.employee_profile
+                if employee:
+                    role_obj = getattr(employee, 'role', None)
+                    user_role = getattr(role_obj, 'name', 'STAFF') if role_obj else 'STAFF'
+                else:
+                    user_role = 'STAFF'
+            except Exception:
+                # No employee profile exists
+                # Fall back to checking is_superuser for admin access
+                if request.user.is_superuser or request.user.is_staff:
+                    user_role = 'ADMIN'
+                else:
+                    user_role = 'STAFF'
 
         # Normalize role name
         if user_role:

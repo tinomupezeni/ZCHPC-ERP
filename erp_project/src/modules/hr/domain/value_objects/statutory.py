@@ -75,23 +75,23 @@ class EmergencyContact(ValueObject):
 
     Attributes:
         name: Contact person's name
-        phone: Contact phone number
+        number: Contact phone number
         relationship: Relationship to the employee
     """
 
     name: str
-    phone: str
+    number: str
     relationship: str
 
     @classmethod
     def empty(cls) -> "EmergencyContact":
         """Create empty emergency contact."""
-        return cls(name="", phone="", relationship="")
+        return cls(name="", number="", relationship="")
 
     @property
     def is_empty(self) -> bool:
         """Check if contact info is empty."""
-        return not self.name and not self.phone
+        return not self.name and not self.number
 
     def __str__(self) -> str:
         """String representation."""
@@ -100,6 +100,6 @@ class EmergencyContact(ValueObject):
         parts = [self.name]
         if self.relationship:
             parts.append(f"({self.relationship})")
-        if self.phone:
-            parts.append(f"- {self.phone}")
+        if self.number:
+            parts.append(f"- {self.number}")
         return " ".join(parts)

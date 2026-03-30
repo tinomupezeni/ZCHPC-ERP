@@ -2,7 +2,23 @@
 Employee API serializers.
 """
 
+from datetime import date
 from rest_framework import serializers
+
+
+def validate_age_18_plus(value):
+    """Validate that date of birth indicates person is at least 18 years old."""
+    if value is None:
+        return value
+
+    today = date.today()
+    age = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
+
+    if age < 18:
+        raise serializers.ValidationError(
+            "Employee must be at least 18 years old."
+        )
+    return value
 
 
 class EmployeeResponseSerializer(serializers.Serializer):
@@ -43,7 +59,11 @@ class CreateEmployeeRequestSerializer(serializers.Serializer):
     email = serializers.EmailField(required=False, allow_null=True, allow_blank=True)
     phone = serializers.CharField(max_length=15, required=False, allow_blank=True)
     national_id = serializers.CharField(max_length=50, required=False, allow_blank=True)
-    date_of_birth = serializers.DateField(required=False, allow_null=True)
+    date_of_birth = serializers.DateField(
+        required=False,
+        allow_null=True,
+        validators=[validate_age_18_plus]
+    )
     gender = serializers.ChoiceField(
         choices=["Male", "Female", "Other"],
         required=False,
@@ -65,6 +85,7 @@ class CreateEmployeeRequestSerializer(serializers.Serializer):
     date_joined = serializers.DateField(required=False, allow_null=True)
     contract_from = serializers.DateField(required=False, allow_null=True)
     contract_to = serializers.DateField(required=False, allow_null=True)
+    leave_days_entitled = serializers.IntegerField(required=False, default=22)
     usd_salary = serializers.DecimalField(
         max_digits=12, decimal_places=2, required=False, allow_null=True
     )
@@ -83,7 +104,7 @@ class CreateEmployeeRequestSerializer(serializers.Serializer):
     pays_aids_levy = serializers.BooleanField(default=True)
     pension_fund = serializers.CharField(max_length=100, required=False, allow_blank=True)
     emergency_contact_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
-    emergency_contact_phone = serializers.CharField(max_length=15, required=False, allow_blank=True)
+    emergency_contact_number = serializers.CharField(max_length=15, required=False, allow_blank=True)
     emergency_contact_relationship = serializers.CharField(max_length=50, required=False, allow_blank=True)
 
 
@@ -94,7 +115,11 @@ class UpdateEmployeeRequestSerializer(serializers.Serializer):
     surname = serializers.CharField(max_length=100, required=False)
     email = serializers.EmailField(required=False, allow_null=True)
     phone = serializers.CharField(max_length=15, required=False, allow_blank=True)
-    date_of_birth = serializers.DateField(required=False, allow_null=True)
+    date_of_birth = serializers.DateField(
+        required=False,
+        allow_null=True,
+        validators=[validate_age_18_plus]
+    )
     gender = serializers.ChoiceField(
         choices=["Male", "Female", "Other"],
         required=False,
@@ -115,6 +140,7 @@ class UpdateEmployeeRequestSerializer(serializers.Serializer):
     reports_to_id = serializers.IntegerField(required=False, allow_null=True)
     contract_from = serializers.DateField(required=False, allow_null=True)
     contract_to = serializers.DateField(required=False, allow_null=True)
+    leave_days_entitled = serializers.IntegerField(required=False, allow_null=True)
     usd_salary = serializers.DecimalField(
         max_digits=12, decimal_places=2, required=False, allow_null=True
     )
@@ -133,7 +159,7 @@ class UpdateEmployeeRequestSerializer(serializers.Serializer):
     pays_aids_levy = serializers.BooleanField(required=False)
     pension_fund = serializers.CharField(max_length=100, required=False, allow_blank=True)
     emergency_contact_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
-    emergency_contact_phone = serializers.CharField(max_length=15, required=False, allow_blank=True)
+    emergency_contact_number = serializers.CharField(max_length=15, required=False, allow_blank=True)
     emergency_contact_relationship = serializers.CharField(max_length=50, required=False, allow_blank=True)
 
 

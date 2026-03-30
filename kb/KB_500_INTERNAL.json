@@ -1,0 +1,64 @@
+{
+  "error_type": "500_INTERNAL_SERVER_ERROR",
+  "description": "Server-side exception - unhandled error in backend code",
+  "priority_tags": {
+    "P0": "Check first - most common causes",
+    "P1": "Check second - common causes",
+    "P2": "Check last - rare causes"
+  },
+  "diagnostic_steps": [
+    {
+      "priority": "P0",
+      "step": "Read exact file:line from stack trace",
+      "command": "Go directly to file and line number mentioned",
+      "rationale": "Stack trace tells you EXACTLY where to look"
+    },
+    {
+      "priority": "P0",
+      "step": "Identify failing attribute/method",
+      "command": "Read the line, note what field/method is accessed",
+      "rationale": "AttributeError usually means missing field on model"
+    },
+    {
+      "priority": "P1",
+      "step": "Check model has required fields",
+      "command": "Read model definition, compare to repository/serializer expectations",
+      "rationale": "Model-repository field mismatch is common"
+    },
+    {
+      "priority": "P2",
+      "step": "Check for None handling issues",
+      "command": "Look for chained attribute access without null checks"
+    }
+  ],
+  "common_bugs": [
+    {
+      "priority": "P0",
+      "pattern": "Model missing fields",
+      "symptom": "AttributeError: 'Model' has no attribute 'field_name'",
+      "cause": "Repository or serializer expects field that doesn't exist on model",
+      "fix": "Add field to model, makemigrations, migrate"
+    },
+    {
+      "priority": "P0",
+      "pattern": "Type mismatch in value objects",
+      "symptom": "'UUID' object has no attribute 'strip'",
+      "cause": "Model field type changed (CharField->UUIDField) but value object expects string",
+      "fix": "Update value object: if isinstance(val, UUID): val = str(val)"
+    },
+    {
+      "priority": "P1",
+      "pattern": "RelatedObjectDoesNotExist",
+      "symptom": "Employee.user.DoesNotExist when accessing reverse relation",
+      "cause": "Accessing OneToOne/ForeignKey without checking existence",
+      "fix": "Use try-except or hasattr() before access"
+    },
+    {
+      "priority": "P1",
+      "pattern": "NoneType has no attribute",
+      "symptom": "NoneType has no attribute 'method_name'",
+      "cause": "Optional field accessed without null check",
+      "fix": "Add if field: guard before accessing"
+    }
+  ]
+}

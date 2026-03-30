@@ -15,8 +15,17 @@ from modules.hr.api.views.organization_views import (
     RoleDetailView,
     RoleListCreateView,
 )
+from modules.hr.api.views.dashboard_views import HRDashboardView
+from modules.hr.api.views.payroll_config_views import (
+    DeductionTypeListCreateView,
+    DeductionTypeDetailView,
+    AllowanceTypeListCreateView,
+    AllowanceTypeDetailView,
+)
 
 __all__ = [
+    # Dashboard
+    "HRDashboardView",
     # Employee
     "EmployeeListCreateView",
     "EmployeeDetailView",
@@ -30,4 +39,9 @@ __all__ = [
     # Role
     "RoleListCreateView",
     "RoleDetailView",
+    # Deductions & Allowances
+    "DeductionTypeListCreateView",
+    "DeductionTypeDetailView",
+    "AllowanceTypeListCreateView",
+    "AllowanceTypeDetailView",
 ]
