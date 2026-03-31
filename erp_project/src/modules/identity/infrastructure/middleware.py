@@ -57,6 +57,10 @@ class RBACMiddleware:
         if not request.user.is_authenticated:
             return self.get_response(request)
 
+        # Superusers bypass all RBAC checks
+        if request.user.is_superuser:
+            return self.get_response(request)
+
         # Check exempt paths
         for exempt_path in self.EXEMPT_PATHS:
             if request.path.startswith(exempt_path):

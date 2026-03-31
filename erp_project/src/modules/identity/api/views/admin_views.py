@@ -5,7 +5,7 @@ from datetime import date
 
 from django.db.models import Count, Sum
 from rest_framework import status
-from rest_framework.permissions import IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -17,7 +17,7 @@ class AdminDashboardView(APIView):
     GET /api/v2/admin/dashboard/
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         """
