@@ -49,7 +49,7 @@ const PostJobModal: React.FC<PostJobModalProps> = ({
     handleSubmit,
     addListItem,
     removeListItem,
-  } = usePostJob(isOpen, job, onClose);
+  } = usePostJob(isOpen, job, onClose, onSave);
 
   // Enhanced add item handler that ensures the array exists
   const handleAddItem = (field: keyof typeof formData) => {

@@ -128,7 +128,7 @@ class ApplicationService:
                 experience=command.experience,
                 resume_path=command.resume_path,
             )
-            candidate.add_event(
+            candidate.add_domain_event(
                 CandidateCreated(
                     candidate_id=candidate.id,
                     email=candidate.email,
@@ -153,7 +153,7 @@ class ApplicationService:
             candidate_id=candidate.id,
             cover_letter=command.cover_letter,
         )
-        application.add_event(
+        application.add_domain_event(
             ApplicationReceived(
                 application_id=application.id,
                 job_id=application.job_id,
@@ -189,7 +189,7 @@ class ApplicationService:
         self._processor.process_transition(application, new_status)
 
         # Add appropriate event
-        application.add_event(
+        application.add_domain_event(
             ApplicationStatusChanged(
                 application_id=application.id,
                 job_id=application.job_id,
@@ -201,7 +201,7 @@ class ApplicationService:
         )
 
         if new_status == ApplicationStatus.SHORTLISTED:
-            application.add_event(
+            application.add_domain_event(
                 CandidateShortlisted(
                     application_id=application.id,
                     job_id=application.job_id,
@@ -210,7 +210,7 @@ class ApplicationService:
                 )
             )
         elif new_status == ApplicationStatus.HIRED:
-            application.add_event(
+            application.add_domain_event(
                 CandidateHired(
                     application_id=application.id,
                     job_id=application.job_id,
@@ -219,7 +219,7 @@ class ApplicationService:
                 )
             )
         elif new_status == ApplicationStatus.REJECTED:
-            application.add_event(
+            application.add_domain_event(
                 CandidateRejected(
                     application_id=application.id,
                     job_id=application.job_id,

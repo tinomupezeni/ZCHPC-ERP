@@ -151,7 +151,7 @@ class LeaveRequestService:
             raise ValidationError(f"Leave request conflicts with existing requests: {conflict_dates}")
 
         # Add domain event
-        request.add_event(
+        request.add_domain_event(
             LeaveRequested(
                 request_id=request.id,
                 employee_id=request.employee_id,
@@ -204,7 +204,7 @@ class LeaveRequestService:
             self._balance_repository.save(balance)
 
         # Add domain event
-        request.add_event(
+        request.add_domain_event(
             LeaveApproved(
                 request_id=request.id,
                 employee_id=request.employee_id,
@@ -242,7 +242,7 @@ class LeaveRequestService:
         request.reject(command.reviewer_id)
 
         # Add domain event
-        request.add_event(
+        request.add_domain_event(
             LeaveRejected(
                 request_id=request.id,
                 employee_id=request.employee_id,
@@ -286,7 +286,7 @@ class LeaveRequestService:
                 self._balance_repository.save(balance)
 
         # Add domain event
-        request.add_event(
+        request.add_domain_event(
             LeaveCancelled(
                 request_id=request.id,
                 employee_id=request.employee_id,

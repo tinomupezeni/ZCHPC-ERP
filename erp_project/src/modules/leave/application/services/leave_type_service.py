@@ -57,7 +57,7 @@ class LeaveTypeService:
         )
 
         # Add domain event
-        leave_type.add_event(
+        leave_type.add_domain_event(
             LeaveTypeCreated(
                 leave_type_id=leave_type.id,
                 name=leave_type.name,

@@ -139,30 +139,30 @@ const Recruitment = () => {
   const formatBackendJob = (job: any): JobListing => ({
     id: job.id,
     title: job.title,
-    department: job.department, // This comes as string "IT" from serializer
+    department: job.department_name || job.department, // Backend returns department_name
     department_id: job.department_id,
     position_id: job.position_id,
     status: job.status, // "Open", "Closed", etc.
-    postedDate: job.postedDate,
-    applicants: job.applicants || 0,
+    postedDate: job.posted_date || job.postedDate, // Backend returns posted_date (snake_case)
+    applicants: job.applicants_count ?? job.applicants ?? 0, // Backend returns applicants_count
     description: job.description,
     requirements: (job.qualifications || []).join("\n"), // Convert list to string for simple view if needed
     location: job.location,
     salaryRange: job.salaryRange,
-    // Multi-currency salary fields
-    salaryUsdMin: job.salaryUsdMin,
-    salaryUsdMax: job.salaryUsdMax,
-    salaryZigMin: job.salaryZigMin,
-    salaryZigMax: job.salaryZigMax,
+    // Multi-currency salary fields (backend uses snake_case)
+    salaryUsdMin: job.salary_usd_min ?? job.salaryUsdMin,
+    salaryUsdMax: job.salary_usd_max ?? job.salaryUsdMax,
+    salaryZigMin: job.salary_zig_min ?? job.salaryZigMin,
+    salaryZigMax: job.salary_zig_max ?? job.salaryZigMax,
     // Include array fields for editing
     competencies: job.competencies || [],
     responsibilities: job.responsibilities || [],
     qualifications: job.qualifications || [],
-    // Include other fields needed for editing
-    contactEmail: job.contactEmail,
-    applicationProcess: job.applicationProcess,
-    reportsTo: job.reportsTo,
-    isInternal: job.isInternal,
+    // Include other fields needed for editing (backend uses snake_case)
+    contactEmail: job.contact_email || job.contactEmail,
+    applicationProcess: job.application_process || job.applicationProcess,
+    reportsTo: job.reports_to || job.reportsTo,
+    isInternal: job.is_internal ?? job.isInternal,
     notes: job.notes,
   });
 

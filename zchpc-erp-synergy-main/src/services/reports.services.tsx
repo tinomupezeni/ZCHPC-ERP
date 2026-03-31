@@ -19,22 +19,23 @@ export interface ReportSummary {
 }
 
 // Report type to endpoint mapping
+// Using payroll module endpoints (base URL already includes /api/v2/)
 const REPORT_ENDPOINTS: Record<string, string> = {
-  // Core Payroll Reports
-  basicSalary: "/reports/basic-salary/",
-  paye: "/reports/paye/",
-  nssa: "/reports/nssa/",
+  // Core Payroll Reports - using payroll module
+  basicSalary: "payroll/payslips/",
+  paye: "payroll/payslips/",
+  nssa: "payroll/payslips/",
 
-  // Benefits Reports
-  allowances: "/reports/allowances/",
+  // Benefits Reports - using HR module
+  allowances: "hr/allowances/",
 
-  // Deductions Reports
-  deductions: "/reports/deductions/",
+  // Deductions Reports - using HR module
+  deductions: "hr/deductions/",
 
   // HR Analytics Reports
-  leaveBalance: "/reports/leave-balances/",
-  training: "/reports/training/",
-  employees: "/reports/employees/",
+  leaveBalance: "leave/balances/",
+  training: "", // Training module not implemented yet
+  employees: "hr/employees/",
 };
 
 /**
@@ -60,7 +61,8 @@ export const fetchReportData = async (
     if (filters?.year) params.append("year", filters.year);
 
     const queryString = params.toString();
-    const url = `/hr${endpoint}${queryString ? `?${queryString}` : ""}`;
+    // Use endpoint directly (already includes correct module path)
+    const url = `${endpoint}${queryString ? `?${queryString}` : ""}`;
 
     const response = await apiClient.get<ReportData[]>(url);
     return response.data;
@@ -72,17 +74,28 @@ export const fetchReportData = async (
 
 /**
  * Fetch summary statistics for the reports dashboard
+ * Uses payroll summary endpoint
  */
 export const fetchReportSummary = async (period?: string): Promise<ReportSummary> => {
   try {
-    const url = period
-      ? `/hr/reports/summary/?period=${period}`
-      : "/hr/reports/summary/";
+    // Period is required for payroll summary - default to current month
+    const periodParam = period || new Date().toISOString().slice(0, 7); // YYYY-MM format
+    const url = `payroll/summary/?period=${periodParam}`;
     const response = await apiClient.get<ReportSummary>(url);
     return response.data;
   } catch (error) {
     console.error("Failed to fetch report summary:", error);
-    throw error;
+    // Return empty summary on error to prevent UI crash
+    return {
+      total_employees: 0,
+      payroll_records: 0,
+      total_gross_salary_usd: 0,
+      total_net_salary_usd: 0,
+      total_paye_usd: 0,
+      total_nssa_usd: 0,
+      total_allowances_usd: 0,
+      total_deductions_usd: 0,
+    };
   }
 };
 

@@ -45,7 +45,8 @@ const makeEmptyForm = (): JobListing =>
 export const usePostJob = (
   isOpen: boolean,
   job: JobListing | null,
-  onClose: () => void
+  onClose: () => void,
+  onSave?: () => void
 ) => {
   const [formData, setFormData] = useState<JobListing | null>(null);
   const [loading, setLoading] = useState(false);
@@ -330,7 +331,11 @@ export const usePostJob = (
       }
 
       toast.success(job ? "Job updated successfully" : "Job posted successfully");
-      onClose();
+      if (onSave) {
+        onSave(); // This triggers the refresh and closes the modal
+      } else {
+        onClose();
+      }
     } catch (error) {
       console.error("Error saving job:", error);
       toast.error("Failed to save job. Please try again.");

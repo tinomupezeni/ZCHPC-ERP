@@ -105,7 +105,7 @@ class JobService:
         )
 
         if status == JobStatus.OPEN:
-            job.add_event(
+            job.add_domain_event(
                 JobPosted(
                     job_id=job.id,
                     title=job.title,
@@ -166,7 +166,7 @@ class JobService:
             raise NotFoundError(f"Job with ID {job_id} not found")
 
         job.publish()
-        job.add_event(
+        job.add_domain_event(
             JobPosted(
                 job_id=job.id,
                 title=job.title,
@@ -186,7 +186,7 @@ class JobService:
             raise NotFoundError(f"Job with ID {job_id} not found")
 
         job.close()
-        job.add_event(
+        job.add_domain_event(
             JobClosed(
                 job_id=job.id,
                 title=job.title,
@@ -204,7 +204,7 @@ class JobService:
             raise NotFoundError(f"Job with ID {job_id} not found")
 
         job.reopen()
-        job.add_event(
+        job.add_domain_event(
             JobReopened(
                 job_id=job.id,
                 title=job.title,

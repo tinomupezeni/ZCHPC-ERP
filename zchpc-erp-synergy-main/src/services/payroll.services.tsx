@@ -30,8 +30,8 @@ export interface ProcessPayrollParams {
  * Fetch payslips for a specific month/period
  */
 export const getPayslips = async (period: string) => {
-  // Expects backend to handle /api/payrolls/?period=2025-11
-  const response = await apiClient.get<PayrollRecord[]>(`/payroll/payrolls/`, {
+  // Backend endpoint: /api/v2/payroll/payslips/?period=YYYY-MM
+  const response = await apiClient.get<PayrollRecord[]>(`/payroll/payslips/`, {
     params: { period }
   });
   return response.data;
@@ -41,7 +41,7 @@ export const getPayslips = async (period: string) => {
  * Trigger the payroll processing engine for a specific month
  */
 export const processPayroll = async (data: ProcessPayrollParams) => {
-  const response = await apiClient.post("/payroll/payrolls/process/", data);
+  const response = await apiClient.post("/payroll/payslips/", data);
   return response.data;
 };
 
@@ -49,7 +49,7 @@ export const processPayroll = async (data: ProcessPayrollParams) => {
  * Approve a specific payslip
  */
 export const approvePayslip = async (id: number) => {
-  const response = await apiClient.post(`/payroll/payrolls/${id}/approve/`);
+  const response = await apiClient.post(`/payroll/payslips/${id}/approve/`);
   return response.data;
 };
 
@@ -57,14 +57,14 @@ export const approvePayslip = async (id: number) => {
  * Delete a payslip (e.g. rollback for one person)
  */
 export const deletePayslip = async (id: number) => {
-  await apiClient.delete(`/payroll/payrolls/${id}/`);
+  await apiClient.delete(`/payroll/payslips/${id}/`);
 };
 
 /**
  * Fetch summary statistics for the dashboard cards
  */
 export const getPayrollSummary = async (period: string) => {
-  const response = await apiClient.get(`/payroll/payrolls/summary/`, {
+  const response = await apiClient.get(`/payroll/summary/`, {
     params: { period }
   });
   return response.data;

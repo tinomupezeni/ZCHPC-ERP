@@ -81,7 +81,7 @@ const LeaveApplications = () => {
   const fetchLeaveRequests = async () => {
     try {
       setIsLoading(true);
-      const response = await apiClient.get("/hr/leave-requests/");
+      const response = await apiClient.get("/leave/requests/");
       setLeaveRequests(response.data);
     } catch (error) {
       console.error("Failed to fetch leave requests:", error);
@@ -93,7 +93,7 @@ const LeaveApplications = () => {
 
   const fetchLeaveTypes = async () => {
     try {
-      const response = await apiClient.get("/hr/leave-types/");
+      const response = await apiClient.get("/leave/types/");
       setLeaveTypes(response.data);
     } catch (error) {
       console.error("Failed to fetch leave types:", error);
@@ -102,7 +102,14 @@ const LeaveApplications = () => {
 
   const handleApprove = async (id: number) => {
     try {
-      await apiClient.post(`/hr/leave-requests/${id}/approve/`);
+      // Get current user ID from localStorage or auth context
+      const userStr = localStorage.getItem("user");
+      const reviewerId = userStr ? JSON.parse(userStr).id : 1;
+
+      await apiClient.post(`/leave/requests/${id}/review/`, {
+        reviewer_id: reviewerId,
+        approved: true,
+      });
       toast.success("Leave request approved");
       fetchLeaveRequests();
       setIsDetailModalOpen(false);
@@ -114,7 +121,14 @@ const LeaveApplications = () => {
 
   const handleReject = async (id: number) => {
     try {
-      await apiClient.post(`/hr/leave-requests/${id}/reject/`);
+      // Get current user ID from localStorage or auth context
+      const userStr = localStorage.getItem("user");
+      const reviewerId = userStr ? JSON.parse(userStr).id : 1;
+
+      await apiClient.post(`/leave/requests/${id}/review/`, {
+        reviewer_id: reviewerId,
+        approved: false,
+      });
       toast.success("Leave request rejected");
       fetchLeaveRequests();
       setIsDetailModalOpen(false);

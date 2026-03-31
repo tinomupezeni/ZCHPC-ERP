@@ -123,7 +123,7 @@ class LeaveBalanceService:
         balance.adjust_entitlement(balance.entitled_days + command.adjustment_days)
 
         # Add domain event
-        balance.add_event(
+        balance.add_domain_event(
             LeaveBalanceAdjusted(
                 balance_id=balance.id,
                 employee_id=balance.employee_id,

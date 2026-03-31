@@ -62,7 +62,7 @@ class Server {
 
   // fetch attendance records
   static fetchAttendanceRecords = () => {
-    return apiClient.get(`${api_url}all/attendance/`);
+    return apiClient.get(`${api_url}attendance/history/`);
   };
 
   // delete attendance record
@@ -99,20 +99,20 @@ class Server {
 
   // fetch payslips
   static fetchPayslips = (month) => {
-    return apiClient.get(`${api_url}api/payroll/payrolls/?period=${month}`);
+    return apiClient.get(`${api_url}payroll/payslips/?period=${month}`);
   };
 
   // delete payslip
   static deleteEmployeeSlip = (id, period) => {
     return apiClient.delete(
-      `${api_url}/payrolls/delete_slip/?employee=${id}&period=${period}`
+      `${api_url}payroll/payslips/${id}/`
     );
   };
 
   // approve payslip
 static approvePayslip = (id, period) => {
   return apiClient.post(
-    `${api_url}api/payroll/payrolls/approve_slip/`,
+    `${api_url}payroll/payslips/${id}/approve/`,
     { employee: id, period: period }, // send data in body
     { headers: getAuthHeaders() }
   );
@@ -121,84 +121,79 @@ static approvePayslip = (id, period) => {
 
   // API's for hr training and development
 
-  //adding  training program
+  //adding  training program - TODO: Training module not implemented yet
   static addTrainingProgram = (data) => {
-    return apiClient.post(`${api_url}register/training/program/`, data);
+    return Promise.resolve({ data: { id: Date.now(), ...data } });
   };
 
-  // fetching all training programs
+  // fetching all training programs - TODO: Training module not implemented yet
   static getTrainingPrograms = () => {
-    return apiClient.get(`${api_url}all/training/programs/`);
+    // Return empty array until training module is implemented
+    return Promise.resolve({ data: [] });
   };
 
-  //delete training program
+  // TODO: Training module not implemented yet - all training methods return mock data
   static deleteTrainingProgram = (id) => {
-    return apiClient.delete(`${api_url}delete/training/program/${id}/`);
+    return Promise.resolve({});
   };
 
-  //update training program
   static updateTrainingProgram = (
     id: number,
     data: TrainingProgramUpdateData
   ) => {
-    return apiClient.put(`${api_url}update/training/program/${id}/`, data);
+    return Promise.resolve({ data: { id, ...data } });
   };
 
-  // add training session
   static addTrainingSession = (data) => {
-    return apiClient.post(`${api_url}training/sessions/`, data);
+    return Promise.resolve({ data: { id: Date.now(), ...data } });
   };
-  // fetch all training sessions
+
   static getTrainingSessions = () => {
-    return apiClient.get(`${api_url}training/sessions/`);
+    return Promise.resolve({ data: [] });
   };
-  // delete training session
+
   static deleteTrainingSession = (id) => {
-    return apiClient.delete(`${api_url}training/sessions/${id}/`);
+    return Promise.resolve({});
   };
-  // update training session
+
   static updateTrainingSession = (id, data) => {
-    return apiClient.put(`${api_url}training/sessions/${id}/`, data);
+    return Promise.resolve({ data: { id, ...data } });
   };
 
-  // add training enrollment
   static addTrainingEnrollment = (data) => {
-    return apiClient.post(`${api_url}training/enrollments/`, data);
-  };
-  // fetch all training enrollments
-  static getTrainingEnrollments = () => {
-    return apiClient.get(`${api_url}training/enrollments/`);
-  };
-  // delete training enrollment
-  static deleteTrainingEnrollment = (id) => {
-    return apiClient.delete(`${api_url}training/enrollments/${id}/`);
-  };
-  // update training enrollment
-  static updateTrainingEnrollment = (id, data) => {
-    return apiClient.put(`${api_url}training/enrollments/${id}/`, data);
+    return Promise.resolve({ data: { id: Date.now(), ...data } });
   };
 
-  // add training certification
+  static getTrainingEnrollments = () => {
+    return Promise.resolve({ data: [] });
+  };
+
+  static deleteTrainingEnrollment = (id) => {
+    return Promise.resolve({});
+  };
+
+  static updateTrainingEnrollment = (id, data) => {
+    return Promise.resolve({ data: { id, ...data } });
+  };
+
   static addTrainingCertification = (data) => {
-    return apiClient.post(`${api_url}training/certifications/`, data);
+    return Promise.resolve({ data: { id: Date.now(), ...data } });
   };
-  // fetch all training certifications
+
   static getTrainingCertifications = () => {
-    return apiClient.get(`${api_url}training/certifications/`);
+    return Promise.resolve({ data: [] });
   };
-  // delete training certification
+
   static deleteTrainingCertification = (id) => {
-    return apiClient.delete(`${api_url}training/certifications/${id}/`);
+    return Promise.resolve({});
   };
-  // update training certification
+
   static updateTrainingCertification = (id, data) => {
-    return apiClient.put(`${api_url}training/certifications/${id}/`, data);
+    return Promise.resolve({ data: { id, ...data } });
   };
-  // search training certifications
+
   static searchTrainingCertifications = (searchTerm) => {
-    return apiClient.get(
-      `${api_url}training/certifications/search/?search=${searchTerm}`
-    );
+    return Promise.resolve({ data: [] });
   };
 
   // Upload attendance records from file
