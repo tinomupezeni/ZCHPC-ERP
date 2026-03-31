@@ -297,7 +297,7 @@ const PostJobModal: React.FC<PostJobModalProps> = ({
                 <Input
                   label="Reports To"
                   value={formData?.reportsTo || ""}
-                  onChange={(v) => handleChange("reportsTo", v)}
+                  onChange={(e) => handleChange("reportsTo", e.target.value)}
                   placeholder="e.g.  Director"
                 />
 

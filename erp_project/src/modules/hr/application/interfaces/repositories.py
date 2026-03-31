@@ -65,6 +65,11 @@ class IEmployeeRepository(ABC):
         ...
 
     @abstractmethod
+    def exists_by_employee_id(self, employee_id: str) -> bool:
+        """Check if an employee with the given employee ID (EC Number) exists."""
+        ...
+
+    @abstractmethod
     def count(self, include_inactive: bool = False) -> int:
         """Count employees."""
         ...

@@ -26,12 +26,23 @@ class EmployeeDTO:
     surname: str
     full_name: str
     email: str | None
+    phone: str | None
+    national_id: str | None
+    date_of_birth: date | None
+    gender: str | None
+    marital_status: str | None
     department_id: int | None
     department_name: str | None
     position_id: int | None
     position_title: str | None
+    employee_type: str
     date_joined: date
     is_active: bool
+    usd_salary: Decimal | None
+    zig_salary: Decimal | None
+    pay_frequency: str
+    bank_name: str | None
+    bank_account: str | None
 
 
 @dataclass(frozen=True)

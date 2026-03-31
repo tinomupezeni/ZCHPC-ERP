@@ -289,15 +289,12 @@ export const usePostJob = (
     try {
       const selectedPos = positions.find((p) => p.id == formData.position_id);
 
-      const cleanData = {
+      const cleanData: Partial<JobListing> = {
         ...formData,
-
         // Always keep title in sync with selected position if possible
         title: selectedPos ? selectedPos.title : formData.title,
 
         // IMPORTANT: keep department_id as ID only (don’t fall back to name)
-        // This line in your old code was a bug:
-        // department_id: formData.department_id || formData.department,
         department_id: formData.department_id,
 
         responsibilities: ensureList(formData.responsibilities)
@@ -320,6 +317,11 @@ export const usePostJob = (
         status: formData.status || "Open",
         postedDate: formData.postedDate || todayISO(),
       };
+
+      // Explicitly remove the 'department' object if it exists to avoid sending unexpected nested data
+      if (cleanData.department && typeof cleanData.department === 'object') {
+          delete cleanData.department;
+      }
 
       if (job?.id) {
         await updateJob(job.id, cleanData);

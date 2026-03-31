@@ -133,6 +133,11 @@ export const useAddEmployee = (
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+
+    // Convert department and position to integers (or null if empty)
+    const departmentId = employee.department ? parseInt(String(employee.department), 10) : null;
+    const positionId = employee.position ? parseInt(String(employee.position), 10) : null;
+
     const payload: any = {
       first_name: employee.firstname,
       surname: employee.surname,
@@ -149,8 +154,8 @@ export const useAddEmployee = (
       leave_days_entitled: employee.leaveDays,
       contract_from: employee.contractFrom || null,
       contract_to: employee.contractTo || null,
-      department_id: employee.department,
-      position_id: employee.position,
+      department_id: departmentId,
+      position_id: positionId,
       usd_salary: employee.usd_salary ? parseFloat(employee.usd_salary) : 0,
       zig_salary: employee.zig_salary ? parseFloat(employee.zig_salary) : 0,
       pension_fund: employee.pensionScheme,

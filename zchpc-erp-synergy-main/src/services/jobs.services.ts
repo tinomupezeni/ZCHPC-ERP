@@ -23,7 +23,7 @@ interface JobApplication {
 
 
 export const getJobs = async (statusFilter?: string) => {
-  let url = "/hr/jobs/";
+  let url = "/recruitment/jobs/";
   if (statusFilter && statusFilter !== "All") {
     url += `?status=${statusFilter}`;
   }
@@ -35,9 +35,7 @@ export const getJobs = async (statusFilter?: string) => {
  * Get a single job details
  */
 export const getJob = async (id: number | string) => {
-  const response = await apiClient.get<JobListing>(`/hr/jobs/${id}/`);
-  console.log(response);
-  
+  const response = await apiClient.get<JobListing>(`/recruitment/jobs/${id}/`);
   return response.data;
 };
 
@@ -45,7 +43,7 @@ export const getJob = async (id: number | string) => {
  * Create a new job posting
  */
 export const createJob = async (data: JobListing) => {
-  const response = await apiClient.post<JobListing>("/hr/jobs/", data);
+  const response = await apiClient.post<JobListing>("/recruitment/jobs/", data);
   return response.data;
 };
 
@@ -53,7 +51,7 @@ export const createJob = async (data: JobListing) => {
  * Update an existing job (Partial update supported)
  */
 export const updateJob = async (id: number | string, data: Partial<JobListing>) => {
-  const response = await apiClient.patch<JobListing>(`/hr/jobs/${id}/`, data);
+  const response = await apiClient.patch<JobListing>(`/recruitment/jobs/${id}/`, data);
   return response.data;
 };
 
@@ -61,21 +59,22 @@ export const updateJob = async (id: number | string, data: Partial<JobListing>) 
  * Delete a job posting
  */
 export const deleteJob = async (id: number | string) => {
-  await apiClient.delete(`/hr/jobs/${id}/`);
+  await apiClient.delete(`/recruitment/jobs/${id}/`);
 };
 
 // --- Application Services ---
 
 export const getApplications = async (jobId?: number) => {
-  let url = "/hr/applications/";
   if (jobId) {
-    url += `?job=${jobId}`;
+    // Get applications for a specific job
+    const response = await apiClient.get<JobApplication[]>(`/recruitment/jobs/${jobId}/applications/`);
+    return response.data;
   }
-  const response = await apiClient.get<JobApplication[]>(url);
-  return response.data;
+  // For all applications, we need a different approach - the backend doesn't have a general applications list
+  return [];
 };
 
 export const updateApplicationStatus = async (id: number, status: string) => {
-  const response = await apiClient.patch(`/hr/applications/${id}/`, { status });
+  const response = await apiClient.patch(`/recruitment/applications/${id}/status/`, { status });
   return response.data;
 };

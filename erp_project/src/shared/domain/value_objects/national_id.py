@@ -57,6 +57,13 @@ class NationalId(ValueObject):
         # Normalize: uppercase and clean up
         normalized = self.value.strip().upper()
 
+        # Replace spaces with dashes for normalization (handles "63-1670679 N 34" -> "63-1670679-N-34")
+        normalized = normalized.replace(" ", "-")
+
+        # Remove any double dashes that might have been created
+        while "--" in normalized:
+            normalized = normalized.replace("--", "-")
+
         # Try to add missing dashes if provided without them
         if "-" not in normalized and len(normalized) >= 11:
             # Attempt to format: XXNNNNNNLNN -> XX-NNNNNN-L-NN

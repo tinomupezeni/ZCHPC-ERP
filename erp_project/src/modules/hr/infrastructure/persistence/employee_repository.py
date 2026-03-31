@@ -132,6 +132,10 @@ class DjangoEmployeeRepository(IEmployeeRepository):
         """Check if an employee with the given national ID exists."""
         return self.model.objects.filter(national_id=national_id).exists()
 
+    def exists_by_employee_id(self, employee_id: str) -> bool:
+        """Check if an employee with the given employee ID (EC Number) exists."""
+        return self.model.objects.filter(employee_id=employee_id).exists()
+
     def count(self, include_inactive: bool = False) -> int:
         """Count employees."""
         queryset = self.model.objects.all()
@@ -178,8 +182,8 @@ class DjangoEmployeeRepository(IEmployeeRepository):
             emergency_contact_relationship=employee.emergency_contact.relationship,
         )
         db_employee.save()
-        # Update the entity with the generated ID
-        object.__setattr__(employee, "id", db_employee.id)
+        # Update the entity with the generated ID (set _id, not id property)
+        object.__setattr__(employee, "_id", db_employee.id)
 
     @transaction.atomic
     def update(self, employee: Employee) -> None:

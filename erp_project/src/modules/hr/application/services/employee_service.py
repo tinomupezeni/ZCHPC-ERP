@@ -44,6 +44,7 @@ class CreateEmployeeCommand:
 
     first_name: str
     surname: str
+    employee_id: str | None = None  # Optional custom EC number
     email: str | None = None
     phone: str | None = None
     national_id: str | None = None
@@ -72,6 +73,7 @@ class CreateEmployeeCommand:
     emergency_contact_name: str | None = None
     emergency_contact_number: str | None = None
     emergency_contact_relationship: str | None = None
+    deductions_data: list | None = None  # List of deduction assignments
     user_id: UUID | None = None
 
 
@@ -172,9 +174,19 @@ class EmployeeService:
                     code="POSITION_DEPARTMENT_MISMATCH",
                 )
 
-        # Generate employee ID
-        id_generator = SequentialEmployeeIdGenerator(self._employees.get_max_employee_id)
-        employee_id = id_generator.next_id()
+        # Use provided employee ID or generate a new one
+        if command.employee_id and command.employee_id.strip():
+            # Validate custom employee_id uniqueness
+            if self._employees.exists_by_employee_id(command.employee_id.strip()):
+                raise ValidationError(
+                    message=f"Employee with EC Number {command.employee_id} already exists",
+                    code="DUPLICATE_EMPLOYEE_ID",
+                )
+            employee_id = EmployeeId(command.employee_id.strip())
+        else:
+            # Auto-generate employee ID
+            id_generator = SequentialEmployeeIdGenerator(self._employees.get_max_employee_id)
+            employee_id = id_generator.next_id()
 
         # Build salary if provided
         salary = None
@@ -445,10 +457,21 @@ class EmployeeService:
             surname=employee.surname,
             full_name=employee.full_name,
             email=employee.email.value if employee.email else None,
+            phone=employee.phone.value if employee.phone else None,
+            national_id=employee.national_id.value if employee.national_id else None,
+            date_of_birth=employee.date_of_birth,
+            gender=employee.gender.value if employee.gender else None,
+            marital_status=employee.marital_status.value if employee.marital_status else None,
             department_id=employee.department_id,
             department_name=dept_name,
             position_id=employee.position_id,
             position_title=pos_title,
+            employee_type=employee.employee_type.value,
             date_joined=employee.date_joined,
             is_active=employee.is_active,
+            usd_salary=employee.salary.usd_amount if employee.salary else None,
+            zig_salary=employee.salary.zig_amount if employee.salary else None,
+            pay_frequency=employee.pay_frequency.value,
+            bank_name=employee.bank_account.bank_name if employee.bank_account else None,
+            bank_account=employee.bank_account.account_number if employee.bank_account else None,
         )

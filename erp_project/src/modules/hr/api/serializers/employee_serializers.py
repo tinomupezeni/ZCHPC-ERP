@@ -37,8 +37,10 @@ class EmployeeResponseSerializer(serializers.Serializer):
     marital_status = serializers.CharField(read_only=True, allow_null=True)
     department_id = serializers.IntegerField(read_only=True, allow_null=True)
     department_name = serializers.CharField(read_only=True, allow_null=True)
+    department = serializers.CharField(source="department_name", read_only=True, allow_null=True)
     position_id = serializers.IntegerField(read_only=True, allow_null=True)
     position_title = serializers.CharField(read_only=True, allow_null=True)
+    position = serializers.CharField(source="position_title", read_only=True, allow_null=True)
     employee_type = serializers.CharField(read_only=True)
     date_joined = serializers.DateField(read_only=True)
     is_active = serializers.BooleanField(read_only=True)
@@ -49,6 +51,17 @@ class EmployeeResponseSerializer(serializers.Serializer):
         max_digits=12, decimal_places=2, read_only=True, allow_null=True
     )
     pay_frequency = serializers.CharField(read_only=True)
+    bank_name = serializers.CharField(read_only=True, allow_null=True)
+    bank_account = serializers.CharField(read_only=True, allow_null=True)
+
+
+class EmptyStringToNullIntegerField(serializers.IntegerField):
+    """IntegerField that converts empty strings to None."""
+
+    def to_internal_value(self, data):
+        if data == "" or data is None:
+            return None
+        return super().to_internal_value(data)
 
 
 class CreateEmployeeRequestSerializer(serializers.Serializer):
@@ -56,6 +69,7 @@ class CreateEmployeeRequestSerializer(serializers.Serializer):
 
     first_name = serializers.CharField(max_length=100)
     surname = serializers.CharField(max_length=100)
+    employee_id = serializers.CharField(max_length=20, required=False, allow_blank=True)
     email = serializers.EmailField(required=False, allow_null=True, allow_blank=True)
     phone = serializers.CharField(max_length=15, required=False, allow_blank=True)
     national_id = serializers.CharField(max_length=50, required=False, allow_blank=True)
@@ -74,18 +88,18 @@ class CreateEmployeeRequestSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
     )
-    department_id = serializers.IntegerField(required=False, allow_null=True)
-    position_id = serializers.IntegerField(required=False, allow_null=True)
-    role_id = serializers.IntegerField(required=False, allow_null=True)
+    department_id = EmptyStringToNullIntegerField(required=False, allow_null=True)
+    position_id = EmptyStringToNullIntegerField(required=False, allow_null=True)
+    role_id = EmptyStringToNullIntegerField(required=False, allow_null=True)
     employee_type = serializers.ChoiceField(
         choices=["Full-time", "Part-time", "Contract", "Intern"],
         default="Full-time",
     )
-    reports_to_id = serializers.IntegerField(required=False, allow_null=True)
+    reports_to_id = EmptyStringToNullIntegerField(required=False, allow_null=True)
     date_joined = serializers.DateField(required=False, allow_null=True)
     contract_from = serializers.DateField(required=False, allow_null=True)
     contract_to = serializers.DateField(required=False, allow_null=True)
-    leave_days_entitled = serializers.IntegerField(required=False, default=22)
+    leave_days_entitled = EmptyStringToNullIntegerField(required=False, default=22)
     usd_salary = serializers.DecimalField(
         max_digits=12, decimal_places=2, required=False, allow_null=True
     )
@@ -106,6 +120,7 @@ class CreateEmployeeRequestSerializer(serializers.Serializer):
     emergency_contact_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
     emergency_contact_number = serializers.CharField(max_length=15, required=False, allow_blank=True)
     emergency_contact_relationship = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    deductions_data = serializers.ListField(required=False, allow_empty=True, default=list)
 
 
 class UpdateEmployeeRequestSerializer(serializers.Serializer):
@@ -130,9 +145,9 @@ class UpdateEmployeeRequestSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
     )
-    department_id = serializers.IntegerField(required=False, allow_null=True)
-    position_id = serializers.IntegerField(required=False, allow_null=True)
-    role_id = serializers.IntegerField(required=False, allow_null=True)
+    department_id = EmptyStringToNullIntegerField(required=False, allow_null=True)
+    position_id = EmptyStringToNullIntegerField(required=False, allow_null=True)
+    role_id = EmptyStringToNullIntegerField(required=False, allow_null=True)
     employee_type = serializers.ChoiceField(
         choices=["Full-time", "Part-time", "Contract", "Intern"],
         required=False,
