@@ -1,113 +1,117 @@
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Link } from 'react-router-dom';
+import { useRole } from '@/hooks/useRole';
+import { dashboardService } from '@/services/dashboard.service';
+import type { DashboardSummary } from '@/types/dashboard.types';
 import {
-  CalendarDays,
-  Clock,
-  FileText,
-  TrendingUp,
-  Briefcase,
-  ArrowRight,
   Sun,
   Sunset,
   Moon,
-  Bell,
-  CheckCircle,
+  Briefcase,
+  Shield,
+  Users,
+  DollarSign,
+  ShoppingCart,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { Badge } from '@/components/ui/badge';
+
+// Role-specific dashboard components
+import { StaffDashboard } from '@/components/dashboard/role/StaffDashboard';
+import { HRDashboard } from '@/components/dashboard/role/HRDashboard';
+import { ManagerDashboard } from '@/components/dashboard/role/ManagerDashboard';
+import { AccountantDashboard } from '@/components/dashboard/role/AccountantDashboard';
+import { ProcurementDashboard } from '@/components/dashboard/role/ProcurementDashboard';
+import { AdminDashboard } from '@/components/dashboard/role/AdminDashboard';
+
+const ROLE_BANNER: Record<string, { gradient: string; icon: React.ElementType; badge: string; subtitle: string }> = {
+  admin: {
+    gradient: 'from-slate-800 via-slate-900 to-indigo-900',
+    icon: Shield,
+    badge: 'System Administrator',
+    subtitle: 'Full system access — manage all modules and configurations.',
+  },
+  hr: {
+    gradient: 'from-blue-700 via-blue-800 to-indigo-800',
+    icon: Users,
+    badge: 'Human Resources',
+    subtitle: 'Manage employees, leave requests, and recruitment.',
+  },
+  manager: {
+    gradient: 'from-indigo-600 via-indigo-700 to-purple-700',
+    icon: Briefcase,
+    badge: 'Department Manager',
+    subtitle: 'View team attendance, approve leave, and monitor performance.',
+  },
+  accountant: {
+    gradient: 'from-emerald-700 via-emerald-800 to-teal-800',
+    icon: DollarSign,
+    badge: 'Accountant',
+    subtitle: 'Process payroll, manage accounts, and review expense claims.',
+  },
+  procurement: {
+    gradient: 'from-amber-700 via-amber-800 to-orange-800',
+    icon: ShoppingCart,
+    badge: 'Procurement Officer',
+    subtitle: 'Manage purchase orders, suppliers, and inventory.',
+  },
+  staff: {
+    gradient: 'from-blue-600 via-blue-700 to-indigo-700',
+    icon: Briefcase,
+    badge: '',
+    subtitle: "Welcome back to your employee portal. Here's an overview of your account.",
+  },
+};
+
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return { text: 'Good morning', icon: Sun, color: 'text-amber-400' };
+  if (hour < 18) return { text: 'Good afternoon', icon: Sunset, color: 'text-orange-400' };
+  return { text: 'Good evening', icon: Moon, color: 'text-indigo-300' };
+}
 
 export function DashboardPage() {
   const { employee } = useAuth();
+  const { roleGroup, roleDisplayName } = useRole();
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return { text: 'Good morning', icon: Sun, color: 'text-amber-500' };
-    if (hour < 18) return { text: 'Good afternoon', icon: Sunset, color: 'text-orange-500' };
-    return { text: 'Good evening', icon: Moon, color: 'text-indigo-500' };
-  };
+  const [dashboardData, setDashboardData] = useState<DashboardSummary | null>(null);
+
+  useEffect(() => {
+    dashboardService.getDashboard().then(setDashboardData).catch(() => {
+      // Dashboard data is optional; page still renders with fallbacks
+    });
+  }, []);
 
   const greeting = getGreeting();
   const GreetingIcon = greeting.icon;
-
-  const quickActions = [
-    {
-      icon: Clock,
-      label: 'Clock In',
-      description: 'Record your attendance',
-      gradient: 'from-green-500 to-emerald-600',
-      shadow: 'shadow-green-500/25',
-      href: '/portal/attendance',
-    },
-    {
-      icon: CalendarDays,
-      label: 'Request Leave',
-      description: 'Submit leave application',
-      gradient: 'from-blue-500 to-blue-600',
-      shadow: 'shadow-blue-500/25',
-      href: '/portal/leave',
-    },
-    {
-      icon: FileText,
-      label: 'View Payslip',
-      description: 'Access your payslips',
-      gradient: 'from-purple-500 to-purple-600',
-      shadow: 'shadow-purple-500/25',
-      href: '/portal/payslips',
-    },
-  ];
-
-  const stats = [
-    {
-      label: 'Leave Balance',
-      value: employee?.leave_days_entitled || 0,
-      unit: 'days',
-      icon: CalendarDays,
-      color: 'text-blue-600',
-      bg: 'bg-blue-50',
-    },
-    {
-      label: 'Days Present',
-      value: 22,
-      unit: 'this month',
-      icon: TrendingUp,
-      color: 'text-green-600',
-      bg: 'bg-green-50',
-    },
-    {
-      label: 'Pending Requests',
-      value: 0,
-      unit: 'requests',
-      icon: Clock,
-      color: 'text-orange-600',
-      bg: 'bg-orange-50',
-    },
-  ];
+  const banner = ROLE_BANNER[roleGroup] ?? ROLE_BANNER.staff;
+  const BannerIcon = banner.icon;
 
   return (
     <div className="space-y-6">
       {/* Welcome Banner */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 rounded-2xl p-6 md:p-8 text-white shadow-xl">
-        {/* Decorative elements */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
+      <div
+        className={`relative overflow-hidden bg-gradient-to-r ${banner.gradient} rounded-2xl p-6 md:p-8 text-white shadow-xl`}
+      >
+        {/* Decorative circles */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2 pointer-events-none" />
 
         <div className="relative z-10">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <GreetingIcon className={`h-6 w-6 ${greeting.color}`} />
-                <span className="text-blue-200 text-sm font-medium">
+                <GreetingIcon className={`h-5 w-5 ${greeting.color}`} />
+                <span className="text-white/70 text-sm font-medium">
                   {format(new Date(), 'EEEE, MMMM d, yyyy')}
                 </span>
               </div>
               <h1 className="text-2xl md:text-3xl font-bold">
                 {greeting.text}, {employee?.first_name}!
               </h1>
-              <p className="text-blue-100 mt-2 max-w-lg">
-                Welcome back to your employee portal. Here's an overview of your account.
-              </p>
+              <p className="text-white/80 mt-2 max-w-lg text-sm">{banner.subtitle}</p>
             </div>
+
             <div className="flex-shrink-0">
               <div className="h-20 w-20 md:h-24 md:w-24 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center">
                 <span className="text-3xl md:text-4xl font-bold">
@@ -118,148 +122,36 @@ export function DashboardPage() {
             </div>
           </div>
 
-          {/* Position badge */}
-          <div className="flex flex-wrap gap-3 mt-6">
-            <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur rounded-lg px-4 py-2">
-              <Briefcase className="h-4 w-4 text-blue-200" />
-              <span className="text-sm font-medium">
-                {employee?.position_title || 'Employee'}
-              </span>
-            </div>
+          {/* Badges */}
+          <div className="flex flex-wrap gap-3 mt-5">
+            {banner.badge && (
+              <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur rounded-lg px-3 py-1.5">
+                <BannerIcon className="h-4 w-4 text-white/80" />
+                <span className="text-sm font-medium">{banner.badge}</span>
+              </div>
+            )}
+            {employee?.position_title && (
+              <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur rounded-lg px-3 py-1.5">
+                <Briefcase className="h-4 w-4 text-white/70" />
+                <span className="text-sm">{employee.position_title}</span>
+              </div>
+            )}
             {employee?.department_name && (
-              <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur rounded-lg px-4 py-2">
-                <span className="text-sm text-blue-200">
-                  {employee.department_name}
-                </span>
+              <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur rounded-lg px-3 py-1.5">
+                <span className="text-sm text-white/80">{employee.department_name}</span>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {stats.map((stat) => (
-          <Card key={stat.label} className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-5">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm font-medium text-slate-500">{stat.label}</p>
-                  <div className="flex items-baseline gap-2 mt-2">
-                    <span className={`text-3xl font-bold ${stat.color}`}>{stat.value}</span>
-                    <span className="text-sm text-slate-400">{stat.unit}</span>
-                  </div>
-                </div>
-                <div className={`h-12 w-12 rounded-xl ${stat.bg} flex items-center justify-center`}>
-                  <stat.icon className={`h-6 w-6 ${stat.color}`} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Quick Actions */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-900">Quick Actions</h2>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {quickActions.map((action) => (
-            <Link key={action.label} to={action.href}>
-              <Card className="cursor-pointer border-slate-200 shadow-sm hover:shadow-lg transition-all duration-200 hover:-translate-y-1 group">
-                <CardContent className="p-5">
-                  <div
-                    className={`h-12 w-12 rounded-xl bg-gradient-to-br ${action.gradient} flex items-center justify-center mb-4 shadow-lg ${action.shadow} group-hover:scale-110 transition-transform`}
-                  >
-                    <action.icon className="h-6 w-6 text-white" />
-                  </div>
-                  <h3 className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">
-                    {action.label}
-                  </h3>
-                  <p className="text-sm text-slate-500 mt-1">{action.description}</p>
-                  <div className="flex items-center gap-1 text-blue-600 text-sm font-medium mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                    Get started
-                    <ArrowRight className="h-4 w-4" />
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* Activity & Notifications */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Activity */}
-        <Card className="border-slate-200 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <Clock className="h-5 w-5 text-blue-600" />
-              Recent Activity
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center gap-4 p-3 rounded-xl bg-slate-50">
-                <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-slate-700">No recent activity</p>
-                  <p className="text-xs text-slate-500">Your activities will appear here</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Notifications */}
-        <Card className="border-slate-200 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <Bell className="h-5 w-5 text-blue-600" />
-              Notifications
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center gap-4 p-3 rounded-xl bg-blue-50">
-                <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                  <Bell className="h-5 w-5 text-blue-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-slate-700">Welcome to the Portal!</p>
-                  <p className="text-xs text-slate-500">Explore your dashboard and features</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Career Link */}
-      <Card className="border-slate-200 bg-gradient-to-r from-slate-900 to-slate-800 text-white shadow-lg">
-        <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-white/10 flex items-center justify-center">
-                <Briefcase className="h-6 w-6" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Explore Career Opportunities</h3>
-                <p className="text-sm text-slate-300">Check out open positions at ZCHPC</p>
-              </div>
-            </div>
-            <Link to="/careers">
-              <Button className="bg-white text-slate-900 hover:bg-slate-100 gap-2">
-                View Jobs
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Role-specific dashboard content */}
+      {roleGroup === 'admin' && <AdminDashboard data={dashboardData} />}
+      {roleGroup === 'hr' && <HRDashboard data={dashboardData} />}
+      {roleGroup === 'manager' && <ManagerDashboard data={dashboardData} />}
+      {roleGroup === 'accountant' && <AccountantDashboard data={dashboardData} />}
+      {roleGroup === 'procurement' && <ProcurementDashboard data={dashboardData} />}
+      {roleGroup === 'staff' && <StaffDashboard data={dashboardData} />}
     </div>
   );
 }
