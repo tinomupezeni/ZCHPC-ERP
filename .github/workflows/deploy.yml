@@ -1,0 +1,83 @@
+name: Deploy to Private VM
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push API Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./erp_project
+          file: ./erp_project/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/zchpc-erp-api:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/zchpc-erp-api:${{ github.sha }}
+          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/zchpc-erp-api:buildcache
+          cache-to: type=inline
+
+      - name: Build and Push Main Frontend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./zchpc-erp-synergy-main
+          file: ./zchpc-erp-synergy-main/Dockerfile
+          push: true
+          build-args: |
+            VITE_API_URL=${{ secrets.VITE_API_URL_MAIN || 'https://zchpcerp.zchpc.ac.zw' }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/zchpc-erp-frontend:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/zchpc-erp-frontend:${{ github.sha }}
+          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/zchpc-erp-frontend:buildcache
+          cache-to: type=inline
+
+      - name: Build and Push Employee Portal Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./employee-portal
+          file: ./employee-portal/Dockerfile
+          push: true
+          build-args: |
+            VITE_API_URL=${{ secrets.VITE_API_URL_PORTAL || 'https://employees.zchpc.ac.zw' }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/zchpc-erp-portal:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/zchpc-erp-portal:${{ github.sha }}
+          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/zchpc-erp-portal:buildcache
+          cache-to: type=inline
+
+  deploy:
+    name: Deploy to VM via SSH
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to VM
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ${{ secrets.DEPLOY_PATH }}
+            # Pull latest images
+            docker-compose pull
+            # Restart containers with the latest images
+            docker-compose up -d
+            # Clean up old/unused images to save disk space
+            docker system prune -f
