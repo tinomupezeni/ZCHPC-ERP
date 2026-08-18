@@ -16,6 +16,7 @@ export default defineConfig(({ mode }) => {
     server: {
       host: '0.0.0.0',
       port: 5174,
+      allowedHosts: ['employees.zchpc.ac.zw'],
       proxy: {
         '/api': {
           target: env.VITE_API_URL || 'http://localhost:8000',

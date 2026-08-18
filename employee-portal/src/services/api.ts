@@ -1,6 +1,6 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v2';
+const API_BASE_URL = 'https://zchpcerp.zchpc.ac.zw/api/v2';
 
 // Create axios instance
 const api = axios.create({
