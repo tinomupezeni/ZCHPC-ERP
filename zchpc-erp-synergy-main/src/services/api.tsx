@@ -1,11 +1,11 @@
 // src/api.js
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || '';
-export const API_BASE_URL = `${API_URL}/api/v2/`;
+// const API_URL = ''
+export const API_BASE_URL = `https://zchpcerp.zchpc.ac.zw/api/v2/`;
 
 const api = axios.create({
-  baseURL: `${API_URL}/api/v2`,
+  baseURL: API_BASE_URL,
 });
 
 // Automatically add the JWT token to every request

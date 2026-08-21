@@ -10,6 +10,7 @@ export default defineConfig(({ mode }) => {
     server: {
       host: "::",
       port: 8080,
+      allowedHosts: ['zchpcerp.zchpc.ac.zw'],
       proxy: {
         '/api': {
           target: env.VITE_API_URL || 'http://localhost:8000',
