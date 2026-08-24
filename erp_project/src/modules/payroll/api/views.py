@@ -468,3 +468,54 @@ class DeductionTypeListView(APIView):
             DeductionTypeSerializer(deduction_type).data,
             status=status.HTTP_201_CREATED
         )
+
+from django.shortcuts import get_object_or_404
+from modules.payroll.infrastructure.persistence.models import PayrollProfile, StatutoryProfile, EmployeeBankAccount
+from modules.hr.infrastructure.persistence.models import Employees
+from .serializers import PayrollProfileSerializer, StatutoryProfileSerializer, EmployeeBankAccountSerializer
+
+class PayrollProfileDetailView(APIView):
+    def get(self, request, employee_id):
+        profile, _ = PayrollProfile.objects.get_or_create(employee__uuid=employee_id)
+        serializer = PayrollProfileSerializer(profile)
+        return Response(serializer.data)
+
+    def put(self, request, employee_id):
+        profile = get_object_or_404(PayrollProfile, employee__uuid=employee_id)
+        serializer = PayrollProfileSerializer(data=request.data)
+        if serializer.is_valid():
+            for k, v in serializer.validated_data.items():
+                setattr(profile, k, v)
+            profile.save()
+            return Response(PayrollProfileSerializer(profile).data)
+        return Response(serializer.errors, status=400)
+
+class StatutoryProfileDetailView(APIView):
+    def get(self, request, employee_id):
+        profile, _ = StatutoryProfile.objects.get_or_create(employee__uuid=employee_id)
+        serializer = StatutoryProfileSerializer(profile)
+        return Response(serializer.data)
+
+    def put(self, request, employee_id):
+        profile = get_object_or_404(StatutoryProfile, employee__uuid=employee_id)
+        serializer = StatutoryProfileSerializer(data=request.data)
+        if serializer.is_valid():
+            for k, v in serializer.validated_data.items():
+                setattr(profile, k, v)
+            profile.save()
+            return Response(StatutoryProfileSerializer(profile).data)
+        return Response(serializer.errors, status=400)
+
+class EmployeeBankAccountListView(APIView):
+    def get(self, request, employee_id):
+        accounts = EmployeeBankAccount.objects.filter(employee__uuid=employee_id)
+        serializer = EmployeeBankAccountSerializer(accounts, many=True)
+        return Response(serializer.data)
+
+    def post(self, request, employee_id):
+        employee = get_object_or_404(Employees, uuid=employee_id)
+        serializer = EmployeeBankAccountSerializer(data=request.data)
+        if serializer.is_valid():
+            account = EmployeeBankAccount.objects.create(employee=employee, **serializer.validated_data)
+            return Response(EmployeeBankAccountSerializer(account).data, status=201)
+        return Response(serializer.errors, status=400)

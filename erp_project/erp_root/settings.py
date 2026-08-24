@@ -48,16 +48,15 @@ if str(SRC_DIR) not in sys.path:
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-!7q@p68fnw2-4_s%b_mk2qojko=p40^w131l#%2%v2jy4ghmv=')
 DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
-# Production domains: zchpcerp.zchpc.ac.zw (main ERP), employees.zchpc.ac.zw (portal)
+# Production domains: zchpc-erp.zw (main ERP), portal.zchpc-erp.zw (portal)
 DEFAULT_ALLOWED_HOSTS = ','.join([
     'localhost',
     '127.0.0.1',
     '0.0.0.0',
     'api',
     'nginx',
-    'zchpcerp.zchpc.ac.zw',
-    'employees.zchpc.ac.zw',
-    '.zchpc.ac.zw',  # Wildcard for all subdomains
+    'zchpc-erp.zw',
+    'portal.zchpc-erp.zw',
 ])
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', DEFAULT_ALLOWED_HOSTS).split(',')
 
@@ -83,7 +82,8 @@ INSTALLED_APPS = [
     'modules.hr.apps.HrConfig',                   # Employee, Department, Position
     'modules.attendance.apps.AttendanceConfig',   # AttendanceRecord
     'modules.leave.apps.LeaveConfig',             # LeaveType, LeaveBalance, LeaveRequest
-    'modules.recruitment.apps.RecruitmentConfig', # Job, Candidate, JobApplication
+    'modules.recruitment.apps.RecruitmentConfig',
+    'modules.bff.apps.BffConfig',
     'modules.payroll.apps.PayrollConfig',         # Payroll, TaxBracket, ExchangeRate
     'modules.accounts.apps.AccountsConfig',       # Account, Journal, JournalEntry
     'modules.procurement.apps.ProcurementConfig', # Vendor, PurchaseRequest, PurchaseOrder
@@ -106,6 +106,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'modules.identity.infrastructure.middleware.JWTAuthenticationMiddleware',  # JWT Auth
+    'modules.identity.infrastructure.middleware.ModuleAccessMiddleware', # Module Access Control
     'modules.identity.infrastructure.middleware.RBACMiddleware',  # Role-based access control
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -143,16 +144,24 @@ WSGI_APPLICATION = 'erp_root.wsgi.application'
 
 # --- Database ---
 # Uses environment variables for Docker deployment
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME', 'erp_db'),
-        'USER': os.environ.get('DB_USER', 'erp_user'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', 'erp@1234'),
-        'HOST': os.environ.get('DB_HOST', 'localhost'),
-        'PORT': os.environ.get('DB_PORT', '5432'),
+if os.environ.get('USE_SQLITE', 'False').lower() in ('true', '1', 'yes'):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / os.environ.get('DB_NAME', 'db.sqlite3'),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('DB_NAME', 'erp_db'),
+            'USER': os.environ.get('DB_USER', 'erp_user'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', 'erp@1234'),
+            'HOST': os.environ.get('DB_HOST', 'localhost'),
+            'PORT': os.environ.get('DB_PORT', '5432'),
+        }
+    }
 
 # --- CORS ---
 # In production, set CORS_ALLOW_ALL_ORIGINS=False and use CORS_ALLOWED_ORIGINS
@@ -168,10 +177,10 @@ DEFAULT_CORS_ORIGINS = ','.join([
     'http://127.0.0.1:3001',
     'http://127.0.0.1:8080',
     'http://127.0.0.1:8081',
-    'https://zchpcerp.zchpc.ac.zw',
-    'https://employees.zchpc.ac.zw',
-    'http://zchpcerp.zchpc.ac.zw',
-    'http://employees.zchpc.ac.zw',
+    'https://zchpc-erp.zw',
+    'https://portal.zchpc-erp.zw',
+    'http://zchpc-erp.zw',
+    'http://portal.zchpc-erp.zw',
 ])
 CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', DEFAULT_CORS_ORIGINS).split(',')
 
@@ -239,10 +248,10 @@ DEFAULT_CSRF_ORIGINS = ','.join([
     'http://localhost:8081',
     'http://127.0.0.1:8080',
     'http://127.0.0.1:8081',
-    'https://zchpcerp.zchpc.ac.zw',
-    'https://employees.zchpc.ac.zw',
-    'http://zchpcerp.zchpc.ac.zw',
-    'http://employees.zchpc.ac.zw',
+    'https://zchpc-erp.zw',
+    'https://portal.zchpc-erp.zw',
+    'http://zchpc-erp.zw',
+    'http://portal.zchpc-erp.zw',
 ])
 CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', DEFAULT_CSRF_ORIGINS).split(',')
 

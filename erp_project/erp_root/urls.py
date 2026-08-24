@@ -44,6 +44,7 @@ urlpatterns = [
     # separation between modules.
     # =========================================================================
     path('api/v2/auth/', include('modules.identity.api.urls', namespace='identity')),
+    path('api/v2/bff/', include('modules.bff.api.urls', namespace='bff')),
     path('api/v2/hr/', include('modules.hr.api.urls', namespace='hr')),
     path('api/v2/attendance/', include('modules.attendance.api.urls', namespace='attendance')),
     path('api/v2/leave/', include('modules.leave.api.urls', namespace='leave')),

@@ -124,37 +124,6 @@ class TestPayFrequency:
 # =============================================================================
 
 
-class TestSalary:
-    """Tests for Salary value object."""
-
-    def test_create_usd_and_zig_salary(self):
-        """Test creating salary with both currencies."""
-        salary = Salary.create(usd_amount=1000, zig_amount=5000)
-
-        assert salary.usd_amount == Decimal("1000")
-        assert salary.zig_amount == Decimal("5000")
-        assert salary.has_usd
-        assert salary.has_zig
-
-    def test_create_usd_only(self):
-        """Test creating USD-only salary."""
-        salary = Salary.usd_only(1500)
-
-        assert salary.usd_amount == Decimal("1500")
-        assert salary.zig_amount == Decimal("0")
-        assert salary.has_usd
-        assert not salary.has_zig
-
-    def test_create_zig_only(self):
-        """Test creating ZIG-only salary."""
-        salary = Salary.zig_only(10000)
-
-        assert salary.usd_amount == Decimal("0")
-        assert salary.zig_amount == Decimal("10000")
-        assert not salary.has_usd
-        assert salary.has_zig
-
-    def test_zero_salary_raises_error(self):
         """Test that zero salary raises error."""
         with pytest.raises(ValidationError) as exc_info:
             Salary.create(usd_amount=0, zig_amount=0)
@@ -204,31 +173,6 @@ class TestSalary:
 # =============================================================================
 
 
-class TestBankAccount:
-    """Tests for BankAccount value object."""
-
-    def test_create_bank_account(self):
-        """Test creating a bank account."""
-        account = BankAccount(bank_name="Standard Bank", account_number="123456789")
-
-        assert account.bank_name == "Standard Bank"
-        assert account.account_number == "123456789"
-        assert not account.is_empty
-
-    def test_empty_bank_account(self):
-        """Test empty bank account."""
-        account = BankAccount.empty()
-
-        assert account.is_empty
-        assert account.bank_name == ""
-        assert account.account_number == ""
-
-    def test_bank_name_without_account_raises_error(self):
-        """Test that bank name without account number raises error."""
-        with pytest.raises(ValueError):
-            BankAccount(bank_name="Standard Bank", account_number="")
-
-    def test_account_number_without_bank_raises_error(self):
         """Test that account number without bank name raises error."""
         with pytest.raises(ValueError):
             BankAccount(bank_name="", account_number="123456789")

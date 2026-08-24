@@ -113,7 +113,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           <div className="flex items-center gap-3">
             <img src="/logo.png" alt="ZCHPC" className="h-10 w-auto" />
             <div>
-              <span className="font-bold text-slate-900">ZCHPC</span>
+              <span className="font-bold text-slate-900">ZCHPC ERP</span>
               <span className="block text-xs text-slate-500">Employee Portal</span>
             </div>
           </div>
@@ -184,10 +184,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             <p className="text-sm font-medium text-slate-700">Need Help?</p>
             <p className="text-xs text-slate-500 mt-1">Contact HR for support</p>
             <a
-              href="mailto:hroffice@zchpc.ac.zw"
+              href="mailto:hr@zchpc-erp.zw"
               className="inline-block mt-3 text-xs font-medium text-blue-600 hover:text-blue-700"
             >
-              hroffice@zchpc.ac.zw
+              hr@zchpc-erp.zw
             </a>
           </div>
         </div>

@@ -132,7 +132,7 @@ Errors return appropriate HTTP status codes:
     # Contact and license
     'CONTACT': {
         'name': 'ZCHPC IT Department',
-        'email': 'it@zchpc.co.zw',
+        'email': 'it@zchpc-erp.zw',
     },
     'LICENSE': {
         'name': 'Proprietary',
@@ -141,7 +141,7 @@ Errors return appropriate HTTP status codes:
     # Server URLs
     'SERVERS': [
         {'url': 'http://localhost:8000', 'description': 'Development server'},
-        {'url': 'https://api.zchpc.co.zw', 'description': 'Production server'},
+        {'url': 'https://api.zchpc-erp.zw', 'description': 'Production server'},
     ],
 }
 

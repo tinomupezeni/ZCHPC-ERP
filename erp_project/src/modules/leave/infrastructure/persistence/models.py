@@ -105,3 +105,12 @@ class CompanyEvent(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.start_date})"
+
+# Phase 1: New Normalized Models for Leave
+class LeaveProfile(models.Model):
+    employee = models.OneToOneField('hr.Employees', on_delete=models.CASCADE, related_name='leave_profile')
+    leave_days_entitled = models.IntegerField(default=20)
+    accrual_rate = models.DecimalField(max_digits=5, decimal_places=2, default=1.67) # e.g. 20/12 months
+
+    class Meta:
+        db_table = 'leave_leaveprofile'

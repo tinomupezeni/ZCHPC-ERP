@@ -192,3 +192,26 @@ class DeductionTypeSerializer(serializers.Serializer):
     default_amount = serializers.DecimalField(
         max_digits=10, decimal_places=2, default=0
     )
+
+class EmployeeBankAccountSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    bank_name = serializers.CharField(max_length=100)
+    branch_code = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    account_number = serializers.CharField(max_length=50)
+    currency = serializers.CharField(max_length=10, default='USD')
+    is_primary = serializers.BooleanField(default=True)
+
+class StatutoryProfileSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    nssa_number = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True)
+    zimra_tax_number = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True)
+    paye_number = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True)
+    pays_aids_levy = serializers.BooleanField(default=True)
+    pension_fund = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
+
+class PayrollProfileSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    employee_uuid = serializers.UUIDField(source='employee.uuid', read_only=True)
+    usd_salary = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
+    zig_salary = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
+    pay_frequency = serializers.CharField(max_length=20, required=False)

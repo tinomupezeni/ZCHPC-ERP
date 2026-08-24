@@ -50,9 +50,6 @@ class EmployeeResponseSerializer(serializers.Serializer):
     zig_salary = serializers.DecimalField(
         max_digits=12, decimal_places=2, read_only=True, allow_null=True
     )
-    pay_frequency = serializers.CharField(read_only=True)
-    bank_name = serializers.CharField(read_only=True, allow_null=True)
-    bank_account = serializers.CharField(read_only=True, allow_null=True)
 
 
 class EmptyStringToNullIntegerField(serializers.IntegerField):
@@ -99,7 +96,6 @@ class CreateEmployeeRequestSerializer(serializers.Serializer):
     date_joined = serializers.DateField(required=False, allow_null=True)
     contract_from = serializers.DateField(required=False, allow_null=True)
     contract_to = serializers.DateField(required=False, allow_null=True)
-    leave_days_entitled = EmptyStringToNullIntegerField(required=False, default=22)
     usd_salary = serializers.DecimalField(
         max_digits=12, decimal_places=2, required=False, allow_null=True
     )
@@ -110,13 +106,6 @@ class CreateEmployeeRequestSerializer(serializers.Serializer):
         choices=["Monthly", "Weekly", "Bi-Weekly"],
         default="Monthly",
     )
-    bank_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
-    bank_account = serializers.CharField(max_length=50, required=False, allow_blank=True)
-    nssa_number = serializers.CharField(max_length=50, required=False, allow_blank=True)
-    zimra_number = serializers.CharField(max_length=50, required=False, allow_blank=True)
-    paye_number = serializers.CharField(max_length=50, required=False, allow_blank=True)
-    pays_aids_levy = serializers.BooleanField(default=True)
-    pension_fund = serializers.CharField(max_length=100, required=False, allow_blank=True)
     emergency_contact_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
     emergency_contact_number = serializers.CharField(max_length=15, required=False, allow_blank=True)
     emergency_contact_relationship = serializers.CharField(max_length=50, required=False, allow_blank=True)
@@ -155,7 +144,6 @@ class UpdateEmployeeRequestSerializer(serializers.Serializer):
     reports_to_id = serializers.IntegerField(required=False, allow_null=True)
     contract_from = serializers.DateField(required=False, allow_null=True)
     contract_to = serializers.DateField(required=False, allow_null=True)
-    leave_days_entitled = serializers.IntegerField(required=False, allow_null=True)
     usd_salary = serializers.DecimalField(
         max_digits=12, decimal_places=2, required=False, allow_null=True
     )
@@ -166,13 +154,6 @@ class UpdateEmployeeRequestSerializer(serializers.Serializer):
         choices=["Monthly", "Weekly", "Bi-Weekly"],
         required=False,
     )
-    bank_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
-    bank_account = serializers.CharField(max_length=50, required=False, allow_blank=True)
-    nssa_number = serializers.CharField(max_length=50, required=False, allow_blank=True)
-    zimra_number = serializers.CharField(max_length=50, required=False, allow_blank=True)
-    paye_number = serializers.CharField(max_length=50, required=False, allow_blank=True)
-    pays_aids_levy = serializers.BooleanField(required=False)
-    pension_fund = serializers.CharField(max_length=100, required=False, allow_blank=True)
     emergency_contact_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
     emergency_contact_number = serializers.CharField(max_length=15, required=False, allow_blank=True)
     emergency_contact_relationship = serializers.CharField(max_length=50, required=False, allow_blank=True)
@@ -199,4 +180,3 @@ class SalarySerializer(serializers.Serializer):
     employee_number = serializers.CharField(read_only=True)
     usd_amount = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     zig_amount = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
-    pay_frequency = serializers.CharField(read_only=True)

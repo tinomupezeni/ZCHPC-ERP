@@ -14,6 +14,7 @@ export interface SidebarItemConfig {
   icon: React.ElementType;
   path: string;
   permission: string[]; // A list of roles that can see this
+  moduleIdentifier?: string; // Link to backend system module
   subItems?: SidebarItemConfig[];
 }
 
@@ -31,6 +32,7 @@ export const navItems: SidebarItemConfig[] = [
     icon: Users,
     path: "/hr",
     permission: ["hr", "admin"], // Now an array
+    moduleIdentifier: "hr",
     subItems: [
       { title: "Employees", path: "/hr/hr-employees", permission: ["hr"] },
       {
@@ -97,6 +99,7 @@ export const navItems: SidebarItemConfig[] = [
     icon: CreditCard,
     path: "/payroll",
     permission: ["hr", "accountant", "admin"], // Now an array with both permissions
+    moduleIdentifier: "payroll",
     subItems: [
       {
         title: "Process Payroll",
@@ -150,12 +153,14 @@ export const navItems: SidebarItemConfig[] = [
     icon: ShoppingCart,
     path: "/sales",
     permission: ["sales", "admin"],
+    moduleIdentifier: "sales",
   },
   {
     title: "Accounting",
     icon: DollarSign,
     path: "/accounting",
     permission: ["accountant", "admin"],
+    moduleIdentifier: "accounts",
     subItems: [
       {
         title: "General Ledger",
@@ -199,6 +204,7 @@ export const navItems: SidebarItemConfig[] = [
     icon: FileText,
     path: "/procurement",
     permission: ["procurement", "admin"],
+    moduleIdentifier: "procurement",
     subItems: [
       {
         title: "Orders",
@@ -237,6 +243,7 @@ export const navItems: SidebarItemConfig[] = [
     icon: Package,
     path: "/inventory",
     permission: ["inventory", "admin"],
+    moduleIdentifier: "inventory",
     subItems: [
       { title: "Stock", path: "/inventory/stock", permission: ["inventory"] },
       {
@@ -255,6 +262,12 @@ export const navItems: SidebarItemConfig[] = [
     title: "Settings",
     icon: Settings,
     path: "/settings",
+    permission: ["admin"],
+  },
+  {
+    title: "App Store",
+    icon: Package,
+    path: "/modules",
     permission: ["admin"],
   },
 ];

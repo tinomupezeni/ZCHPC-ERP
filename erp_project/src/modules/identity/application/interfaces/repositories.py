@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from typing import Protocol
 from uuid import UUID
 
-from modules.identity.domain.entities import AuditLogEntry, Role, User
+from modules.identity.domain.entities import AuditLogEntry, Role, SystemModule, User
 
 
 class IUserRepository(ABC):
@@ -83,6 +83,42 @@ class IRoleRepository(ABC):
     @abstractmethod
     def update(self, role: Role) -> None:
         """Update an existing role."""
+        pass
+
+
+class ISystemModuleRepository(ABC):
+    """
+    Repository interface for SystemModule aggregate.
+    """
+
+    @abstractmethod
+    def get_by_id(self, module_id: int) -> SystemModule | None:
+        """Get module by ID."""
+        pass
+
+    @abstractmethod
+    def get_by_identifier(self, identifier: str) -> SystemModule | None:
+        """Get module by unique identifier (code name)."""
+        pass
+
+    @abstractmethod
+    def get_all(self, include_inactive: bool = True) -> list[SystemModule]:
+        """Get all modules."""
+        pass
+
+    @abstractmethod
+    def get_active(self) -> list[SystemModule]:
+        """Get only active modules."""
+        pass
+
+    @abstractmethod
+    def add(self, module: SystemModule) -> None:
+        """Add a new module."""
+        pass
+
+    @abstractmethod
+    def update(self, module: SystemModule) -> None:
+        """Update an existing module."""
         pass
 
 

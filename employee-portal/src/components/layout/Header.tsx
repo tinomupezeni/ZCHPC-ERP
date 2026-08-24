@@ -28,7 +28,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           <Link to="/portal" className="flex items-center gap-2">
             <img src="/logo.png" alt="ZCHPC" className="h-9 w-auto" />
             <div className="hidden sm:block">
-              <span className="font-bold text-lg tracking-tight">ZCHPC</span>
+              <span className="font-bold text-lg tracking-tight">ZCHPC ERP</span>
               <span className="text-blue-200 ml-2 text-sm">Portal</span>
             </div>
           </Link>

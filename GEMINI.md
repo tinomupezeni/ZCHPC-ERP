@@ -1,6 +1,7 @@
 # ZCHPC ERP - Gemini CLI Guidelines
 
-This document serves as the foundational mandate for Gemini CLI when operating within the ZCHPC ERP project. It consolidates project-specific "Golden Rules," architectural patterns, and standard operating procedures (SOPs).
+This document serves as the foundational mandate for Gemini CLI when operating within the ZCHPC ERP project.
+ It consolidates project-specific "Golden Rules," architectural patterns, and standard operating procedures (SOPs).
 
 ## 1. Project Architecture & Stack
 
