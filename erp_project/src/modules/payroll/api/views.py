@@ -246,7 +246,7 @@ class PayslipListView(APIView):
         payslips = PayrollModel.objects.filter(
             period__year=period.year,
             period__month=period.month
-        ).select_related("employee", "employee__department").order_by(
+        ).select_related("employee", "employee__employment_details__department").order_by(
             "employee__employee_id"
         )
 
@@ -261,7 +261,7 @@ class PayslipDetailView(APIView):
         """Get detailed payslip information."""
         try:
             payslip = PayrollModel.objects.select_related(
-                "employee", "employee__department"
+                "employee", "employee__employment_details__department"
             ).get(id=payslip_id)
         except PayrollModel.DoesNotExist:
             return Response(
@@ -269,12 +269,16 @@ class PayslipDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+        # Reverse OneToOne raises RelatedObjectDoesNotExist (an AttributeError
+        # subclass) when absent, so getattr(..., None) is the safe accessor.
+        employment_details = getattr(payslip.employee, "employment_details", None)
+
         # Build detailed response
         data = {
             "id": payslip.id,
             "employee_id": payslip.employee.employee_id,
             "employee_name": f"{payslip.employee.first_name} {payslip.employee.surname}",
-            "department": getattr(payslip.employee.department, "name", "N/A"),
+            "department": getattr(getattr(employment_details, "department", None), "name", "N/A"),
             "period": f"{payslip.period.year}-{payslip.period.month:02d}",
             "base_salary_usd": str(payslip.base_salary_usd or 0),
             "base_salary_zig": str(payslip.base_salary_zig or 0),

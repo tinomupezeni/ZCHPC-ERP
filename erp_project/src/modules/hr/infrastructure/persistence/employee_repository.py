@@ -42,12 +42,17 @@ class DjangoEmployeeRepository(IEmployeeRepository):
             self._model = Employees
         return self._model
 
+    # select_related traverses the reverse OneToOne into EmploymentDetails and
+    # its own department/position FKs in a single join; emergency_contacts is a
+    # reverse FK (multiple rows possible) so it needs prefetch_related instead.
+    _RELATED = ("role", "employment_details__department", "employment_details__position")
+
     def get_by_id(self, employee_id: int) -> Employee | None:
         """Get employee by database ID."""
         try:
             db_employee = self.model.objects.select_related(
-                "department", "position", "role"
-            ).get(id=employee_id)
+                *self._RELATED
+            ).prefetch_related("emergency_contacts").get(id=employee_id)
             return self._to_entity(db_employee)
         except self.model.DoesNotExist:
             return None
@@ -57,8 +62,8 @@ class DjangoEmployeeRepository(IEmployeeRepository):
         emp_id_str = str(employee_id)
         try:
             db_employee = self.model.objects.select_related(
-                "department", "position", "role"
-            ).get(employee_id=emp_id_str)
+                *self._RELATED
+            ).prefetch_related("emergency_contacts").get(employee_id=emp_id_str)
             return self._to_entity(db_employee)
         except self.model.DoesNotExist:
             return None
@@ -67,8 +72,8 @@ class DjangoEmployeeRepository(IEmployeeRepository):
         """Get employee by email address."""
         try:
             db_employee = self.model.objects.select_related(
-                "department", "position", "role"
-            ).get(email__iexact=email)
+                *self._RELATED
+            ).prefetch_related("emergency_contacts").get(email__iexact=email)
             return self._to_entity(db_employee)
         except self.model.DoesNotExist:
             return None
@@ -77,8 +82,8 @@ class DjangoEmployeeRepository(IEmployeeRepository):
         """Get employee by national ID."""
         try:
             db_employee = self.model.objects.select_related(
-                "department", "position", "role"
-            ).get(national_id=national_id)
+                *self._RELATED
+            ).prefetch_related("emergency_contacts").get(national_id=national_id)
             return self._to_entity(db_employee)
         except self.model.DoesNotExist:
             return None
@@ -86,8 +91,8 @@ class DjangoEmployeeRepository(IEmployeeRepository):
     def get_all(self, include_inactive: bool = False) -> list[Employee]:
         """Get all employees."""
         queryset = self.model.objects.select_related(
-            "department", "position", "role"
-        )
+            *self._RELATED
+        ).prefetch_related("emergency_contacts")
         if not include_inactive:
             queryset = queryset.filter(is_active=True)
         return [self._to_entity(e) for e in queryset]
@@ -95,8 +100,10 @@ class DjangoEmployeeRepository(IEmployeeRepository):
     def get_by_department(self, department_id: int, include_inactive: bool = False) -> list[Employee]:
         """Get employees in a department."""
         queryset = self.model.objects.select_related(
-            "department", "position", "role"
-        ).filter(department_id=department_id)
+            *self._RELATED
+        ).prefetch_related("emergency_contacts").filter(
+            employment_details__department_id=department_id
+        )
         if not include_inactive:
             queryset = queryset.filter(is_active=True)
         return [self._to_entity(e) for e in queryset]
@@ -104,8 +111,10 @@ class DjangoEmployeeRepository(IEmployeeRepository):
     def get_by_position(self, position_id: int, include_inactive: bool = False) -> list[Employee]:
         """Get employees with a specific position."""
         queryset = self.model.objects.select_related(
-            "department", "position", "role"
-        ).filter(position_id=position_id)
+            *self._RELATED
+        ).prefetch_related("emergency_contacts").filter(
+            employment_details__position_id=position_id
+        )
         if not include_inactive:
             queryset = queryset.filter(is_active=True)
         return [self._to_entity(e) for e in queryset]
@@ -143,6 +152,16 @@ class DjangoEmployeeRepository(IEmployeeRepository):
             queryset = queryset.filter(is_active=True)
         return queryset.count()
 
+    @property
+    def _employment_details_model(self):
+        from modules.hr.infrastructure.persistence.models import EmploymentDetails
+        return EmploymentDetails
+
+    @property
+    def _emergency_contact_model(self):
+        from modules.hr.infrastructure.persistence.models import EmergencyContact as EmergencyContactModel
+        return EmergencyContactModel
+
     @transaction.atomic
     def add(self, employee: Employee) -> None:
         """Add a new employee."""
@@ -157,22 +176,29 @@ class DjangoEmployeeRepository(IEmployeeRepository):
             marital_status=employee.marital_status.value if employee.marital_status else "",
             email=employee.email.value if employee.email else "",
             phone=employee.phone.value if employee.phone else "",
-            department_id=employee.department_id,
-            position_id=employee.position_id,
             role_id=employee.role_id,
-            employee_type=employee.employee_type.value,
-            reports_to_id=employee.reports_to_id,
-            date_joined=employee.date_joined,
-            contract_from=employee.contract_from,
-            contract_to=employee.contract_to,
             is_active=employee.is_active,
-            emergency_contact_name=employee.emergency_contact.name,
-            emergency_contact_number=employee.emergency_contact.number,
-            emergency_contact_relationship=employee.emergency_contact.relationship,
         )
         db_employee.save()
         # Update the entity with the generated ID (set _id, not id property)
         object.__setattr__(employee, "_id", db_employee.id)
+
+        self._employment_details_model.objects.create(
+            employee=db_employee,
+            department_id=employee.department_id,
+            position_id=employee.position_id,
+            reports_to_id=employee.reports_to_id,
+            date_joined=employee.date_joined,
+            contract_from=employee.contract_from,
+            contract_to=employee.contract_to,
+            employee_type=employee.employee_type.value,
+        )
+        self._emergency_contact_model.objects.create(
+            employee=db_employee,
+            name=employee.emergency_contact.name,
+            relationship=employee.emergency_contact.relationship,
+            phone=employee.emergency_contact.number,
+        )
 
     @transaction.atomic
     def update(self, employee: Employee) -> None:
@@ -188,19 +214,37 @@ class DjangoEmployeeRepository(IEmployeeRepository):
             marital_status=employee.marital_status.value if employee.marital_status else "",
             email=employee.email.value if employee.email else "",
             phone=employee.phone.value if employee.phone else "",
-            department_id=employee.department_id,
-            position_id=employee.position_id,
             role_id=employee.role_id,
-            employee_type=employee.employee_type.value,
-            reports_to_id=employee.reports_to_id,
-            date_joined=employee.date_joined,
-            contract_from=employee.contract_from,
-            contract_to=employee.contract_to,
             is_active=employee.is_active,
-            emergency_contact_name=employee.emergency_contact.name,
-            emergency_contact_number=employee.emergency_contact.number,
-            emergency_contact_relationship=employee.emergency_contact.relationship,
         )
+
+        self._employment_details_model.objects.update_or_create(
+            employee_id=employee.id,
+            defaults={
+                "department_id": employee.department_id,
+                "position_id": employee.position_id,
+                "reports_to_id": employee.reports_to_id,
+                "date_joined": employee.date_joined,
+                "contract_from": employee.contract_from,
+                "contract_to": employee.contract_to,
+                "employee_type": employee.employee_type.value,
+            },
+        )
+
+        emergency_contact_model = self._emergency_contact_model
+        emergency_contact = emergency_contact_model.objects.filter(employee_id=employee.id).first()
+        if emergency_contact is None:
+            emergency_contact_model.objects.create(
+                employee_id=employee.id,
+                name=employee.emergency_contact.name,
+                relationship=employee.emergency_contact.relationship,
+                phone=employee.emergency_contact.number,
+            )
+        else:
+            emergency_contact.name = employee.emergency_contact.name
+            emergency_contact.relationship = employee.emergency_contact.relationship
+            emergency_contact.phone = employee.emergency_contact.number
+            emergency_contact.save()
 
     @transaction.atomic
     def delete(self, employee_id: int) -> bool:
@@ -246,6 +290,15 @@ class DjangoEmployeeRepository(IEmployeeRepository):
             except ValueError:
                 pass
 
+        # Reverse OneToOne descriptor raises RelatedObjectDoesNotExist (a subclass
+        # of AttributeError) when absent, so getattr(..., None) is safe here.
+        employment_details = getattr(db_employee, "employment_details", None)
+
+        # Use .all() (not .first()) so a prefetch_related cache is reused instead
+        # of triggering a fresh query per employee.
+        emergency_contacts = list(db_employee.emergency_contacts.all())
+        emergency_contact_row = emergency_contacts[0] if emergency_contacts else None
+
         return Employee(
             id=db_employee.id,
             employee_id=EmployeeId(db_employee.employee_id),
@@ -258,18 +311,20 @@ class DjangoEmployeeRepository(IEmployeeRepository):
             marital_status=marital_status,
             email=email,
             phone=phone,
-            department_id=db_employee.department_id,
-            position_id=db_employee.position_id,
+            department_id=employment_details.department_id if employment_details else None,
+            position_id=employment_details.position_id if employment_details else None,
             role_id=db_employee.role_id,
-            employee_type=EmploymentType.from_string(db_employee.employee_type),
-            reports_to_id=db_employee.reports_to_id,
-            date_joined=db_employee.date_joined,
-            contract_from=db_employee.contract_from,
-            contract_to=db_employee.contract_to,
+            employee_type=EmploymentType.from_string(
+                employment_details.employee_type if employment_details else "Full-time"
+            ),
+            reports_to_id=employment_details.reports_to_id if employment_details else None,
+            date_joined=employment_details.date_joined if employment_details else None,
+            contract_from=employment_details.contract_from if employment_details else None,
+            contract_to=employment_details.contract_to if employment_details else None,
             is_active=db_employee.is_active,
             emergency_contact=EmergencyContact(
-                name=db_employee.emergency_contact_name or "",
-                number=db_employee.emergency_contact_number or "",
-                relationship=db_employee.emergency_contact_relationship or "",
+                name=emergency_contact_row.name if emergency_contact_row else "",
+                number=emergency_contact_row.phone if emergency_contact_row else "",
+                relationship=emergency_contact_row.relationship if emergency_contact_row else "",
             ),
         )

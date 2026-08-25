@@ -96,13 +96,22 @@ class LoginView(APIView):
         employee_data = None
         if hasattr(db_user, "employee_profile") and db_user.employee_profile:
             emp = db_user.employee_profile
+            # Reverse OneToOne raises RelatedObjectDoesNotExist (an AttributeError
+            # subclass) when absent, so getattr(..., None) is the safe accessor.
+            employment_details = getattr(emp, "employment_details", None)
             employee_data = {
                 "id": emp.id,
                 "employee_id": emp.employee_id,
                 "role": emp.role.name if emp.role else None,
                 "role_display_name": emp.role.display_name if emp.role else None,
-                "department": emp.department.name if emp.department else None,
-                "position": emp.position.title if emp.position else None,
+                "department": (
+                    employment_details.department.name
+                    if employment_details and employment_details.department else None
+                ),
+                "position": (
+                    employment_details.position.title
+                    if employment_details and employment_details.position else None
+                ),
             }
             refresh["role"] = emp.role.name if emp.role else None
 
