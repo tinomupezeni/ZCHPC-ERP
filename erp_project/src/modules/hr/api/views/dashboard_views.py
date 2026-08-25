@@ -90,14 +90,8 @@ class HRDashboardView(APIView):
             for emp in new_employees_qs
         ]
 
-        # Training programs (placeholder)
+        # Training programs (placeholder - not yet implemented)
         training_programs = []
-        try:
-            from modules.hr.infrastructure.persistence.models import TrainingProgram
-            # If model has fields, fetch them
-            training_programs = []
-        except Exception:
-            pass
 
         # Upcoming reviews (placeholder)
         upcoming_reviews = []

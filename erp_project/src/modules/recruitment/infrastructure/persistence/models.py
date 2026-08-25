@@ -26,7 +26,6 @@ class Job(models.Model):
     )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Open')
     location = models.CharField(max_length=100, default="Harare")
-    salary_range = models.CharField(max_length=100, blank=True, null=True)
     salary_usd_min = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     salary_usd_max = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     salary_zig_min = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
