@@ -5,6 +5,9 @@ import { MainLayout, PublicLayout } from '@/components/layout';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { AttendancePage } from '@/pages/AttendancePage';
 import { LeavePage } from '@/pages/LeavePage';
+import { FuelRequisitionsPage } from '@/pages/FuelRequisitionsPage';
+import { StoresRequisitionsPage } from '@/pages/StoresRequisitionsPage';
+import { ComparativeSchedulesPage } from '@/pages/ComparativeSchedulesPage';
 import { PayslipsPage } from '@/pages/PayslipsPage';
 import { JobsListPage } from '@/pages/JobsListPage';
 import { JobDetailPage } from '@/pages/JobDetailPage';
@@ -44,6 +47,9 @@ function App() {
             <Route path="/portal" element={<DashboardPage />} />
             <Route path="/portal/attendance" element={<AttendancePage />} />
             <Route path="/portal/leave" element={<LeavePage />} />
+            <Route path="/portal/fuel-requisitions" element={<FuelRequisitionsPage />} />
+            <Route path="/portal/stores-requisitions" element={<StoresRequisitionsPage />} />
+            <Route path="/portal/comparative-schedules" element={<ComparativeSchedulesPage />} />
             <Route path="/portal/payslips" element={<PayslipsPage />} />
           </Route>
 
