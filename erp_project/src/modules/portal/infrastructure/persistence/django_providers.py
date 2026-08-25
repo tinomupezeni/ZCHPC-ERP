@@ -104,7 +104,7 @@ class DjangoEmployeeProvider(IEmployeeProvider):
 
         # Authenticate user
         user = authenticate(
-            username=employee.user.username,
+            email=employee.user.email,
             password=password,
         )
 

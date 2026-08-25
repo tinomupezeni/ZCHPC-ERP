@@ -6,6 +6,9 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import permission_classes
+from django.utils import timezone
 
 from shared.domain.exceptions import ValidationError, NotFoundError
 from modules.procurement.domain.entities import Supplier, InventoryItem, BudgetCenter
@@ -19,6 +22,7 @@ from modules.procurement.infrastructure.persistence.django_inventory_item_reposi
 from modules.procurement.infrastructure.persistence.django_budget_center_repository import DjangoBudgetCenterRepository
 from modules.procurement.infrastructure.persistence.django_purchase_request_repository import DjangoPurchaseRequestRepository
 from modules.procurement.infrastructure.persistence.django_purchase_order_repository import DjangoPurchaseOrderRepository
+from modules.procurement.infrastructure.persistence.models import FuelRequisition, StoresRequisition, ComparativeSchedule
 from modules.procurement.api.serializers import (
     SupplierSerializer,
     CreateSupplierSerializer,
@@ -432,6 +436,133 @@ def purchase_request_reject(request: Request, request_id: int) -> Response:
         return Response(PurchaseRequestSerializer(pr).data)
     except Exception as e:
         return _handle_error(e)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def fuel_requisition_approve(request: Request, requisition_id: int) -> Response:
+    """Approve exactly the current office stage of a fuel requisition."""
+    try:
+        record = FuelRequisition.objects.get(pk=requisition_id)
+    except FuelRequisition.DoesNotExist:
+        return Response({"error": "Fuel requisition not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    employee = getattr(request.user, "employee_profile", None)
+    role = (employee.role.name if employee and employee.role else "").upper()
+    is_admin = request.user.is_superuser or role in {"ADMIN", "SYSTEM_ADMINISTRATOR"}
+    stages = {
+        "PENDING_DEPARTMENT": ("department", {"MANAGER", "DEPARTMENT_MANAGER", "HR_MANAGER"}),
+        "PENDING_RECIPIENT": ("recipient", set()),
+        "PENDING_FINANCE": ("finance", {"FINANCE", "ACCOUNTANT", "GENERAL_MANAGER"}),
+        "PENDING_DIRECTOR": ("director", {"DIRECTOR", "ZCHPC_DIRECTOR"}),
+        "PENDING_ADMIN": ("admin", {"ADMIN", "SYSTEM_ADMINISTRATOR"}),
+    }
+    stage = stages.get(record.status)
+    if stage is None:
+        return Response({"error": "This requisition is no longer awaiting approval"}, status=status.HTTP_400_BAD_REQUEST)
+    stage_name, roles = stage
+
+    recipient_match = False
+    if employee and stage_name == "recipient":
+        recipient_text = record.recipient_driver.strip().lower()
+        recipient_match = recipient_text in {
+            request.user.email.lower(),
+            f"{employee.first_name} {employee.surname}".strip().lower(),
+            employee.employee_id.lower(),
+        }
+    if not is_admin and not (role in roles or any(item in role for item in roles) or recipient_match):
+        return Response({"error": "You are not authorized for this approval stage"}, status=status.HTTP_403_FORBIDDEN)
+    if record.requester_id == request.user.id:
+        return Response({"error": "The requester cannot approve their own requisition"}, status=status.HTTP_403_FORBIDDEN)
+
+    next_status = {
+        "department": "PENDING_RECIPIENT",
+        "recipient": "PENDING_FINANCE",
+        "finance": "PENDING_DIRECTOR",
+        "director": "PENDING_ADMIN",
+        "admin": "APPROVED",
+    }[stage_name]
+    setattr(record, f"{stage_name}_approved_by_id", request.user.id)
+    setattr(record, f"{stage_name}_approved_at", timezone.now())
+    record.status = next_status
+    record.save()
+    return Response({"id": record.id, "status": record.status})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def stores_requisition_approve(request: Request, requisition_id: int) -> Response:
+    """Approve exactly the current office stage of a Stores Requisition."""
+    try:
+        record = StoresRequisition.objects.get(pk=requisition_id)
+    except StoresRequisition.DoesNotExist:
+        return Response({"error": "Stores requisition not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    employee = getattr(request.user, "employee_profile", None)
+    role = (employee.role.name if employee and employee.role else "").upper()
+    is_admin = request.user.is_superuser or role in {"ADMIN", "SYSTEM_ADMINISTRATOR"}
+    stages = {
+        "PENDING_DEPARTMENT": ("department", {"MANAGER", "DEPARTMENT_MANAGER", "HR_MANAGER"}),
+        "PENDING_PROCUREMENT": ("procurement", {"PROCUREMENT", "PROCUREMENT_OFFICER", "STORES", "STORES_OFFICER"}),
+        "PENDING_ACCOUNTS": ("accounts", {"ACCOUNTS", "ACCOUNTANT", "FINANCE"}),
+        "PENDING_GENERAL_MANAGER": ("general_manager", {"GENERAL_MANAGER", "MANAGER"}),
+        "PENDING_DIRECTOR": ("director", {"DIRECTOR", "ZCHPC_DIRECTOR"}),
+        "PENDING_ADMIN": ("admin", {"ADMIN", "SYSTEM_ADMINISTRATOR"}),
+    }
+    stage = stages.get(record.status)
+    if stage is None:
+        return Response({"error": "This requisition is no longer awaiting approval"}, status=status.HTTP_400_BAD_REQUEST)
+    stage_name, allowed_roles = stage
+    if not is_admin and not (role in allowed_roles or any(item in role for item in allowed_roles)):
+        return Response({"error": "You are not authorized for this approval stage"}, status=status.HTTP_403_FORBIDDEN)
+    if stage_name == "department" and not is_admin and employee.department_id != record.department_id:
+        return Response({"error": "Only the requester's department can approve this stage"}, status=status.HTTP_403_FORBIDDEN)
+    if record.requester_id == request.user.id:
+        return Response({"error": "The requester cannot approve their own requisition"}, status=status.HTTP_403_FORBIDDEN)
+
+    next_status = {
+        "department": "PENDING_PROCUREMENT",
+        "procurement": "PENDING_ACCOUNTS",
+        "accounts": "PENDING_GENERAL_MANAGER",
+        "general_manager": "PENDING_DIRECTOR",
+        "director": "PENDING_ADMIN",
+        "admin": "APPROVED",
+    }[stage_name]
+    setattr(record, f"{stage_name}_approved_by_id", request.user.id)
+    setattr(record, f"{stage_name}_approved_at", timezone.now())
+    record.status = next_status
+    record.save()
+    return Response({"id": record.id, "requisition_number": record.requisition_number, "status": record.status})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def comparative_schedule_approve(request: Request, schedule_id: int) -> Response:
+    """Advance a comparative schedule through Procurement, Director, Procurement, Accounts."""
+    try:
+        record = ComparativeSchedule.objects.get(pk=schedule_id)
+    except ComparativeSchedule.DoesNotExist:
+        return Response({"error": "Comparative schedule not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    employee = getattr(request.user, "employee_profile", None)
+    role = (employee.role.name if employee and employee.role else "").upper()
+    is_admin = request.user.is_superuser or role in {"ADMIN", "SYSTEM_ADMINISTRATOR"}
+    stages = {
+        "PENDING_DIRECTOR": ("director", {"DIRECTOR", "ZCHPC_DIRECTOR"}),
+        "PENDING_PROCUREMENT": ("procurement_finalised", {"PROCUREMENT", "PROCUREMENT_OFFICER"}),
+        "PENDING_ACCOUNTS": ("accounts", {"ACCOUNTS", "ACCOUNTANT", "FINANCE"}),
+    }
+    stage = stages.get(record.status)
+    if stage is None:
+        return Response({"error": "This schedule is no longer awaiting approval"}, status=status.HTTP_400_BAD_REQUEST)
+    stage_name, allowed_roles = stage
+    if not is_admin and not (role in allowed_roles or any(item in role for item in allowed_roles)):
+        return Response({"error": "You are not authorized for this approval stage"}, status=status.HTTP_403_FORBIDDEN)
+    setattr(record, f"{stage_name}_by_id", request.user.id)
+    setattr(record, f"{stage_name}_at", timezone.now())
+    record.status = {"director": "PENDING_PROCUREMENT", "procurement_finalised": "PENDING_ACCOUNTS", "accounts": "APPROVED"}[stage_name]
+    record.save()
+    return Response({"id": record.id, "schedule_number": record.schedule_number, "status": record.status})
 
 
 # ============================
