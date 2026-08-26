@@ -127,7 +127,7 @@ POST /auth/users/
   "email": "newuser@zchpc.com",
   "first_name": "Jane",
   "last_name": "Smith",
-  "temp_password": "erp@1234"
+  "temp_password": "temp-password"
 }
 ```
 
