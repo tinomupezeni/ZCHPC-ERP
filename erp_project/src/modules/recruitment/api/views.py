@@ -1,7 +1,8 @@
 """
 Recruitment API views.
 """
-
+from rest_framework.parsers import MultiPartParser, FormParser
+from modules.recruitment.api.validators import validate_resume_file
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -279,11 +280,21 @@ class PublicApplyView(APIView):
     """Public job application."""
 
     permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
-        """Submit a job application."""
+        """Submit a job application, including a resume upload."""
         serializer = SubmitApplicationRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        resume_file = request.FILES.get("resume")
+        validate_resume_file(resume_file)
+
+        # Save the file and get a path back for the domain layer.
+        from django.core.files.storage import default_storage
+        saved_path = default_storage.save(
+            f"recruitment/resumes/{resume_file.name}", resume_file
+        )
 
         service = get_application_service()
         try:
@@ -302,6 +313,7 @@ class PublicApplyView(APIView):
                 qualifications=serializer.validated_data.get("qualifications", ""),
                 experience=serializer.validated_data.get("experience", ""),
                 cover_letter=serializer.validated_data.get("cover_letter", ""),
+                resume_path=saved_path,
             )
             application = service.submit_application(command)
             return Response(
