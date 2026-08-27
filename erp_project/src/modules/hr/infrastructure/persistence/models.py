@@ -64,10 +64,7 @@ class Employees(models.Model):
                 self.employee_id = "EMP0001"
         super().save(*args, **kwargs)
     email = models.EmailField(unique=True, default='placeholder@example.com')
-    department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True)
-    position = models.ForeignKey('Position', on_delete=models.SET_NULL, null=True, blank=True)
     role = models.ForeignKey('Role', on_delete=models.SET_NULL, null=True, blank=True)
-    employee_type = models.CharField(max_length=50, default='Full-time')
     is_active = models.BooleanField(default=True)
 
     # Personal information
@@ -77,14 +74,8 @@ class Employees(models.Model):
     marital_status = models.CharField(max_length=20, null=True, blank=True)
     phone = models.CharField(max_length=20, null=True, blank=True)
 
-    # Employment details
-    reports_to = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='direct_reports')
-    date_joined = models.DateField(null=True, blank=True)
-    contract_from = models.DateField(null=True, blank=True)
-    contract_to = models.DateField(null=True, blank=True)    # Emergency contact
-    emergency_contact_name = models.CharField(max_length=100, null=True, blank=True)
-    emergency_contact_number = models.CharField(max_length=20, null=True, blank=True)
-    emergency_contact_relationship = models.CharField(max_length=50, null=True, blank=True)
+    # Employment details (department, position, reports_to, dates, employee_type)
+    # and emergency contact info now live in EmploymentDetails/EmergencyContact below.
 
 # Phase 1: New Normalized Models for HR
 class EmployeeContact(models.Model):

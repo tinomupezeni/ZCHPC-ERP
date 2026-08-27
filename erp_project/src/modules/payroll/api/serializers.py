@@ -127,7 +127,7 @@ class PayslipListSerializer(serializers.Serializer):
     employee_id = serializers.CharField(source="employee.employee_id")
     employee_name = serializers.SerializerMethodField()
     department = serializers.CharField(
-        source="employee.department.name", default="N/A"
+        source="employee.employment_details.department.name", default="N/A"
     )
     period = serializers.SerializerMethodField()
     gross_usd = serializers.DecimalField(max_digits=12, decimal_places=2)

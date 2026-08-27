@@ -54,14 +54,14 @@ class AdminDashboardView(APIView):
         # Employee distribution by department
         employee_distribution = list(
             Employees.objects.filter(is_active=True)
-            .values('department__name')
+            .values('employment_details__department__name')
             .annotate(employees=Count('id'))
             .order_by('-employees')
         )
         # Format for frontend
         employee_distribution = [
             {
-                'department': item['department__name'] or 'Unassigned',
+                'department': item['employment_details__department__name'] or 'Unassigned',
                 'employees': item['employees']
             }
             for item in employee_distribution
@@ -69,7 +69,7 @@ class AdminDashboardView(APIView):
 
         # Payroll distribution by department (latest period)
         payroll_distribution = list(
-            Payroll.objects.values('employee__department__name')
+            Payroll.objects.values('employee__employment_details__department__name')
             .annotate(
                 total_usd=Sum('net_salary_usd'),
                 total_zig=Sum('net_salary_zig')
@@ -79,7 +79,7 @@ class AdminDashboardView(APIView):
         # Format for frontend
         payroll_distribution = [
             {
-                'employee__department': item['employee__department__name'] or 'Unassigned',
+                'employee__department': item['employee__employment_details__department__name'] or 'Unassigned',
                 'total_usd': str(item['total_usd'] or 0),
                 'total_zig': str(item['total_zig'] or 0)
             }

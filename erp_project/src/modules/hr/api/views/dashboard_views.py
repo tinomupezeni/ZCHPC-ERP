@@ -75,20 +75,27 @@ class HRDashboardView(APIView):
         thirty_days_ago = date.today() - timedelta(days=30)
         new_employees_qs = Employees.objects.filter(
             is_active=True,
-            date_joined__gte=thirty_days_ago
-        ).select_related('department', 'position', 'role').order_by('-date_joined')[:5]
+            employment_details__date_joined__gte=thirty_days_ago
+        ).select_related(
+            'role', 'employment_details__department', 'employment_details__position'
+        ).order_by('-employment_details__date_joined')[:5]
 
-        new_employees = [
-            {
+        def _employment_details(emp):
+            # Reverse OneToOne raises RelatedObjectDoesNotExist (an AttributeError
+            # subclass) when absent, so getattr(..., None) is the safe accessor.
+            return getattr(emp, 'employment_details', None)
+
+        new_employees = []
+        for emp in new_employees_qs:
+            details = _employment_details(emp)
+            new_employees.append({
                 'id': emp.id,
                 'name': f"{emp.first_name} {emp.surname}",
                 'role': emp.role.display_name if emp.role else 'N/A',
-                'department': emp.department.name if emp.department else 'N/A',
-                'joinDate': emp.date_joined.isoformat() if emp.date_joined else None,
+                'department': details.department.name if details and details.department else 'N/A',
+                'joinDate': details.date_joined.isoformat() if details and details.date_joined else None,
                 'avatarUrl': None,
-            }
-            for emp in new_employees_qs
-        ]
+            })
 
         # Training programs (placeholder - not yet implemented)
         training_programs = []

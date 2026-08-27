@@ -17,7 +17,7 @@ class Command(BaseCommand):
 
         # Import HR models within the handle method to avoid AppRegistryNotReady error
         from modules.hr.infrastructure.persistence.models import (
-            Department, Role, Position, Employees
+            Department, Role, Position, Employees, EmploymentDetails
         )
         from django.contrib.auth import get_user_model
         User = get_user_model() # Ensure CustomUser is properly loaded
@@ -84,11 +84,17 @@ class Command(BaseCommand):
                     'first_name': user.first_name,
                     'surname': user.last_name,
                     'email': user.email,
+                    'role': admin_role,
+                    'is_active': True,
+                }
+            )
+            # department/position/employee_type live in EmploymentDetails now.
+            EmploymentDetails.objects.update_or_create(
+                employee=employee,
+                defaults={
                     'department': it_department,
                     'position': it_position,
-                    'role': admin_role,
                     'employee_type': 'Full-time',
-                    'is_active': True,
                 }
             )
             if not employee_created:

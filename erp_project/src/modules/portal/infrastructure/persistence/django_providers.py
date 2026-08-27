@@ -34,6 +34,9 @@ class DjangoEmployeeProvider(IEmployeeProvider):
 
     def _to_dto(self, employee) -> EmployeeDTO:
         """Convert Django model to DTO."""
+        # Reverse OneToOne raises RelatedObjectDoesNotExist (an AttributeError
+        # subclass) when absent, so getattr(..., None) is the safe accessor.
+        employment_details = getattr(employee, "employment_details", None)
         return EmployeeDTO(
             id=employee.id,
             employee_id=employee.employee_id,
@@ -41,13 +44,15 @@ class DjangoEmployeeProvider(IEmployeeProvider):
             surname=employee.surname,
             email=employee.email,
             phone=employee.phone,
-            department_id=employee.department_id,
+            department_id=employment_details.department_id if employment_details else None,
             department_name=(
-                employee.department.name if employee.department else None
+                employment_details.department.name
+                if employment_details and employment_details.department else None
             ),
-            position_id=employee.position_id,
+            position_id=employment_details.position_id if employment_details else None,
             position_name=(
-                employee.position.title if employee.position else None
+                employment_details.position.title
+                if employment_details and employment_details.position else None
             ),
             is_active=employee.is_active,
             user_id=employee.user_id,
@@ -57,7 +62,7 @@ class DjangoEmployeeProvider(IEmployeeProvider):
         from modules.hr.infrastructure.persistence.models import Employees
         try:
             employee = Employees.objects.select_related(
-                "department", "position"
+                "employment_details__department", "employment_details__position"
             ).get(pk=employee_id)
             return self._to_dto(employee)
         except Employees.DoesNotExist:
@@ -67,7 +72,7 @@ class DjangoEmployeeProvider(IEmployeeProvider):
         from modules.hr.infrastructure.persistence.models import Employees
         try:
             employee = Employees.objects.select_related(
-                "department", "position"
+                "employment_details__department", "employment_details__position"
             ).get(employee_id=ec_number)
             return self._to_dto(employee)
         except Employees.DoesNotExist:
@@ -77,7 +82,7 @@ class DjangoEmployeeProvider(IEmployeeProvider):
         from modules.hr.infrastructure.persistence.models import Employees
         try:
             employee = Employees.objects.select_related(
-                "department", "position"
+                "employment_details__department", "employment_details__position"
             ).get(user_id=user_id)
             return self._to_dto(employee)
         except Employees.DoesNotExist:
@@ -93,7 +98,7 @@ class DjangoEmployeeProvider(IEmployeeProvider):
         # Get employee by EC number
         try:
             employee = Employees.objects.select_related(
-                "department", "position", "user"
+                "employment_details__department", "employment_details__position", "user"
             ).get(employee_id=ec_number)
         except Employees.DoesNotExist:
             return None
