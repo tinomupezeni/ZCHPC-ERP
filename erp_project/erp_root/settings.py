@@ -257,3 +257,14 @@ CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', DEFAULT_CSRF_ORIGI
 
 # --- AutoField ---
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# --- Email ---
+# Defaults to the console backend (prints emails to the terminal) for local
+# development/testing. In production, set EMAIL_BACKEND to the SMTP backend
+# via environment variable and configure EMAIL_HOST/PORT/USER/PASSWORD.
+EMAIL_BACKEND = os.environ.get(
+    'EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend'
+)
+DEFAULT_FROM_EMAIL = os.environ.get(
+    'DEFAULT_FROM_EMAIL', 'ZCHPC ERP <noreply@zchpc.ac.zw>'
+)
