@@ -1,18 +1,8 @@
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { CalendarPlus, Loader2 } from 'lucide-react';
-import { format, differenceInDays } from 'date-fns';
+import { Loader2, Printer } from 'lucide-react';
+import { format } from 'date-fns';
+import { useAuth } from '@/contexts/AuthContext';
 import type { LeaveType, LeaveBalance, CreateLeaveRequestData } from '@/types/leave.types';
 
 interface LeaveRequestFormProps {
@@ -24,53 +14,39 @@ interface LeaveRequestFormProps {
 
 export function LeaveRequestForm({
   leaveTypes,
-  balances,
   onSubmit,
   isSubmitting,
 }: LeaveRequestFormProps) {
   const [leaveType, setLeaveType] = useState<string>('');
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
-  const [reason, setReason] = useState<string>('');
+  const [period, setPeriod] = useState<string>('');
+  const [daysApplied, setDaysApplied] = useState<string>('');
+  const [address, setAddress] = useState('');
+  const [telephone, setTelephone] = useState('');
+  const [email, setEmail] = useState('');
+  const [signature, setSignature] = useState('');
+  const [applicationDate, setApplicationDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [employmentCode, setEmploymentCode] = useState('EMP0001');
+  const [fullNames, setFullNames] = useState('');
+  const [designation, setDesignation] = useState('');
+  const [department, setDepartment] = useState('IT');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const { employee } = useAuth();
 
-  const today = format(new Date(), 'yyyy-MM-dd');
-
-  const selectedBalance = balances.find(
-    (b) => b.leave_type === parseInt(leaveType)
-  );
-
-  const calculateDays = (): number => {
-    if (!startDate || !endDate) return 0;
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    return differenceInDays(end, start) + 1;
-  };
-
-  const numberOfDays = calculateDays();
+  useEffect(() => {
+    if (employee) {
+      setEmploymentCode(employee.employee_id || 'EMP0001');
+      setFullNames(employee.full_name || `${employee.first_name} ${employee.surname}`.trim());
+      setDesignation(employee.position_title || '');
+      setDepartment(employee.department_name || 'IT');
+    }
+  }, [employee]);
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    if (!leaveType) {
-      newErrors.leaveType = 'Please select a leave type';
-    }
-
-    if (!startDate) {
-      newErrors.startDate = 'Please select a start date';
-    }
-
-    if (!endDate) {
-      newErrors.endDate = 'Please select an end date';
-    }
-
-    if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
-      newErrors.endDate = 'End date must be after start date';
-    }
-
-    if (selectedBalance && numberOfDays > selectedBalance.days_remaining) {
-      newErrors.leaveType = `Insufficient balance. You have ${selectedBalance.days_remaining} days remaining.`;
-    }
+    if (!leaveType) newErrors.leaveType = 'Select a leave type';
+    if (!period) newErrors.period = 'Enter the leave period';
+    if (!daysApplied) newErrors.daysApplied = 'Enter the number of days';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -82,137 +58,30 @@ export function LeaveRequestForm({
     if (!validate()) return;
 
     await onSubmit({
-      leave_type: parseInt(leaveType),
-      start_date: startDate,
-      end_date: endDate,
-      reason: reason || undefined,
+      leave_type_id: parseInt(leaveType),
+      start_date: period.split(' to ')[0] || applicationDate,
+      end_date: period.split(' to ')[1] || applicationDate,
+      reason: `Employment Code Number: ${employmentCode}; Full Names: ${fullNames}; Designation: ${designation}; Department: ${department}; Address: ${address}; Telephone: ${telephone}; Email: ${email}; Signature: ${signature}`,
     });
 
     // Reset form on success
     setLeaveType('');
-    setStartDate('');
-    setEndDate('');
-    setReason('');
+    setPeriod(''); setDaysApplied(''); setAddress(''); setTelephone(''); setEmail(''); setSignature('');
     setErrors({});
   };
 
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
-          <CalendarPlus className="h-5 w-5" />
-          Request Leave
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Leave Type */}
-          <div className="space-y-2">
-            <Label htmlFor="leaveType">Leave Type</Label>
-            <Select value={leaveType} onValueChange={setLeaveType}>
-              <SelectTrigger id="leaveType">
-                <SelectValue placeholder="Select leave type" />
-              </SelectTrigger>
-              <SelectContent>
-                {leaveTypes.map((type) => {
-                  const balance = balances.find(
-                    (b) => b.leave_type === type.id
-                  );
-                  return (
-                    <SelectItem key={type.id} value={type.id.toString()}>
-                      {type.name}
-                      {balance && (
-                        <span className="text-muted-foreground ml-2">
-                          ({balance.days_remaining} days left)
-                        </span>
-                      )}
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-            {errors.leaveType && (
-              <p className="text-sm text-destructive">{errors.leaveType}</p>
-            )}
-            {selectedBalance && (
-              <p className="text-xs text-muted-foreground">
-                Balance: {selectedBalance.days_remaining} / {selectedBalance.days_allowed} days
-              </p>
-            )}
-          </div>
-
-          {/* Date Range */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="startDate">Start Date</Label>
-              <Input
-                id="startDate"
-                type="date"
-                min={today}
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-              {errors.startDate && (
-                <p className="text-sm text-destructive">{errors.startDate}</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="endDate">End Date</Label>
-              <Input
-                id="endDate"
-                type="date"
-                min={startDate || today}
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-              {errors.endDate && (
-                <p className="text-sm text-destructive">{errors.endDate}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Days Summary */}
-          {numberOfDays > 0 && (
-            <div className="p-3 bg-muted/50 rounded-lg text-center">
-              <p className="text-lg font-semibold">{numberOfDays} day{numberOfDays !== 1 ? 's' : ''}</p>
-              <p className="text-xs text-muted-foreground">
-                {startDate && format(new Date(startDate), 'MMM d, yyyy')} -{' '}
-                {endDate && format(new Date(endDate), 'MMM d, yyyy')}
-              </p>
-            </div>
-          )}
-
-          {/* Reason */}
-          <div className="space-y-2">
-            <Label htmlFor="reason">Reason (Optional)</Label>
-            <Textarea
-              id="reason"
-              placeholder="Enter reason for leave..."
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              rows={3}
-            />
-          </div>
-
-          {/* Submit Button */}
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={isSubmitting || !leaveType || !startDate || !endDate}
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Submitting...
-              </>
-            ) : (
-              'Submit Request'
-            )}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
-  );
+  return <div className="leave-paper-wrap">
+    <div className="leave-actions"><Button type="button" variant="outline" onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" />Print form</Button></div>
+    <form className="leave-paper" onSubmit={handleSubmit}>
+      <header className="leave-header"><img src="/logo.png" alt="ZCHPC" /><h1>ZCHPC</h1><h2>ZIMBABWE CENTRE FOR HIGH PERFORMANCE<br />COMPUTING</h2><h3>APPLICATION FOR LEAVE <span>(HR 02)</span></h3><strong>Confidential</strong></header>
+      <div className="leave-dash" />
+      <table className="leave-identity"><tbody><tr><th>EMPLOYMENT CODE NUMBER</th><td><input value={employmentCode} onChange={(event) => setEmploymentCode(event.target.value)} /></td></tr><tr><th>FULL NAMES</th><td><input value={fullNames} onChange={(event) => setFullNames(event.target.value)} /></td></tr><tr><th>DESIGNATION</th><td><input value={designation} onChange={(event) => setDesignation(event.target.value)} /></td></tr><tr><th>DEPARTMENT</th><td><input value={department} onChange={(event) => setDepartment(event.target.value)} /></td></tr></tbody></table>
+      <h4>LEAVE DETAILS</h4><table className="leave-types"><thead><tr><th>TYPE OF LEAVE</th><th>PERIOD</th><th>NUMBER OF DAYS APPLIED</th></tr></thead><tbody>{['VACATION', 'SICK', 'MATERNITY', 'STUDY', 'SPECIAL/COMPASSIONATE', 'ANNUAL'].map((name) => <tr key={name}><td><label><input type="radio" name="leaveType" checked={leaveType === String(leaveTypes.find((type) => type.name.toUpperCase() === name)?.id || '')} onChange={() => { const type = leaveTypes.find((item) => item.name.toUpperCase() === name); if (type) setLeaveType(String(type.id)); }} />{name}</label></td><td><input value={leaveType === String(leaveTypes.find((type) => type.name.toUpperCase() === name)?.id || '') ? period : ''} onChange={(event) => setPeriod(event.target.value)} /></td><td><input value={leaveType === String(leaveTypes.find((type) => type.name.toUpperCase() === name)?.id || '') ? daysApplied : ''} onChange={(event) => setDaysApplied(event.target.value)} /></td></tr>)}</tbody></table>
+      <h4>Contact details while on leave:</h4><label className="leave-line">Address<input value={address} onChange={(event) => setAddress(event.target.value)} /></label><div className="leave-two-lines"><label>Telephone<input value={telephone} onChange={(event) => setTelephone(event.target.value)} /></label><label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label></div><div className="leave-two-lines"><label>Signature of Applicant<input value={signature} onChange={(event) => setSignature(event.target.value)} /></label><label>Date<input type="date" value={applicationDate} onChange={(event) => setApplicationDate(event.target.value)} /></label></div>
+      <table className="leave-approval"><thead><tr><th>Recommended/<br />not recommended</th><th>Recommended/<br />not recommended</th><th>Approved/Not Approved</th></tr></thead><tbody><tr><td>DEPARTMENT HEAD<br /><span>........................<br />signature</span></td><td>HR DEPARTMENT<br /><span>Number of Days accumulated<br /><br />.................... signature</span></td><td>DIRECTOR/GENERAL MANAGER<br /><span>............................ Signature ................. Date</span></td></tr></tbody></table>
+      <div className="leave-submit"><Button type="submit" disabled={isSubmitting || !leaveType}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Submit Leave Application</Button></div>
+    </form>
+  </div>;
 }
 
 export default LeaveRequestForm;

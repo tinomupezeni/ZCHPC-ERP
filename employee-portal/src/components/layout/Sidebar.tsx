@@ -18,6 +18,7 @@ import {
   Fuel,
   ClipboardCheck,
   Scale,
+  Plane,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -40,6 +41,7 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
     { path: '/portal/fuel-requisitions', label: 'Fuel Requisitions', icon: Fuel, description: 'Submit fuel request' },
     { path: '/portal/stores-requisitions', label: 'Stores Requisitions', icon: ClipboardCheck, description: 'Submit stores request' },
     { path: '/portal/comparative-schedules', label: 'Comparative Schedules', icon: Scale, description: 'Compare quotations' },
+    { path: '/portal/travel-authorisation', label: 'Travel Authorisation', icon: Plane, description: 'Request official travel' },
   ],
   hr: [
     { path: '/portal', label: 'Dashboard', icon: Home, description: 'HR overview' },
@@ -55,6 +57,7 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
     { path: '/portal/fuel-requisitions', label: 'Fuel Requisitions', icon: Fuel, description: 'Approve fuel requests' },
     { path: '/portal/stores-requisitions', label: 'Stores Requisitions', icon: ClipboardCheck, description: 'Approve stores requests' },
     { path: '/portal/comparative-schedules', label: 'Comparative Schedules', icon: Scale, description: 'Approve schedules' },
+    { path: '/portal/travel-authorisation', label: 'Travel Authorisation', icon: Plane, description: 'Review travel forms' },
     { path: '/portal/attendance', label: 'Team Attendance', icon: Clock, description: 'Department records' },
     { path: '/portal/reports', label: 'Reports', icon: BarChart2, description: 'Team performance' },
     { path: '/portal/payslips', label: 'My Payslips', icon: FileText, description: 'Your earnings' },
@@ -67,6 +70,7 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
     { path: '/portal/fuel-requisitions', label: 'Fuel Requisitions', icon: Fuel, description: 'Approve fuel requests' },
     { path: '/portal/stores-requisitions', label: 'Stores Requisitions', icon: ClipboardCheck, description: 'Approve stores requests' },
     { path: '/portal/comparative-schedules', label: 'Comparative Schedules', icon: Scale, description: 'Approve schedules' },
+    { path: '/portal/travel-authorisation', label: 'Travel Authorisation', icon: Plane, description: 'Review travel forms' },
     { path: '/portal/leave', label: 'Leave', icon: CalendarDays, description: 'Request time off' },
     { path: '/portal/payslips', label: 'My Payslips', icon: FileText, description: 'Your earnings' },
     { path: '/portal/attendance', label: 'Attendance', icon: Clock, description: 'Clock in/out' },
@@ -77,6 +81,7 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
     { path: '/portal/fuel-requisitions', label: 'Fuel Requisitions', icon: Fuel, description: 'Process fuel requests' },
     { path: '/portal/stores-requisitions', label: 'Stores Requisitions', icon: ClipboardCheck, description: 'Process stores requests' },
     { path: '/portal/comparative-schedules', label: 'Comparative Schedules', icon: Scale, description: 'Process quotations' },
+    { path: '/portal/travel-authorisation', label: 'Travel Authorisation', icon: Plane, description: 'Process travel forms' },
     { path: '/portal/inventory', label: 'Inventory', icon: Package, description: 'Stock levels' },
     { path: '/portal/suppliers', label: 'Suppliers', icon: Users, description: 'Vendor records' },
     { path: '/portal/leave', label: 'Leave', icon: CalendarDays, description: 'Request time off' },
@@ -91,6 +96,7 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
     { path: '/portal/fuel-requisitions', label: 'Fuel Requisitions', icon: Fuel, description: 'Process fuel requests' },
     { path: '/portal/stores-requisitions', label: 'Stores Requisitions', icon: ClipboardCheck, description: 'Process stores requests' },
     { path: '/portal/comparative-schedules', label: 'Comparative Schedules', icon: Scale, description: 'Process quotations' },
+    { path: '/portal/travel-authorisation', label: 'Travel Authorisation', icon: Plane, description: 'Process travel forms' },
     { path: '/careers', label: 'Recruitment', icon: UserPlus, description: 'Job postings & apps' },
     { path: '/portal/reports', label: 'Reports', icon: BarChart2, description: 'System-wide reports' },
     { path: '/portal/attendance', label: 'Attendance', icon: Clock, description: 'Track records' },

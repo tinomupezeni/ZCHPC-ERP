@@ -8,6 +8,7 @@ import { LeavePage } from '@/pages/LeavePage';
 import { FuelRequisitionsPage } from '@/pages/FuelRequisitionsPage';
 import { StoresRequisitionsPage } from '@/pages/StoresRequisitionsPage';
 import { ComparativeSchedulesPage } from '@/pages/ComparativeSchedulesPage';
+import { TravelAuthorisationPage } from '@/pages/TravelAuthorisationPage';
 import { PayslipsPage } from '@/pages/PayslipsPage';
 import { JobsListPage } from '@/pages/JobsListPage';
 import { JobDetailPage } from '@/pages/JobDetailPage';
@@ -50,6 +51,7 @@ function App() {
             <Route path="/portal/fuel-requisitions" element={<FuelRequisitionsPage />} />
             <Route path="/portal/stores-requisitions" element={<StoresRequisitionsPage />} />
             <Route path="/portal/comparative-schedules" element={<ComparativeSchedulesPage />} />
+            <Route path="/portal/travel-authorisation" element={<TravelAuthorisationPage />} />
             <Route path="/portal/payslips" element={<PayslipsPage />} />
           </Route>
 
