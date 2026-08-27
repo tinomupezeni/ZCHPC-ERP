@@ -10,7 +10,6 @@ import string
 from dataclasses import dataclass
 from uuid import UUID
 
-from click import command
 
 from shared.domain.exceptions import ConflictError, NotFoundError, ValidationError
 from shared.domain.value_objects import Email
@@ -20,7 +19,6 @@ from modules.identity.application.interfaces import (
     UserDTO,
 )
 from modules.identity.domain.entities import User
-from modules.identity.domain.value_objects import HashedPassword
 
 
 @dataclass
@@ -103,13 +101,15 @@ class UserService:
                 details={"email": email},
             )
 
-        # generate temp password
+        
+        # Use provided password or generate a secure temporary password
         if command.password:
             password = command.password
             temp_password = None
         else:
-            password = temp_password = generate_temp_password()
-        
+            password = generate_temp_password()
+            temp_password = password
+              
         # Create user
         user = User.create(
             email=email,
@@ -323,3 +323,4 @@ class UserService:
             is_staff=user.is_staff,
             is_superuser=user.is_superuser,
         )
+

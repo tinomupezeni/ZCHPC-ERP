@@ -315,3 +315,23 @@ class StaticAndMediaAccessTest(TestCase):
             status.HTTP_401_UNAUTHORIZED,
             "Unauthenticated media access was not rejected.",
         )
+
+class CorsWhitelistTest(TestCase):
+    """Verify CORS is explicitly whitelisted."""
+
+    def test_cors_does_not_use_wildcard(self):
+        self.assertFalse(settings.CORS_ALLOW_ALL_ORIGINS)
+
+    def test_cors_origins_do_not_contain_wildcard(self):
+        self.assertNotIn(
+            "*",
+            settings.CORS_ALLOWED_ORIGINS,
+            "Security Risk: CORS_ALLOWED_ORIGINS contains a wildcard.",
+        )
+
+    def test_cors_origins_are_valid_urls(self):
+        for origin in settings.CORS_ALLOWED_ORIGINS:
+            self.assertTrue(
+                origin.startswith("http://") or origin.startswith("https://"),
+                f"Invalid CORS origin: {origin}",
+            )
