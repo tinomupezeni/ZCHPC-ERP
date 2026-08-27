@@ -2,10 +2,6 @@ import uuid
 from django.db import models
 from django.conf import settings # For AUTH_USER_MODEL
 
-class Address(models.Model):
-    # TODO: Add fields for Address model
-    pass
-
 class AllowanceType(models.Model):
     name = models.CharField(max_length=100, unique=True, default='')
     description = models.TextField(blank=True, default='')
@@ -43,10 +39,6 @@ class EmployeeAllowance(models.Model):
 
 class EmployeeDeduction(models.Model):
     # TODO: Add fields for EmployeeDeduction model
-    pass
-
-class EmployeePayrollConfig(models.Model):
-    # TODO: Add fields for EmployeePayrollConfig model
     pass
 
 class Employees(models.Model):
@@ -130,18 +122,6 @@ class EmploymentDetails(models.Model):
     class Meta:
         db_table = 'hr_employmentdetails'
 
-class InsuranceOption(models.Model):
-    # TODO: Add fields for InsuranceOption model
-    pass
-
-class MedicalAidPlan(models.Model):
-    # TODO: Add fields for MedicalAidPlan model
-    pass
-
-class PensionFund(models.Model):
-    # TODO: Add fields for PensionFund model
-    pass
-
 class Position(models.Model):
     # TODO: Add fields for Position model
     title = models.CharField(max_length=100, unique=True, default='IT Manager')
@@ -157,22 +137,3 @@ class Role(models.Model):
     permissions = models.JSONField(default=list) # Assuming a JSONField for permissions
     pass
 
-class TrainingCertification(models.Model):
-    # TODO: Add fields for TrainingCertification model
-    pass
-
-class TrainingEnrollment(models.Model):
-    # TODO: Add fields for TrainingEnrollment model
-    pass
-
-class TrainingProgram(models.Model):
-    # TODO: Add fields for TrainingProgram model
-    pass
-
-class TrainingSession(models.Model):
-    # TODO: Add fields for TrainingSession model
-    pass
-
-class Union(models.Model):
-    # TODO: Add fields for Union model
-    pass

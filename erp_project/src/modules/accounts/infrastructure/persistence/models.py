@@ -2,7 +2,6 @@
 Django models for the Accounts module.
 """
 from django.db import models
-from django.contrib.postgres.fields import ArrayField
 
 
 class Currency(models.Model):
@@ -196,7 +195,7 @@ class AccountMoveLine(models.Model):
         null=True,
         blank=True
     )
-    tag_ids = ArrayField(models.IntegerField(), blank=True, default=list)
+    tags = models.ManyToManyField(AccountTag, blank=True, related_name='move_lines')
     date = models.DateField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
