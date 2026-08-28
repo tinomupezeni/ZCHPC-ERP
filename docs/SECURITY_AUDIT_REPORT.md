@@ -98,7 +98,7 @@ While auditing the deployment layer (`nginx.conf`, `docker-compose.yml`), I iden
 
 ### ⚠️ Flag 3: Docker Compose "Fail-Open" Secret Fallbacks
 
-**The Issue:** The compose file uses bash fallback syntax: `POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}`.
+**The Issue:** The compose file uses bash fallback syntax: `POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-erp@1234}`.
 **The Risk:** If a `.env` variable is missing, Docker silently deploys the database with the weak default password.
 **Proposed Fix:** Change `:-` to `:?` (e.g., `${POSTGRES_PASSWORD:?DB password required}`). This forces Docker Compose to crash on startup if the secret is not explicitly provided.
 
