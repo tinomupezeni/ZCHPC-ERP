@@ -337,3 +337,46 @@ html {
 .ta-approval-table tr { height: 39px; }
 @media (max-width: 640px) { .ta-page { padding: 8px; } .ta-paper { padding: 25px 14px; min-height: 0; font-size: 9px; } .ta-header { grid-template-columns: 25px 1fr 48px; min-height: 70px; } .ta-crest-space { width: 20px; } .ta-header img { width: 44px; height: 44px; } .ta-title h1, .ta-title h2 { font-size: 11px; } .ta-table th, .ta-table td { padding: 2px; } }
 @media print { .ta-page { padding: 0; background: white; } .ta-actions { display: none; } .ta-paper { width: 210mm; min-height: 297mm; padding: 10mm 16mm; border: 0; box-shadow: none; } @page { size: A4 portrait; margin: 0; } }
+
+.claim-paper { box-sizing: border-box; width: min(100%, 794px); min-height: 1123px; margin: 0 auto; padding: 42px 54px 36px; background: #fff; border: 1px solid #b7b7b0; box-shadow: 0 5px 20px rgba(0,0,0,.12); color: #252525; font-family: Arial, Helvetica, sans-serif; font-size: 10px; line-height: 1.25; }
+.claim-header { display: grid; grid-template-columns: 72px 1fr 72px; align-items: center; gap: 8px; min-height: 112px; }
+.claim-header img { width: 68px; height: 55px; object-fit: contain; filter: grayscale(1) contrast(1.5); }
+.claim-crest { width: 54px; height: 54px; border: 1px solid #555; border-radius: 50%; display: grid; place-items: center; text-align: center; font: bold 9px Georgia, serif; color: #555; }
+.claim-header > div:nth-child(2) { text-align: center; }
+.claim-brand { font: bold 9px Georgia, serif; text-decoration: underline; margin-bottom: 24px; }
+.claim-header h1 { margin: 0 0 13px; font-size: 15px; line-height: 1.1; }
+.claim-header p { margin: 0; text-align: left; font-size: 8px; line-height: 1.15; }
+.claim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+.claim-grid table, .banking, .claim-expenses, .finance-only { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.claim-grid th, .claim-grid td, .banking th, .banking td, .claim-expenses th, .claim-expenses td, .finance-only th, .finance-only td { border: 1px solid #777; padding: 3px 5px; vertical-align: middle; text-align: left; font-weight: 400; }
+.claim-grid th { width: 31%; font-weight: 700; }
+.claim-grid tr { height: 29px; }
+.claim-grid tr:first-child, .claim-grid tr:nth-child(2), .claim-grid tr:nth-child(3), .claim-grid tr:nth-child(4) { height: 27px; }
+.claim-grid tr:last-child { height: 105px; vertical-align: top; }
+.claim-grid input, .claim-grid textarea, .claim-paper input { width: 100%; box-sizing: border-box; border: 0; border-bottom: 1px dotted #777; outline: 0; background: transparent; font: inherit; color: inherit; padding: 0; }
+.claim-grid textarea { height: 90px; resize: none; border: 0; background: repeating-linear-gradient(to bottom, transparent 0, transparent 17px, #aaa 18px, transparent 19px); }
+.budget-code td { position: relative; padding-top: 24px; vertical-align: top; }
+.budget-code .amount-head { position: absolute; top: 3px; right: 16px; font-weight: 700; }
+.budget-code input { display: block; height: 16px; margin-bottom: 3px; border-bottom: 1px solid #aaa; }
+.claim-period { height: 28px; padding: 8px 5px 0; border-bottom: 1px solid #777; }
+.claim-period input { display: inline-block; width: 82px; margin: 0 5px; }
+.claim-middle { display: grid; grid-template-columns: 1fr 1.02fr; gap: 13px; }
+.banking { margin-top: 0; }
+.banking th:first-child { width: 40%; }
+.banking tr { height: 27px; }
+.claim-line { display: flex; align-items: baseline; gap: 5px; min-height: 28px; padding: 6px 5px 0; }
+.claim-line input { flex: 1; min-width: 0; }
+.claim-paper h2 { margin: 8px 0 4px; font-size: 10px; }
+.declaration { margin: 0 4px 12px; font-size: 9px; line-height: 1.25; }
+.authorisation { margin-top: 54px !important; }
+.claim-expenses th { width: 68%; }
+.claim-expenses td { width: 16%; height: 28px; }
+.claim-expenses tr:first-child th, .claim-expenses tr:first-child td { height: 36px; }
+.claim-expenses .total { height: 30px; }
+.claim-expenses .total th { text-align: left; }
+.finance-only { width: 52%; margin: 0 0 0 auto; }
+.finance-only caption { border: 1px solid #777; border-bottom: 0; padding: 4px; font-weight: 700; }
+.finance-only th { width: 38%; }
+.finance-only td { height: 28px; }
+@media (max-width: 640px) { .claim-paper { padding: 24px 12px; min-height: 0; font-size: 8px; } .claim-header { grid-template-columns: 38px 1fr 42px; min-height: 82px; gap: 3px; } .claim-crest { width: 34px; height: 34px; font-size: 6px; } .claim-header img { width: 40px; height: 38px; } .claim-brand { margin-bottom: 10px; font-size: 7px; } .claim-header h1 { font-size: 10px; } .claim-header p { font-size: 6px; } .claim-grid, .claim-middle { gap: 6px; } .claim-grid th, .claim-grid td, .banking th, .banking td, .claim-expenses th, .claim-expenses td, .finance-only th, .finance-only td { padding: 2px; } .declaration { font-size: 7px; } }
+@media print { .ta-page { padding: 0; background: #fff; } .ta-actions { display: none; } .claim-paper { width: 210mm; min-height: 297mm; padding: 11mm 14mm 9mm; border: 0; box-shadow: none; } @page { size: A4 portrait; margin: 0; } }

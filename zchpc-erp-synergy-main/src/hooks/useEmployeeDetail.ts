@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { getOneEmployee, updateEmployee } from "@/services/employees.services";
+import { getEmployeeById, updateEmployee } from "@/services/employees.services";
 import { getDepartment, getPositions } from "@/services/hr.services";
 import { Employee, DropdownOption } from "../types/employee";
 
@@ -19,7 +19,7 @@ export const useEmployeeDetail = (initialEmployee: Employee, onUpdate: () => voi
   useEffect(() => {
     const fetchFullDetails = async () => {
       try {
-        const response = await getOneEmployee(initialEmployee.id);
+        const response = await getEmployeeById(initialEmployee.id);
         const data = response.data;
         setEmployee(data);
         setFormData(data);
@@ -81,7 +81,7 @@ export const useEmployeeDetail = (initialEmployee: Employee, onUpdate: () => voi
       await updateEmployee(employee.id, payload);
       toast.success("Profile updated successfully");
 
-      const updated = await getOneEmployee(employee.id);
+      const updated = await getEmployeeById(employee.id);
       setEmployee(updated.data);
       setFormData(updated.data);
 

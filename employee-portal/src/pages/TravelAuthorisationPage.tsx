@@ -2,38 +2,29 @@ import { useState } from 'react';
 import { Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-type TravelRow = { date: string; destination: string };
+type ClaimFields = Record<string, string>;
 
-const initialRows: TravelRow[] = Array.from({ length: 5 }, () => ({ date: '', destination: '' }));
+const initialFields: ClaimFields = {
+  fullName: '', department: '', telephone: '', station: '', address: '', idNumber: '', ec: '', position: '',
+  periodFrom: '', periodTo: '', accountNumber: '', bank: '', branch: '', code: '', category: '', activity: '',
+  signed: '', dated: '', authorisedName: '', certified: '', reviewed: '', approved: '', authorised: '', advance: '', refund: '',
+};
+
+const claimRows = ['Telephone log attached', 'Toll-fees (receipts attached)', 'Other Incidental (receipts attached)', 'Subsistence (attach field report & TA)'];
 
 export function TravelAuthorisationPage() {
-  const [officers, setOfficers] = useState(['', '', '']);
-  const [programme, setProgramme] = useState('');
-  const [subProgramme, setSubProgramme] = useState('');
-  const [activity, setActivity] = useState('');
-  const [budgetCode, setBudgetCode] = useState('');
-  const [travelRows, setTravelRows] = useState(initialRows);
-  const [nights, setNights] = useState('');
-  const [reasons, setReasons] = useState('');
-  const [transport, setTransport] = useState('');
-  const [expenditure, setExpenditure] = useState('');
-  const [budgetSign, setBudgetSign] = useState('');
-  const [budgetDate, setBudgetDate] = useState('');
-  const [headSign, setHeadSign] = useState('');
-  const [headDate, setHeadDate] = useState('');
-  const [directorSign, setDirectorSign] = useState('');
-  const [directorDate, setDirectorDate] = useState('');
-
-  const updateOfficer = (index: number, value: string) => setOfficers((current) => current.map((item, itemIndex) => itemIndex === index ? value : item));
-  const updateTravel = (index: number, field: keyof TravelRow, value: string) => setTravelRows((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row));
+  const [fields, setFields] = useState(initialFields);
+  const updateField = (name: string, value: string) => setFields((current) => ({ ...current, [name]: value }));
+  const input = (name: string, type = 'text') => <input aria-label={name} type={type} value={fields[name] ?? ''} onChange={(event) => updateField(name, event.target.value)} />;
 
   return <div className="ta-page">
     <div className="ta-actions"><Button type="button" variant="outline" onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" />Print form</Button></div>
-    <form className="ta-paper" onSubmit={(event) => event.preventDefault()}>
-      <header className="ta-header"><div className="ta-crest-space" /><div className="ta-title"><h1>ZIMBABWE CENTRE FOR HIGH PERFORMANCE COMPUTING</h1><h2>TRAVEL AUTHORISATION (TA) FORM</h2></div><img src="/logo.png" alt="ZCHPC" /></header>
-      <table className="ta-table ta-top-table"><tbody><tr><th>Name of Travelling Officers</th><td>{officers.map((officer, index) => <label key={index}>({index + 1})<input value={officer} onChange={(event) => updateOfficer(index, event.target.value)} /></label>)}</td></tr><tr><th>Programme</th><td><input value={programme} onChange={(event) => setProgramme(event.target.value)} /></td><th>Sub-programme</th><td><input value={subProgramme} onChange={(event) => setSubProgramme(event.target.value)} /></td></tr><tr><th>Activity as in Approved<br />Budget</th><td colSpan={3}><input value={activity} onChange={(event) => setActivity(event.target.value)} /></td></tr><tr><th>Budget Code:</th><td colSpan={3}><input value={budgetCode} onChange={(event) => setBudgetCode(event.target.value)} /></td></tr></tbody></table>
-      <table className="ta-table ta-travel-table"><thead><tr><th>Dates of Travel</th><th>Destination</th></tr></thead><tbody>{travelRows.map((row, index) => <tr key={index}><td><input type="date" aria-label={`Travel date ${index + 1}`} value={row.date} onChange={(event) => updateTravel(index, 'date', event.target.value)} /></td><td><input aria-label={`Destination ${index + 1}`} value={row.destination} onChange={(event) => updateTravel(index, 'destination', event.target.value)} /></td></tr>)}<tr><th>Number of nights</th><td><input value={nights} onChange={(event) => setNights(event.target.value)} /></td></tr><tr><th>Outline reasons for visit/What will be<br />achieved/Attach TORs</th><td><textarea rows={3} value={reasons} onChange={(event) => setReasons(event.target.value)} /></td></tr><tr><th>Mode of Transport Required</th><td><input value={transport} onChange={(event) => setTransport(event.target.value)} /></td></tr><tr><th>Estimated Expenditure,<br />accommodation/expenses etc</th><td><textarea rows={4} value={expenditure} onChange={(event) => setExpenditure(event.target.value)} /></td></tr></tbody></table>
-      <table className="ta-table ta-approval-table"><tbody><tr><th>Budget Confirmation</th><td>Sign:<input value={budgetSign} onChange={(event) => setBudgetSign(event.target.value)} /></td><td>Date:<input type="date" value={budgetDate} onChange={(event) => setBudgetDate(event.target.value)} /></td></tr><tr><th>Recommended by Head of Department</th><td>Sign:<input value={headSign} onChange={(event) => setHeadSign(event.target.value)} /></td><td>Date:<input type="date" value={headDate} onChange={(event) => setHeadDate(event.target.value)} /></td></tr><tr><th>Authorized by Director:</th><td>Sign:<input value={directorSign} onChange={(event) => setDirectorSign(event.target.value)} /></td><td>Date:<input type="date" value={directorDate} onChange={(event) => setDirectorDate(event.target.value)} /></td></tr></tbody></table>
+    <form className="claim-paper" onSubmit={(event) => event.preventDefault()}>
+      <header className="claim-header"><div className="claim-crest">ZCHPC</div><div><div className="claim-brand">ZIMBABWE CENTRE FOR HIGH PERFORMANCE COMPUTING</div><h1>TRAVELLING &amp; SUBSISTENCE EXPENSE CLAIM FORM</h1><p>Complete and submit this form in hard copy to FINANCE. CLAIMS MUST BE MADE WITHIN 14 DAYS OF<br />INCURRING THE EXPENSE.</p></div><img src="/logo.png" alt="ZCHPC" /></header>
+      <section className="claim-grid"><table><tbody><tr><th>Full Name:</th><td>{input('fullName')}</td></tr><tr><th>Department:</th><td>{input('department')}</td></tr><tr><th>Telephone:</th><td>{input('telephone')}</td></tr><tr><th>Station:</th><td>{input('station')}</td></tr><tr><th>Address:</th><td><textarea aria-label="address" value={fields.address} onChange={(event) => updateField('address', event.target.value)} /></td></tr></tbody></table><table><tbody><tr><th>ID No:</th><td>{input('idNumber')}</td></tr><tr><th>EC:</th><td>{input('ec')}</td></tr><tr><th>Position:</th><td>{input('position')}</td></tr><tr className="budget-code"><th>Budget code to be charged</th><td><span className="amount-head">S &nbsp;&nbsp;&nbsp;&nbsp; C</span>{Array.from({ length: 4 }, (_, index) => <input key={index} aria-label={`budget code ${index + 1}`} />)}</td></tr></tbody></table></section>
+      <div className="claim-period">Summary of claim for the period: {input('periodFrom')} To {input('periodTo')} (details overleaf)</div>
+      <section className="claim-middle"><div><table className="banking"><tbody><tr><th colSpan={2}>BANKING DETAILS: &nbsp; A/C NAME:</th></tr><tr><th>ACCOUNT NUMBER:</th><td>{input('accountNumber')}</td></tr><tr><th>BANK</th><td>{input('bank')} &nbsp; BRANCH: {input('branch')} &nbsp; CODE {input('code')}</td></tr></tbody></table><div className="claim-line">Category: {input('category')}</div><div className="claim-line">Activity: {input('activity')}</div><h2>DECLARATION</h2><p className="declaration">I declare that the total expenses being claimed were incurred by me solely in the course of ZCHPC business. I agree to Finance rejecting my expense claim if the following attachments are missing: (1) Travel Authorisation (TA). (2) Field Report duly signed by me.</p><div className="claim-line">Signed: {input('signed')}</div><div className="claim-line">Dated: {input('dated')}</div><h2 className="authorisation">AUTHORISATION</h2><p>This claim is correct and in order for payment.</p><div className="claim-line">Name: {input('authorisedName')}</div></div><table className="claim-expenses"><tbody>{claimRows.map((label) => <tr key={label}><th>{label}</th><td>{input(label)}</td><td>{input(`${label} cents`)}</td></tr>)}<tr className="total"><th>TOTAL EXPENSES CLAIMED</th><td>S</td><td>C</td></tr><tr><th>Less Advanced Dated:</th><td>{input('advance')}</td><td /></tr><tr><th>RE-IMBURSEMENT/(REFUND)</th><td>{input('refund')}</td><td /></tr></tbody></table></section>
+      <table className="finance-only"><caption>FINANCE USE ONLY</caption><tbody><tr><th>Certified (A)</th><td>{input('certified')}</td></tr><tr><th>Reviewed (A)</th><td>{input('reviewed')}</td></tr><tr><th>Approved (GM)</th><td>{input('approved')}</td></tr><tr><th>Authorised<br />(Director)</th><td>{input('authorised')}</td></tr></tbody></table>
     </form>
   </div>;
 }

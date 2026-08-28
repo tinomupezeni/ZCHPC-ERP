@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 // const API_URL = ''
-export const API_BASE_URL = `https://zchpcerp.zchpc.ac.zw/api/v2/`;
+export const API_BASE_URL = `${import.meta.env.VITE_API_URL || "https://zchpcerp.zchpc.ac.zw"}/api/v2/`;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
