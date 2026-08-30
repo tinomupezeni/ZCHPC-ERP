@@ -2,7 +2,8 @@
 
 ## Overview
 
-The ZCHPC ERP system follows a **Modular Monolith** architecture with **Clean Architecture** principles. This document describes the current system structure and provides guidance for development.
+The ZCHPC ERP system follows a **Modular Monolith** architecture with **Clean Architecture** principles.
+ This document describes the current system structure and provides guidance for development.
 
 ## Architecture Diagram
 

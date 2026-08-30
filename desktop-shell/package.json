@@ -1,0 +1,59 @@
+{
+  "name": "zchpc-erp-desktop",
+  "version": "1.0.0",
+  "description": "ZCHPC ERP Desktop Application",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "keywords": [
+    "ERP",
+    "Django",
+    "React",
+    "Electron"
+  ],
+  "author": "ZCHPC ERP",
+  "license": "Proprietary",
+  "dependencies": {
+    "axios": "^1.6.2"
+  },
+  "devDependencies": {
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "zw.zchpc-erp",
+    "productName": "ZCHPC ERP",
+    "directories": {
+      "output": "dist_electron"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "assets/**/*",
+      "backend_dist/**/*",
+      "ui_dist/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "backend_dist",
+        "to": "backend",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ZCHPC ERP"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    }
+  }
+}

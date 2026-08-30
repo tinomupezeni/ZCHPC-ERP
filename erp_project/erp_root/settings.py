@@ -90,15 +90,17 @@ INSTALLED_APPS = [
     # Models are in infrastructure/persistence/models.py with db_table set
     # to match existing tables for backwards compatibility.
     # =========================================================================
-    "modules.identity.apps.IdentityConfig",  # CustomUser, AuditLog
-    "modules.hr.apps.HrConfig",  # Employee, Department, Position
-    "modules.attendance.apps.AttendanceConfig",  # AttendanceRecord
-    "modules.leave.apps.LeaveConfig",  # LeaveType, LeaveBalance, LeaveRequest
-    "modules.recruitment.apps.RecruitmentConfig",  # Job, Candidate, JobApplication
-    "modules.payroll.apps.PayrollConfig",  # Payroll, TaxBracket, ExchangeRate
-    "modules.accounts.apps.AccountsConfig",  # Account, Journal, JournalEntry
-    "modules.procurement.apps.ProcurementConfig",  # Vendor, PurchaseRequest, PurchaseOrder
-    "modules.portal.apps.PortalConfig",  # ExpenseClaim, SupportTicket, Document
+    'modules.identity.apps.IdentityConfig',       # CustomUser, AuditLog
+    'modules.hr.apps.HrConfig',                   # Employee, Department, Position
+    'modules.attendance.apps.AttendanceConfig',   # AttendanceRecord
+    'modules.leave.apps.LeaveConfig',             # LeaveType, LeaveBalance, LeaveRequest
+    'modules.recruitment.apps.RecruitmentConfig',
+    'modules.bff.apps.BffConfig',
+    'modules.payroll.apps.PayrollConfig',         # Payroll, TaxBracket, ExchangeRate
+    'modules.accounts.apps.AccountsConfig',       # Account, Journal, JournalEntry
+    'modules.procurement.apps.ProcurementConfig', # Vendor, PurchaseRequest, PurchaseOrder
+    'modules.portal.apps.PortalConfig',           # ExpenseClaim, SupportTicket, Document
+
     # Third-party apps
     "rest_framework",
     "rest_framework_simplejwt",
@@ -109,16 +111,17 @@ INSTALLED_APPS = [
 INTERNAL_IPS = ["127.0.0.1"]
 
 MIDDLEWARE = [
-    "django.middleware.security.SecurityMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
-    "corsheaders.middleware.CorsMiddleware",
-    "django.middleware.common.CommonMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",
-    "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "modules.identity.infrastructure.middleware.JWTAuthenticationMiddleware",  # JWT Auth
-    "modules.identity.infrastructure.middleware.RBACMiddleware",  # Role-based access control
-    "django.contrib.messages.middleware.MessageMiddleware",
-    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    'django.middleware.security.SecurityMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'modules.identity.infrastructure.middleware.JWTAuthenticationMiddleware',  # JWT Auth
+    'modules.identity.infrastructure.middleware.ModuleAccessMiddleware', # Module Access Control
+    'modules.identity.infrastructure.middleware.RBACMiddleware',  # Role-based access control
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
     "django_browser_reload.middleware.BrowserReloadMiddleware",
 ]
 
@@ -157,17 +160,26 @@ WSGI_APPLICATION = "erp_root.wsgi.application"
 
 # --- Database ---
 # Uses environment variables for Docker deployment
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("DB_NAME", "erp_db"),
-        "USER": os.environ.get("DB_USER", "erp_user"),
-        # SECURITY FIX: Removed hardcoded password fallback.
-        "PASSWORD": os.environ.get("DB_PASSWORD", ""),
-        "HOST": os.environ.get("DB_HOST", "localhost"),
-        "PORT": os.environ.get("DB_PORT", "5432"),
+if os.environ.get('USE_SQLITE', 'False').lower() in ('true', '1', 'yes'):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / os.environ.get('DB_NAME', 'db.sqlite3'),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('DB_NAME', 'erp_db'),
+            'USER': os.environ.get('DB_USER', 'erp_user'),
+            # SECURITY FIX: Removed hardcoded password fallback.
+            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+            'HOST': os.environ.get('DB_HOST', 'localhost'),
+            'PORT': os.environ.get('DB_PORT', '5432'),
+        }
+    }
+    }
 
 # --- CORS ---
 # SECURITY FIX: Default to False. Wildcard CORS is dangerous in production.
@@ -290,3 +302,14 @@ CSRF_TRUSTED_ORIGINS = os.environ.get(
 
 # --- AutoField ---
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# --- Email ---
+# Defaults to the console backend (prints emails to the terminal) for local
+# development/testing. In production, set EMAIL_BACKEND to the SMTP backend
+# via environment variable and configure EMAIL_HOST/PORT/USER/PASSWORD.
+EMAIL_BACKEND = os.environ.get(
+    'EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend'
+)
+DEFAULT_FROM_EMAIL = os.environ.get(
+    'DEFAULT_FROM_EMAIL', 'ZCHPC ERP <noreply@zchpc.ac.zw>'
+)

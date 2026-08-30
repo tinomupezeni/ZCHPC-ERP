@@ -165,18 +165,7 @@ class DjangoEmployeeRepository(IEmployeeRepository):
             date_joined=employee.date_joined,
             contract_from=employee.contract_from,
             contract_to=employee.contract_to,
-            leave_days_entitled=employee.leave_days_entitled,
             is_active=employee.is_active,
-            usd_salary=employee.salary.usd_amount if employee.salary else None,
-            zig_salary=employee.salary.zig_amount if employee.salary else None,
-            pay_frequency=employee.pay_frequency.value,
-            bank_name=employee.bank_account.bank_name,
-            bank_account=employee.bank_account.account_number,
-            pension_fund=employee.pension_fund,
-            nssa_number=employee.statutory_info.nssa_number,
-            zimra_tax_number=employee.statutory_info.zimra_number,
-            paye_number=employee.statutory_info.paye_number,
-            pays_aids_levy=employee.statutory_info.pays_aids_levy,
             emergency_contact_name=employee.emergency_contact.name,
             emergency_contact_number=employee.emergency_contact.number,
             emergency_contact_relationship=employee.emergency_contact.relationship,
@@ -207,18 +196,7 @@ class DjangoEmployeeRepository(IEmployeeRepository):
             date_joined=employee.date_joined,
             contract_from=employee.contract_from,
             contract_to=employee.contract_to,
-            leave_days_entitled=employee.leave_days_entitled,
             is_active=employee.is_active,
-            usd_salary=employee.salary.usd_amount if employee.salary else None,
-            zig_salary=employee.salary.zig_amount if employee.salary else None,
-            pay_frequency=employee.pay_frequency.value,
-            bank_name=employee.bank_account.bank_name,
-            bank_account=employee.bank_account.account_number,
-            pension_fund=employee.pension_fund,
-            nssa_number=employee.statutory_info.nssa_number,
-            zimra_tax_number=employee.statutory_info.zimra_number,
-            paye_number=employee.statutory_info.paye_number,
-            pays_aids_levy=employee.statutory_info.pays_aids_levy,
             emergency_contact_name=employee.emergency_contact.name,
             emergency_contact_number=employee.emergency_contact.number,
             emergency_contact_relationship=employee.emergency_contact.relationship,
@@ -232,14 +210,6 @@ class DjangoEmployeeRepository(IEmployeeRepository):
 
     def _to_entity(self, db_employee) -> Employee:
         """Convert Django model to domain entity."""
-        # Build salary
-        salary = None
-        if db_employee.usd_salary or db_employee.zig_salary:
-            salary = Salary.create(
-                usd_amount=db_employee.usd_salary or Decimal("0"),
-                zig_amount=db_employee.zig_salary or Decimal("0"),
-            )
-
         # Build value objects
         national_id = None
         if db_employee.national_id:
@@ -296,21 +266,7 @@ class DjangoEmployeeRepository(IEmployeeRepository):
             date_joined=db_employee.date_joined,
             contract_from=db_employee.contract_from,
             contract_to=db_employee.contract_to,
-            leave_days_entitled=db_employee.leave_days_entitled,
             is_active=db_employee.is_active,
-            salary=salary,
-            pay_frequency=PayFrequency.from_string(db_employee.pay_frequency),
-            bank_account=BankAccount(
-                bank_name=db_employee.bank_name or "",
-                account_number=db_employee.bank_account or "",
-            ),
-            statutory_info=StatutoryInfo(
-                nssa_number=db_employee.nssa_number or "",
-                zimra_number=db_employee.zimra_tax_number or "",
-                paye_number=db_employee.paye_number or "",
-                pays_aids_levy=db_employee.pays_aids_levy,
-            ),
-            pension_fund=db_employee.pension_fund or "",
             emergency_contact=EmergencyContact(
                 name=db_employee.emergency_contact_name or "",
                 number=db_employee.emergency_contact_number or "",

@@ -140,3 +140,22 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.username_attempted} - {self.event_type} at {self.timestamp}"
+
+
+class SystemModule(models.Model):
+    """
+    Model for tracking installable ERP modules and their status.
+    """
+    identifier = models.CharField(max_length=50, unique=True)  # e.g., 'hr', 'payroll'
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True, default='')
+    is_active = models.BooleanField(default=False)
+    dependencies = models.JSONField(default=list)  # e.g., ['hr'] for payroll
+
+    class Meta:
+        db_table = 'identity_systemmodule'
+        verbose_name = 'System Module'
+        verbose_name_plural = 'System Modules'
+
+    def __str__(self):
+        return f"{self.name} ({self.identifier}) - {'Active' if self.is_active else 'Inactive'}"

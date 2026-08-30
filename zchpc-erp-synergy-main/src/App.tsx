@@ -16,6 +16,7 @@ import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { MainLayout } from "./layout/MainLayout";
 import PayrollPage from "./pages/PayrollPage";
+import ModulesPage from "./pages/ModulesPage";
 
 const queryClient = new QueryClient();
 
@@ -112,6 +113,16 @@ const App = () => {
                 <ProtectedRoute requiredPermission={["admin"]}>
                   <MainLayout setOpenTab={setOpenTab}>
                     <SettingsPage />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/modules"
+              element={
+                <ProtectedRoute requiredPermission={["admin"]}>
+                  <MainLayout setOpenTab={setOpenTab}>
+                    <ModulesPage />
                   </MainLayout>
                 </ProtectedRoute>
               }

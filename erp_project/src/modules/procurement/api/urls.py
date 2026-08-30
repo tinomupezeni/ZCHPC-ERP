@@ -76,6 +76,21 @@ urlpatterns = [
         views.purchase_request_reject,
         name="request-reject"
     ),
+    path(
+        "fuel-requisitions/<int:requisition_id>/approve/",
+        views.fuel_requisition_approve,
+        name="fuel-requisition-approve"
+    ),
+    path(
+        "stores-requisitions/<int:requisition_id>/approve/",
+        views.stores_requisition_approve,
+        name="stores-requisition-approve"
+    ),
+    path(
+        "comparative-schedules/<int:schedule_id>/approve/",
+        views.comparative_schedule_approve,
+        name="comparative-schedule-approve"
+    ),
 
     # Purchase Orders
     path(

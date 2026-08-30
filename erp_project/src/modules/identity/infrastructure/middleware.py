@@ -164,3 +164,51 @@ class RBACMiddleware:
                 return True
 
         return False
+
+
+class ModuleAccessMiddleware:
+    """
+    Middleware to restrict access to modules that are not active.
+    """
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        # Only check API v2 paths
+        if not request.path.startswith('/api/v2/'):
+            return self.get_response(request)
+
+        # Exempt paths
+        exempt_paths = [
+            '/api/v2/auth/',
+            '/api/v2/portal/auth/',
+            '/api/v2/portal/public/',
+        ]
+        for path in exempt_paths:
+            if request.path.startswith(path):
+                return self.get_response(request)
+
+        # Determine which module is being accessed
+        # Path format: /api/v2/{module_name}/...
+        parts = request.path.split('/')
+        if len(parts) < 4:
+            return self.get_response(request)
+            
+        module_identifier = parts[3]
+        
+        # Check if the module is active in the database
+        try:
+            from modules.identity.infrastructure.persistence.models import SystemModule
+            module = SystemModule.objects.filter(identifier=module_identifier).first()
+            
+            # If the module is registered but inactive, block access
+            if module and not module.is_active:
+                return JsonResponse(
+                    {"detail": f"The '{module.name}' module is not installed."},
+                    status=403
+                )
+        except Exception:
+            # If something goes wrong, allow for now
+            pass
+
+        return self.get_response(request)

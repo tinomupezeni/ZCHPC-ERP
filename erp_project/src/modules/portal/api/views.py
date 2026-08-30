@@ -9,6 +9,8 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.utils import timezone
+from modules.procurement.infrastructure.persistence.models import FuelRequisition, StoresRequisition, ComparativeSchedule
 
 from shared.domain.exceptions import ValidationError, NotFoundError
 from modules.portal.application.services import (
@@ -48,6 +50,12 @@ from modules.portal.api.serializers import (
     JobApplicationSerializer,
     ApplicationStatusSerializer,
     NotificationSerializer,
+    FuelRequisitionSerializer,
+    CreateFuelRequisitionSerializer,
+    StoresRequisitionSerializer,
+    CreateStoresRequisitionSerializer,
+    ComparativeScheduleSerializer,
+    CreateComparativeScheduleSerializer,
 )
 
 
@@ -114,7 +122,8 @@ def login(request: Request) -> Response:
         )
 
     # Generate JWT tokens
-    from django.contrib.auth.models import User
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
     user = User.objects.get(pk=result.employee.user_id)
     refresh = RefreshToken.for_user(user)
 
@@ -358,6 +367,79 @@ def leave_summary(request: Request) -> Response:
     employee_id = _get_employee_id(request)
     summary = _leave_service.get_summary(employee_id)
     return Response(summary)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def fuel_requisitions(request: Request) -> Response:
+    """List or submit fuel requisitions for the authenticated employee."""
+    from modules.hr.infrastructure.persistence.models import Employees
+
+    try:
+        employee = Employees.objects.get(user_id=request.user.id)
+    except Employees.DoesNotExist:
+        return Response({"error": "Employee profile not found"}, status=status.HTTP_400_BAD_REQUEST)
+    if not employee.department_id:
+        return Response({"error": "Employee department is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if request.method == "GET":
+        records = FuelRequisition.objects.filter(requester=request.user).select_related("department")
+        return Response(FuelRequisitionSerializer(records, many=True).data)
+
+    serializer = CreateFuelRequisitionSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    data = serializer.validated_data
+    if data["diesel_quantity"] == 0 and data["petrol_quantity"] == 0:
+        return Response({"error": "Enter a diesel or petrol quantity"}, status=status.HTTP_400_BAD_REQUEST)
+    record = FuelRequisition.objects.create(
+        requester=request.user,
+        department_id=employee.department_id,
+        **data,
+    )
+    return Response(FuelRequisitionSerializer(record).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def stores_requisitions(request: Request) -> Response:
+    """List or submit Stores Requisition forms for the authenticated employee."""
+    from modules.hr.infrastructure.persistence.models import Employees
+
+    try:
+        employee = Employees.objects.get(user_id=request.user.id)
+    except Employees.DoesNotExist:
+        return Response({"error": "Employee profile not found"}, status=status.HTTP_400_BAD_REQUEST)
+    if not employee.department_id:
+        return Response({"error": "Employee department is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if request.method == "GET":
+        records = StoresRequisition.objects.filter(requester=request.user).select_related("department")
+        return Response(StoresRequisitionSerializer(records, many=True).data)
+
+    serializer = CreateStoresRequisitionSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    record = StoresRequisition.objects.create(
+        requester=request.user,
+        department_id=employee.department_id,
+        items=serializer.validated_data["items"],
+    )
+    return Response(StoresRequisitionSerializer(record).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def comparative_schedules(request: Request) -> Response:
+    """List or submit quotation comparison schedules."""
+    if request.method == "GET":
+        records = ComparativeSchedule.objects.filter(requester=request.user)
+        return Response(ComparativeScheduleSerializer(records, many=True).data)
+    serializer = CreateComparativeScheduleSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    record = ComparativeSchedule.objects.create(requester=request.user, **serializer.validated_data)
+    return Response(ComparativeScheduleSerializer(record).data, status=status.HTTP_201_CREATED)
 
 
 # ============================

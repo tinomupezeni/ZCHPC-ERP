@@ -37,7 +37,7 @@ const LoginPage = () => {
         <div className="relative z-20 w-full flex flex-col justify-between p-12 text-white">
           <div className="flex items-center gap-3">
             <img src="/logo.png" alt="ZCHPC" className="h-14 w-auto" />
-            <span className="text-2xl font-bold tracking-tighter">ZCHPC</span>
+            <span className="text-2xl font-bold tracking-tighter">ZCHPC ERP</span>
           </div>
 
           <div className="space-y-6">
@@ -92,7 +92,7 @@ const LoginPage = () => {
                     <Input
                       id="email"
                       type="email"
-                      placeholder="admin@zchpc.com"
+                      placeholder="admin@zchpc-erp.zw"
                       className="pl-10 h-12 bg-background/50"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}

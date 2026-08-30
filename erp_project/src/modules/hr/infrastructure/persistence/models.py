@@ -89,31 +89,46 @@ class Employees(models.Model):
     reports_to = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='direct_reports')
     date_joined = models.DateField(null=True, blank=True)
     contract_from = models.DateField(null=True, blank=True)
-    contract_to = models.DateField(null=True, blank=True)
-    leave_days_entitled = models.IntegerField(default=20)
-
-    # Salary information
-    usd_salary = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    zig_salary = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    pay_frequency = models.CharField(max_length=20, default='monthly')
-
-    # Banking information
-    bank_name = models.CharField(max_length=100, null=True, blank=True)
-    bank_account = models.CharField(max_length=50, null=True, blank=True)
-
-    # Statutory information
-    nssa_number = models.CharField(max_length=50, null=True, blank=True)
-    zimra_tax_number = models.CharField(max_length=50, null=True, blank=True)
-    paye_number = models.CharField(max_length=50, null=True, blank=True)
-    pays_aids_levy = models.BooleanField(default=True)
-
-    # Pension fund
-    pension_fund = models.CharField(max_length=100, null=True, blank=True)
-
-    # Emergency contact
+    contract_to = models.DateField(null=True, blank=True)    # Emergency contact
     emergency_contact_name = models.CharField(max_length=100, null=True, blank=True)
     emergency_contact_number = models.CharField(max_length=20, null=True, blank=True)
     emergency_contact_relationship = models.CharField(max_length=50, null=True, blank=True)
+
+# Phase 1: New Normalized Models for HR
+class EmployeeContact(models.Model):
+    employee = models.OneToOneField(Employees, on_delete=models.CASCADE, related_name='contact_profile')
+    personal_email = models.EmailField(null=True, blank=True)
+    work_email = models.EmailField(null=True, blank=True)
+    phone = models.CharField(max_length=20, null=True, blank=True)
+    street_address = models.CharField(max_length=255, null=True, blank=True)
+    city = models.CharField(max_length=100, null=True, blank=True)
+    country = models.CharField(max_length=100, null=True, blank=True)
+
+    class Meta:
+        db_table = 'hr_employeecontact'
+
+class EmergencyContact(models.Model):
+    employee = models.ForeignKey(Employees, on_delete=models.CASCADE, related_name='emergency_contacts')
+    name = models.CharField(max_length=100)
+    relationship = models.CharField(max_length=50)
+    phone = models.CharField(max_length=20)
+    email = models.EmailField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'hr_emergencycontact'
+
+class EmploymentDetails(models.Model):
+    employee = models.OneToOneField(Employees, on_delete=models.CASCADE, related_name='employment_details')
+    department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True)
+    position = models.ForeignKey('Position', on_delete=models.SET_NULL, null=True, blank=True)
+    reports_to = models.ForeignKey(Employees, on_delete=models.SET_NULL, null=True, blank=True, related_name='subordinates')
+    date_joined = models.DateField(null=True, blank=True)
+    contract_from = models.DateField(null=True, blank=True)
+    contract_to = models.DateField(null=True, blank=True)
+    employee_type = models.CharField(max_length=50, default='Full-time')
+
+    class Meta:
+        db_table = 'hr_employmentdetails'
 
 class InsuranceOption(models.Model):
     # TODO: Add fields for InsuranceOption model

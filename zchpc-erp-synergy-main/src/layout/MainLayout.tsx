@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { navItems } from "./navConfig";
@@ -6,30 +6,57 @@ import { SidebarItem } from "./SidebarItem";
 import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getActiveModules, SystemModule } from "@/services/system.services";
 
 export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [collapsed, setCollapsed] = useState(false);
   const { user, logout, checkPermission, isLoading } = useAuth();
+  const [activeModules, setActiveModules] = useState<string[]>([]);
+  const [isModulesLoading, setIsModulesLoading] = useState(true);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>(
     {}
   );
 
+  useEffect(() => {
+    const fetchActiveModules = async () => {
+      try {
+        const modules = await getActiveModules();
+        setActiveModules(modules.map((m: SystemModule) => m.identifier));
+      } catch (error) {
+        console.error("Failed to fetch active modules", error);
+      } finally {
+        setIsModulesLoading(false);
+      }
+    };
+    fetchActiveModules();
+  }, []);
+
   const filteredNavItems = useMemo(() => {
     // If loading, show nothing (or we will show the skeleton below)
-    if (isLoading || !user) return [];
+    if (isLoading || isModulesLoading || !user) return [];
 
     const filterItems = (items: typeof navItems): typeof navItems => {
       return items
-        .filter((item) => checkPermission(item.permission))
+        .filter((item) => {
+          // Check role permission
+          if (!checkPermission(item.permission)) return false;
+
+          // Check if module is active (if it's a modular item)
+          if (item.moduleIdentifier && !activeModules.includes(item.moduleIdentifier)) {
+            return false;
+          }
+
+          return true;
+        })
         .map((item) => ({
           ...item,
           subItems: item.subItems ? filterItems(item.subItems) : undefined,
         }));
     };
     return filterItems(navItems);
-  }, [user, isLoading, checkPermission]); // Dependency on 'user' is key for refresh fix
+  }, [user, isLoading, isModulesLoading, activeModules, checkPermission]); // Dependency on 'user' is key for refresh fix
 
   console.log(user);
   
@@ -52,7 +79,7 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
         )}
       >
         <div className="flex h-16 items-center px-4 border-b">
-          <img src="/logo.png" alt="ZCHPC" className="h-10 w-auto" />
+          <img src="/logo.png" alt="ZCHPC ERP" className="h-10 w-auto" />
           {!collapsed && (
             <span className="font-bold text-slate-900 ml-2">ZCHPC ERP</span>
           )}

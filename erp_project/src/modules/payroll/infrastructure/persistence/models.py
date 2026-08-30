@@ -163,3 +163,35 @@ class PayrollPeriod(models.Model):
 
     def __str__(self):
         return self.name
+
+# Phase 1: New Normalized Models for Payroll
+class PayrollProfile(models.Model):
+    employee = models.OneToOneField('hr.Employees', on_delete=models.CASCADE, related_name='payroll_profile')
+    usd_salary = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    zig_salary = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    pay_frequency = models.CharField(max_length=20, default='monthly')
+
+    class Meta:
+        db_table = 'payroll_payrollprofile'
+
+class EmployeeBankAccount(models.Model):
+    employee = models.ForeignKey('hr.Employees', on_delete=models.CASCADE, related_name='bank_accounts')
+    bank_name = models.CharField(max_length=100)
+    branch_code = models.CharField(max_length=50, null=True, blank=True)
+    account_number = models.CharField(max_length=50)
+    currency = models.CharField(max_length=10, default='USD')
+    is_primary = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'payroll_employeebankaccount'
+
+class StatutoryProfile(models.Model):
+    employee = models.OneToOneField('hr.Employees', on_delete=models.CASCADE, related_name='statutory_profile')
+    nssa_number = models.CharField(max_length=50, null=True, blank=True)
+    zimra_tax_number = models.CharField(max_length=50, null=True, blank=True)
+    paye_number = models.CharField(max_length=50, null=True, blank=True)
+    pays_aids_levy = models.BooleanField(default=True)
+    pension_fund = models.CharField(max_length=100, null=True, blank=True)
+
+    class Meta:
+        db_table = 'payroll_statutoryprofile'

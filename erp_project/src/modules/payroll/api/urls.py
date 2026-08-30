@@ -91,3 +91,11 @@ urlpatterns = [
         name="deduction-type-list"
     ),
 ]
+
+from modules.payroll.api.views import PayrollProfileDetailView, StatutoryProfileDetailView, EmployeeBankAccountListView
+
+urlpatterns += [
+    path('profiles/<uuid:employee_id>/', PayrollProfileDetailView.as_view(), name='payroll-profile-detail'),
+    path('statutory/<uuid:employee_id>/', StatutoryProfileDetailView.as_view(), name='statutory-profile-detail'),
+    path('bank-accounts/<uuid:employee_id>/', EmployeeBankAccountListView.as_view(), name='employee-bank-accounts'),
+]

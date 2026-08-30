@@ -86,6 +86,21 @@ urlpatterns = [
         views.leave_summary,
         name="leave-summary"
     ),
+    path(
+        "fuel-requisitions/",
+        views.fuel_requisitions,
+        name="fuel-requisitions"
+    ),
+    path(
+        "stores-requisitions/",
+        views.stores_requisitions,
+        name="stores-requisitions"
+    ),
+    path(
+        "comparative-schedules/",
+        views.comparative_schedules,
+        name="comparative-schedules"
+    ),
 
     # Payslips
     path(

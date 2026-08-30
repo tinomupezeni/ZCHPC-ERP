@@ -234,11 +234,42 @@ class ApplicationService:
         job = self._job_repo.get_by_id(saved.job_id)
         candidate = self._candidate_repo.get_by_id(saved.candidate_id)
 
+        # Notify the candidate by email if the status actually changed.
+        if candidate and candidate.email and old_status != new_status:
+            self._notify_candidate_status_change(
+                candidate_email=candidate.email,
+                job_title=job.title if job else "",
+                new_status=new_status.value,
+            )
+
         return self._to_dto(
             saved,
             job.title if job else "",
             candidate,
         )
+
+    @staticmethod
+    def _notify_candidate_status_change(
+        candidate_email: str, job_title: str, new_status: str
+    ) -> None:
+        """Email the candidate that their application status changed."""
+        from django.conf import settings
+        from django.core.mail import send_mail
+
+        try:
+            send_mail(
+                subject=f"Update on your application: {job_title}",
+                message=(
+                    f"Your application for '{job_title}' is now marked as "
+                    f"'{new_status}'."
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[candidate_email],
+                fail_silently=True,
+            )
+        except Exception:
+            # A broken email config should never block a status update.
+            pass
 
     def get_application(self, application_id: int) -> ApplicationDTO:
         """Get an application by ID."""

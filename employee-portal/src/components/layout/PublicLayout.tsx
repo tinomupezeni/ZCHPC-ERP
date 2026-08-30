@@ -67,7 +67,7 @@ export function PublicLayout() {
             <div className="flex items-center gap-3">
               <img src="/logo.png" alt="ZCHPC" className="h-10 w-auto" />
               <div>
-                <span className="font-bold text-lg tracking-tight">ZCHPC</span>
+                <span className="font-bold text-lg tracking-tight">ZCHPC ERP</span>
                 <span className="hidden sm:inline text-blue-200 ml-2 text-sm">Career Portal</span>
               </div>
             </div>
@@ -296,7 +296,7 @@ export function PublicLayout() {
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <img src="/logo.png" alt="ZCHPC" className="h-10 w-auto" />
-                <span className="font-bold text-white">ZCHPC</span>
+                <span className="font-bold text-white">ZCHPC ERP</span>
               </div>
               <p className="text-sm">
                 Zimbabwe Centre for High Performance Computing - Advancing technology and innovation.
@@ -320,7 +320,7 @@ export function PublicLayout() {
             <div>
               <h4 className="font-semibold text-white mb-3">Contact HR</h4>
               <ul className="space-y-2 text-sm">
-                <li>Email: hroffice@zchpc.ac.zw</li>
+                <li>Email: hr@zchpc-erp.zw</li>
                 <li>Phone: +263 242 123 456</li>
               </ul>
             </div>

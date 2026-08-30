@@ -50,13 +50,7 @@ class Employee(AggregateRoot[int]):
         date_joined: date | None = None,
         contract_from: date | None = None,
         contract_to: date | None = None,
-        leave_days_entitled: int = 22,
         is_active: bool = True,
-        salary: Salary | None = None,
-        pay_frequency: PayFrequency = PayFrequency.MONTHLY,
-        bank_account: BankAccount | None = None,
-        statutory_info: StatutoryInfo | None = None,
-        pension_fund: str = "",
         emergency_contact: EmergencyContact | None = None,
         created_at: datetime | None = None,
         updated_at: datetime | None = None,
@@ -81,13 +75,7 @@ class Employee(AggregateRoot[int]):
         self.date_joined = date_joined or date.today()
         self.contract_from = contract_from
         self.contract_to = contract_to
-        self.leave_days_entitled = leave_days_entitled
         self.is_active = is_active
-        self.salary = salary
-        self.pay_frequency = pay_frequency
-        self.bank_account = bank_account or BankAccount.empty()
-        self.statutory_info = statutory_info or StatutoryInfo.empty()
-        self.pension_fund = pension_fund
         self.emergency_contact = emergency_contact or EmergencyContact.empty()
         self.created_at = created_at or datetime.utcnow()
         self.updated_at = updated_at or datetime.utcnow()
@@ -193,30 +181,8 @@ class Employee(AggregateRoot[int]):
             self.reports_to_id = reports_to_id
         self.updated_at = datetime.utcnow()
 
-    def update_salary(self, new_salary: Salary) -> Salary | None:
-        """
-        Update employee salary.
 
-        Args:
-            new_salary: New salary
 
-        Returns:
-            Previous salary for audit
-        """
-        old_salary = self.salary
-        self.salary = new_salary
-        self.updated_at = datetime.utcnow()
-        return old_salary
-
-    def update_bank_account(self, bank_account: BankAccount) -> None:
-        """Update bank account information."""
-        self.bank_account = bank_account
-        self.updated_at = datetime.utcnow()
-
-    def update_statutory_info(self, statutory_info: StatutoryInfo) -> None:
-        """Update statutory information."""
-        self.statutory_info = statutory_info
-        self.updated_at = datetime.utcnow()
 
     def update_emergency_contact(self, contact: EmergencyContact) -> None:
         """Update emergency contact."""

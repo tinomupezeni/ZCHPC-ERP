@@ -143,6 +143,86 @@ class CreateLeaveRequestSerializer(serializers.Serializer):
     reason = serializers.CharField(required=False, allow_null=True)
 
 
+class FuelRequisitionSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    department = serializers.CharField(source='department.name', read_only=True)
+    programme = serializers.CharField()
+    recipient_driver = serializers.CharField()
+    requester_signature = serializers.CharField()
+    vehicle_registration = serializers.CharField()
+    request_date = serializers.DateField()
+    diesel_quantity = serializers.DecimalField(max_digits=8, decimal_places=2)
+    diesel_quantity_words = serializers.CharField()
+    petrol_quantity = serializers.DecimalField(max_digits=8, decimal_places=2)
+    petrol_quantity_words = serializers.CharField()
+    purpose = serializers.CharField()
+    destination = serializers.CharField()
+    destination_dates = serializers.CharField()
+    finance_recommendation = serializers.CharField()
+    status = serializers.CharField()
+    rejection_reason = serializers.CharField()
+    issuance_quantity = serializers.DecimalField(max_digits=8, decimal_places=2, allow_null=True)
+    serial_numbers = serializers.CharField()
+    issued_by_name = serializers.CharField()
+    received_by_name = serializers.CharField()
+    created_at = serializers.DateTimeField()
+
+
+class CreateFuelRequisitionSerializer(serializers.Serializer):
+    programme = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    recipient_driver = serializers.CharField(max_length=255)
+    requester_signature = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    vehicle_registration = serializers.CharField(max_length=50)
+    request_date = serializers.DateField()
+    diesel_quantity = serializers.DecimalField(max_digits=8, decimal_places=2, min_value=0, default=0)
+    diesel_quantity_words = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    petrol_quantity = serializers.DecimalField(max_digits=8, decimal_places=2, min_value=0, default=0)
+    petrol_quantity_words = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    purpose = serializers.CharField()
+    destination = serializers.CharField(max_length=255)
+    destination_dates = serializers.CharField(required=False, allow_blank=True, max_length=255)
+
+
+class StoresRequisitionSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    requisition_number = serializers.CharField(read_only=True)
+    department = serializers.CharField(source='department.name', read_only=True)
+    items = serializers.ListField()
+    status = serializers.CharField(read_only=True)
+    rejection_reason = serializers.CharField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+
+
+class CreateStoresRequisitionSerializer(serializers.Serializer):
+    items = serializers.ListField(child=serializers.DictField(), min_length=1, max_length=4)
+
+    def validate_items(self, items):
+        required = {'description', 'quantity_required', 'budget_code', 'required_by'}
+        for item in items:
+            if not required.issubset(item) or not all(str(item[key]).strip() for key in required):
+                raise serializers.ValidationError(
+                    'Each item needs a description, quantity, budget code, and required-by date.'
+                )
+        return items
+
+
+class ComparativeScheduleSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    schedule_number = serializers.CharField(read_only=True)
+    compliance = serializers.DictField(read_only=True)
+    items = serializers.ListField(read_only=True)
+    recommendation = serializers.CharField(read_only=True)
+    status = serializers.CharField(read_only=True)
+    rejection_reason = serializers.CharField(read_only=True)
+    procurement_submitted_at = serializers.DateTimeField(read_only=True)
+
+
+class CreateComparativeScheduleSerializer(serializers.Serializer):
+    compliance = serializers.DictField()
+    items = serializers.ListField(child=serializers.DictField(), min_length=1)
+    recommendation = serializers.CharField(required=False, allow_blank=True)
+
+
 # ============================
 # Payslip Serializers
 # ============================

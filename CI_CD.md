@@ -23,8 +23,8 @@ To enable the pipeline, you MUST configure the following secrets in your GitHub 
 - `DEPLOY_PATH`: The directory on the VM where the `deploy/` folder is located (e.g., `/home/ubuntu/zchpc-erp/deploy`).
 
 ### Optional Frontend Config
-- `VITE_API_URL_MAIN`: API URL for the main frontend (default: `https://zchpcerp.zchpc.ac.zw`).
-- `VITE_API_URL_PORTAL`: API URL for the employee portal (default: `https://employees.zchpc.ac.zw`).
+- `VITE_API_URL_MAIN`: API URL for the main frontend (default: `https://zchpc-erp.zw`).
+- `VITE_API_URL_PORTAL`: API URL for the employee portal (default: `https://portal.zchpc-erp.zw`).
 
 ---
 
@@ -49,7 +49,7 @@ POSTGRES_PASSWORD=your_secure_password
 
 # Django Configuration
 SECRET_KEY=your_django_secret_key
-ADMIN_EMAIL=admin@zchpc.ac.zw
+ADMIN_EMAIL=admin@zchpc-erp.zw
 ADMIN_PASSWORD=your_admin_password
 ```
 
