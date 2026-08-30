@@ -4,8 +4,12 @@ User management application service.
 Orchestrates user CRUD operations.
 """
 
+import secrets
+import string
+
 from dataclasses import dataclass
 from uuid import UUID
+
 
 from shared.domain.exceptions import ConflictError, NotFoundError, ValidationError
 from shared.domain.value_objects import Email
@@ -15,7 +19,6 @@ from modules.identity.application.interfaces import (
     UserDTO,
 )
 from modules.identity.domain.entities import User
-from modules.identity.domain.value_objects import HashedPassword
 
 
 @dataclass
@@ -49,14 +52,22 @@ class CreateUserResult:
     temp_password: str | None = None
 
 
+def generate_temp_password(length: int = 12) -> str:
+    """
+    Generate a cryptographically secure random temporary password.
+
+    Uses Python's secrets module for security-sensitive random values.
+    """
+    alphabet = string.ascii_letters + string.digits + "!@#$%"
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
 class UserService:
     """
     Application service for user management.
 
     Handles CRUD operations and user administration.
     """
-
-    DEFAULT_TEMP_PASSWORD = "erp@1234"
 
     def __init__(self, user_repository: IUserRepository) -> None:
         """
@@ -90,10 +101,15 @@ class UserService:
                 details={"email": email},
             )
 
-        # Use provided password or generate temp password
-        password = command.password or self.DEFAULT_TEMP_PASSWORD
-        temp_password = None if command.password else self.DEFAULT_TEMP_PASSWORD
-
+        
+        # Use provided password or generate a secure temporary password
+        if command.password:
+            password = command.password
+            temp_password = None
+        else:
+            password = generate_temp_password()
+            temp_password = password
+              
         # Create user
         user = User.create(
             email=email,
@@ -307,3 +323,4 @@ class UserService:
             is_staff=user.is_staff,
             is_superuser=user.is_superuser,
         )
+

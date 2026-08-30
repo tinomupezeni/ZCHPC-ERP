@@ -16,9 +16,9 @@ services:
     image: postgres:16-alpine
     container_name: zchpc_local_db
     environment:
-      POSTGRES_DB: erp_db
-      POSTGRES_USER: erp_user
-      POSTGRES_PASSWORD: localdev123
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB must be set}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
     ports:
       - "5432:5432"
     volumes:
@@ -42,7 +42,7 @@ services:
       - DB_HOST=db
       - DB_NAME=erp_db
       - DB_USER=erp_user
-      - DB_PASSWORD=localdev123
+      - DB_PASSWORD=change-me
       - DB_PORT=5432
       - SECRET_KEY=local-dev-secret-key-not-for-production
       - ALLOWED_HOSTS=localhost,127.0.0.1,api,host.docker.internal
