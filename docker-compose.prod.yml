@@ -20,9 +20,9 @@ services:
     container_name: zchpc_db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-erp_db}
-      POSTGRES_USER: ${POSTGRES_USER:-erp_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-erp@1234}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB must be set}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -46,9 +46,9 @@ services:
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,api,nginx}
       - DB_HOST=db
       - DB_PORT=5432
-      - DB_NAME=${POSTGRES_DB:-erp_db}
-      - DB_USER=${POSTGRES_USER:-erp_user}
-      - DB_PASSWORD=${POSTGRES_PASSWORD:-erp@1234}
+      - DB_NAME=${POSTGRES_DB:?POSTGRES_DB must be set}
+      - DB_USER=${POSTGRES_USER:?POSTGRES_USER must be set}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-http://localhost,http://127.0.0.1}
     volumes:
       - api_static:/app/staticfiles

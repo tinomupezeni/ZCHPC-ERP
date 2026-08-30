@@ -93,3 +93,7 @@ media/
 
 # Mac and Linux system files
 *.swp
+
+
+# virtual environment folders   
+software-env/

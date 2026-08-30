@@ -2,18 +2,21 @@
 import axios from 'axios';
 
 // const API_URL = ''
-export const API_BASE_URL = `https://zchpcerp.zchpc.ac.zw/api/v2/`;
+export const API_BASE_URL = (typeof __API_URL__ !== "undefined" ? __API_URL__ : "") + "/api/v2/";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
 });
 
 // Automatically add the JWT token to every request
-api.interceptors.request.use((config) => {
+api.interceptors.request.use(config => {
+
   const token = localStorage.getItem('accessToken');
+
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
   return config;
 });
 
