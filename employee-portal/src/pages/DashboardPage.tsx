@@ -14,7 +14,6 @@ import {
   ShoppingCart,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { Badge } from '@/components/ui/badge';
 
 // Role-specific dashboard components
 import { StaffDashboard } from '@/components/dashboard/role/StaffDashboard';
@@ -72,7 +71,7 @@ function getGreeting() {
 
 export function DashboardPage() {
   const { employee } = useAuth();
-  const { roleGroup, roleDisplayName } = useRole();
+  const { roleGroup } = useRole();
 
   const [dashboardData, setDashboardData] = useState<DashboardSummary | null>(null);
 

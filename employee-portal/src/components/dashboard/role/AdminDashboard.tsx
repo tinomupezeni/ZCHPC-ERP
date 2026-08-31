@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useAuth } from '@/contexts/AuthContext';
 import type { DashboardSummary } from '@/types/dashboard.types';
 
 interface AdminDashboardProps {
@@ -25,8 +24,6 @@ interface AdminDashboardProps {
 }
 
 export function AdminDashboard({ data }: AdminDashboardProps) {
-  const { employee } = useAuth();
-
   const systemStats = [
     {
       label: 'Pending Leave Requests',
