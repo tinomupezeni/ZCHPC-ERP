@@ -212,6 +212,26 @@ class AttendanceService:
         )
         return [self._to_dto(r) for r in records]
 
+    def get_filtered_history(
+        self,
+        department_id: int | None = None,
+        employee_id: int | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> Sequence[AttendanceRecordDTO]:
+        """
+        Get attendance records across employees, filtered by department/employee/date range.
+
+        Used by admin/HR views to list attendance beyond the requesting user's own record.
+        """
+        records = self.attendance_repo.get_filtered(
+            department_id=department_id,
+            employee_id=employee_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        return [self._to_dto(r) for r in records]
+
     def get_summary(
         self,
         employee_id: int,

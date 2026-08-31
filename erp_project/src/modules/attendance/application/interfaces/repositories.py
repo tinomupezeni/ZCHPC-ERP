@@ -40,6 +40,17 @@ class IAttendanceRepository(ABC):
         ...
 
     @abstractmethod
+    def get_filtered(
+        self,
+        department_id: int | None = None,
+        employee_id: int | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> Sequence[AttendanceRecord]:
+        """Get attendance records filtered by department/employee/date range (admin)."""
+        ...
+
+    @abstractmethod
     def save(self, record: AttendanceRecord) -> AttendanceRecord:
         """Save attendance record."""
         ...

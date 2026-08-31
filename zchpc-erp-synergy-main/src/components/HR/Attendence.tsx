@@ -4,6 +4,29 @@ import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import Server from "@/services/Server";
 import { toast } from "sonner";
 
+// Helper: resolve a "Time Range" selection to a concrete [start, end] date pair.
+// "Custom Range" is handled by the caller via explicit customStart/customEnd instead.
+const resolveDateRange = (timeRange: string): { start: string; end: string } | null => {
+  const today = new Date();
+  const toISO = (d: Date) => d.toISOString().slice(0, 10);
+
+  if (timeRange === "Last 7 Days") {
+    const start = new Date(today);
+    start.setDate(start.getDate() - 6);
+    return { start: toISO(start), end: toISO(today) };
+  }
+  if (timeRange === "Last 30 Days") {
+    const start = new Date(today);
+    start.setDate(start.getDate() - 29);
+    return { start: toISO(start), end: toISO(today) };
+  }
+  if (timeRange === "This Month") {
+    const start = new Date(today.getFullYear(), today.getMonth(), 1);
+    return { start: toISO(start), end: toISO(today) };
+  }
+  return null;
+};
+
 // Helper: display time as HH:MM for UI
 const formatTime = (timeStr) => {
   if (!timeStr) return "--";
@@ -59,28 +82,47 @@ const Attendance = () => {
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [timeRange, setTimeRange] = useState("Last 7 Days");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const [selectedDepartment, setSelectedDepartment] = useState("All Departments");
-  const [departments, setDepartments] = useState(["All Departments"]);
+  const [selectedDepartment, setSelectedDepartment] = useState(""); // "" = All Departments
+  const [departments, setDepartments] = useState<{ id: number | string; name: string }[]>([]);
+
+  useEffect(() => {
+    fetchDepartments();
+  }, []);
 
   useEffect(() => {
     fetchAttendanceRecords();
-    fetchDepartments();
-  }, []);
+  }, [selectedDepartment, timeRange, customStart, customEnd]);
 
   const fetchAttendanceRecords = async () => {
     setLoading(true);
     try {
-      const response = await Server.fetchAttendanceRecords();
-      if (response.data && Array.isArray(response.data)) {
-        // Transform the data to match the column names from the Excel file
-        const formattedRecords = response.data.map(record => ({
-          name: record.employeeName || record.name || `${record.employee?.first_name || ''} ${record.employee?.last_name || ''}`.trim(),
-          'job no': record.employeeId || record.job_number || record['job no'] || '',
-          date: record.date,
-          'time in': record.loginTime || record.time_in || record['time in'],
-          'time out': record.logoutTime || record.time_out || record['time out']
+      const range =
+        timeRange === "Custom Range"
+          ? customStart && customEnd
+            ? { start: customStart, end: customEnd }
+            : null
+          : resolveDateRange(timeRange);
+
+      const response = await Server.fetchAttendanceRecords({
+        department_id: selectedDepartment || undefined,
+        start_date: range?.start,
+        end_date: range?.end,
+        // Frontend paginates client-side, so pull the largest page in one go.
+        page_size: 200,
+      });
+
+      const results = response.data?.results;
+      if (Array.isArray(results)) {
+        const formattedRecords = results.map(record => ({
+          name: record.employee_name || '',
+          'job no': record.employee_id ?? '',
+          date: record.record_date,
+          'time in': record.time_in,
+          'time out': record.time_out,
         }));
         setAttendanceRecords(formattedRecords);
       } else {
@@ -99,21 +141,17 @@ const Attendance = () => {
   const fetchDepartments = async () => {
     try {
       const response = await Server.fetchDepartments();
-      setDepartments(["All Departments", ...response.data]);
+      setDepartments(response.data || []);
     } catch (error) {
       console.error("Error fetching departments:", error);
     }
   };
 
   const filteredRecords = attendanceRecords.filter(record => {
-    const matchesSearch = 
+    return (
       (record.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (record['job no'] || '').toLowerCase().includes(searchTerm.toLowerCase());
-    
-    // Since we removed department from the records, we'll keep this for backward compatibility
-    const matchesDepartment = selectedDepartment === "All Departments";
-    
-    return matchesSearch && matchesDepartment;
+      String(record['job no'] || '').toLowerCase().includes(searchTerm.toLowerCase())
+    );
   });
 
   // Pagination logic
@@ -305,11 +343,33 @@ const Attendance = () => {
             </div>
             <div className="flex flex-wrap gap-2 w-full md:w-auto">
               <div className="relative">
-                <select 
+                <select
+                  title="Department"
+                  className="px-4 py-2 pr-8 border rounded-lg appearance-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={selectedDepartment}
+                  onChange={(e) => {
+                    setSelectedDepartment(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                >
+                  <option value="">All Departments</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute w-4 h-4 text-gray-400 transform -translate-y-1/2 right-3 top-1/2" />
+              </div>
+              <div className="relative">
+                <select
                 title="Time Range"
                   className="px-4 py-2 pr-8 border rounded-lg appearance-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   value={timeRange}
-                  onChange={(e) => setTimeRange(e.target.value)}
+                  onChange={(e) => {
+                    setTimeRange(e.target.value);
+                    setCurrentPage(1);
+                  }}
                 >
                   <option>Last 7 Days</option>
                   <option>Last 30 Days</option>
@@ -318,6 +378,24 @@ const Attendance = () => {
                 </select>
                 <ChevronDown className="absolute w-4 h-4 text-gray-400 transform -translate-y-1/2 right-3 top-1/2" />
               </div>
+              {timeRange === "Custom Range" && (
+                <>
+                  <input
+                    type="date"
+                    aria-label="Start date"
+                    className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={customStart}
+                    onChange={(e) => setCustomStart(e.target.value)}
+                  />
+                  <input
+                    type="date"
+                    aria-label="End date"
+                    className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={customEnd}
+                    onChange={(e) => setCustomEnd(e.target.value)}
+                  />
+                </>
+              )}
             </div>
           </div>
         </div>

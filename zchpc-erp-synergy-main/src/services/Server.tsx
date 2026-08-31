@@ -60,9 +60,16 @@ class Server {
     return apiClient.post(`${api_url}update/user/`, data);
   };
 
-  // fetch attendance records
-  static fetchAttendanceRecords = () => {
-    return apiClient.get(`${api_url}attendance/history/`);
+  // fetch attendance records across all employees (admin/HR), optionally filtered
+  // by department, employee, and/or date range
+  static fetchAttendanceRecords = (filters?: {
+    department_id?: number | string;
+    employee_id?: number | string;
+    start_date?: string;
+    end_date?: string;
+    page_size?: number;
+  }) => {
+    return apiClient.get(`${api_url}attendance/all/`, { params: filters });
   };
 
   // delete attendance record

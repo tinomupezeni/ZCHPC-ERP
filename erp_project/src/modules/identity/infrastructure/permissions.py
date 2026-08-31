@@ -119,3 +119,32 @@ class RolePermission(BasePermission):
                 user_role = 'STAFF'
 
         return user_role.upper() in [r.upper() for r in self.allowed_roles]
+
+
+class IsHRorAdmin(BasePermission):
+    """Permission class for endpoints that expose data across all employees (e.g. admin/HR reports)."""
+
+    ALLOWED_ROLES = {
+        "ADMIN",
+        "SYSTEM_ADMINISTRATOR",
+        "HR",
+        "HUMAN_RESOURCES",
+        "MANAGER",
+        "DEPARTMENT_MANAGER",
+    }
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+
+        if request.user.is_superuser or request.user.is_staff:
+            return True
+
+        try:
+            employee = request.user.employee_profile
+            role_obj = getattr(employee, 'role', None) if employee else None
+            user_role = getattr(role_obj, 'name', 'STAFF') if role_obj else 'STAFF'
+        except Exception:
+            user_role = 'STAFF'
+
+        return user_role.upper() in self.ALLOWED_ROLES
