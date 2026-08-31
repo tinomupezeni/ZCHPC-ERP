@@ -90,6 +90,17 @@ def admin_client(api_client, admin_user):
     return api_client
 
 
+@pytest.fixture
+def enable_all_system_modules(db):
+    """
+    Activate every SystemModule row so ModuleAccessMiddleware doesn't block
+    requests in tests that aren't specifically exercising the App Store
+    install/uninstall flow.
+    """
+    from modules.identity.infrastructure.persistence.models import SystemModule
+    SystemModule.objects.update(is_active=True)
+
+
 # =============================================================================
 # Database Fixtures
 # =============================================================================

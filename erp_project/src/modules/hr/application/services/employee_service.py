@@ -426,15 +426,45 @@ class EmployeeService:
     def get_employee_salary(self, employee_id: int) -> SalaryDTO | None:
         """Get employee salary information."""
         employee = self._employees.get_by_id(employee_id)
-        if not employee or not employee.salary:
+        if not employee:
+            return None
+        payroll_info = self._get_payroll_info(employee.id)
+        if payroll_info["usd_salary"] is None and payroll_info["zig_salary"] is None:
             return None
         return SalaryDTO(
             employee_id=employee.id,
             employee_number=str(employee.employee_id),
-            usd_amount=employee.salary.usd_amount,
-            zig_amount=employee.salary.zig_amount,
-            pay_frequency=employee.pay_frequency.value,
+            usd_amount=payroll_info["usd_salary"] or Decimal("0"),
+            zig_amount=payroll_info["zig_salary"] or Decimal("0"),
+            pay_frequency=payroll_info["pay_frequency"],
         )
+
+    def _get_payroll_info(self, employee_id: int) -> dict:
+        """
+        Fetch salary/banking info for an employee.
+
+        Salary and bank account moved out of the Employee aggregate into the
+        payroll module's normalized tables (PayrollProfile, EmployeeBankAccount)
+        during the DB normalization pass, so they're read directly here rather
+        than off the Employee entity.
+        """
+        from modules.payroll.infrastructure.persistence.models import (
+            EmployeeBankAccount,
+            PayrollProfile,
+        )
+
+        profile = PayrollProfile.objects.filter(employee_id=employee_id).first()
+        bank = EmployeeBankAccount.objects.filter(
+            employee_id=employee_id, is_primary=True
+        ).first()
+
+        return {
+            "usd_salary": profile.usd_salary if profile else None,
+            "zig_salary": profile.zig_salary if profile else None,
+            "pay_frequency": profile.pay_frequency if profile else "monthly",
+            "bank_name": bank.bank_name if bank else None,
+            "bank_account": bank.account_number if bank else None,
+        }
 
     def _to_dto(self, employee: Employee) -> EmployeeDTO:
         """Convert employee entity to DTO."""
@@ -449,6 +479,8 @@ class EmployeeService:
             pos = self._positions.get_by_id(employee.position_id)
             if pos:
                 pos_title = pos.title
+
+        payroll_info = self._get_payroll_info(employee.id)
 
         return EmployeeDTO(
             id=employee.id,
@@ -469,9 +501,9 @@ class EmployeeService:
             employee_type=employee.employee_type.value,
             date_joined=employee.date_joined,
             is_active=employee.is_active,
-            usd_salary=employee.salary.usd_amount if employee.salary else None,
-            zig_salary=employee.salary.zig_amount if employee.salary else None,
-            pay_frequency=employee.pay_frequency.value,
-            bank_name=employee.bank_account.bank_name if employee.bank_account else None,
-            bank_account=employee.bank_account.account_number if employee.bank_account else None,
+            usd_salary=payroll_info["usd_salary"],
+            zig_salary=payroll_info["zig_salary"],
+            pay_frequency=payroll_info["pay_frequency"],
+            bank_name=payroll_info["bank_name"],
+            bank_account=payroll_info["bank_account"],
         )
