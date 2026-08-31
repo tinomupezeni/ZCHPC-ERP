@@ -16,6 +16,8 @@ from modules.hr.api.views import (
     EmployeeDetailView,
     EmployeeListCreateView,
     EmployeeSalaryView,
+    EventDetailView,
+    EventListCreateView,
     HRDashboardView,
     PositionDetailView,
     PositionListCreateView,
@@ -53,4 +55,8 @@ urlpatterns = [
     # Allowances
     path("allowances/", AllowanceTypeListCreateView.as_view(), name="allowance_list"),
     path("allowances/<int:allowance_id>/", AllowanceTypeDetailView.as_view(), name="allowance_detail"),
+
+    # Company calendar events
+    path("events/", EventListCreateView.as_view(), name="event_list"),
+    path("events/<int:event_id>/", EventDetailView.as_view(), name="event_detail"),
 ]

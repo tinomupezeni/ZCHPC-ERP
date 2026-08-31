@@ -22,6 +22,10 @@ from modules.hr.api.views.payroll_config_views import (
     AllowanceTypeListCreateView,
     AllowanceTypeDetailView,
 )
+from modules.hr.api.views.calendar_views import (
+    EventListCreateView,
+    EventDetailView,
+)
 
 __all__ = [
     # Dashboard
@@ -44,4 +48,7 @@ __all__ = [
     "DeductionTypeDetailView",
     "AllowanceTypeListCreateView",
     "AllowanceTypeDetailView",
+    # Company calendar events
+    "EventListCreateView",
+    "EventDetailView",
 ]
