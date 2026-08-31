@@ -215,6 +215,12 @@ static approvePayslip = (id, period) => {
    * @param {number} id The ID of the department.
    * @returns {Promise} The apiClient promise.
    */
+  static fetchDepartments = () => {
+    return apiClient.get(`${api_url}hr/departments/`, {
+      headers: getAuthHeaders(),
+    });
+  };
+
   static fetchDepartmentDetails = (id) => {
     return apiClient.get(`${api_url}departments/${id}/`, {
       headers: getAuthHeaders(),
