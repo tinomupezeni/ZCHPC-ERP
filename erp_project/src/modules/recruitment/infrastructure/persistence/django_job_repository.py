@@ -57,10 +57,10 @@ class DjangoJobRepository(IJobRepository):
         return [self._to_entity(model) for model in queryset]
 
     def get_public_jobs(self) -> Sequence[Job]:
-        """Get all public (non-internal, open) jobs."""
+        """Get all open jobs shown on the public careers page (internal and external)."""
         queryset = JobModel.objects.select_related(
             "department", "position"
-        ).filter(status="Open", is_internal=False)
+        ).filter(status="Open")
 
         return [self._to_entity(model) for model in queryset]
 

@@ -243,7 +243,7 @@ class JobService:
         return [self._to_dto(j) for j in jobs]
 
     def get_public_jobs(self) -> Sequence[JobDTO]:
-        """Get all public (non-internal, open) jobs."""
+        """Get all open jobs shown on the public careers page (internal and external)."""
         jobs = self._job_repo.get_public_jobs()
         return [self._to_dto(j) for j in jobs]
 
