@@ -107,7 +107,9 @@ const PayrollReports = () => {
     const now = new Date();
     for (let i = 0; i < 12; i++) {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const period = date.toISOString().split("T")[0];
+      // Backend period params are YYYY-MM - the full YYYY-MM-DD 400'd
+      // every period except whatever happened to match the default.
+      const period = date.toISOString().slice(0, 7);
       const label = date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
       generatedPeriods.push({ period, label });
     }
