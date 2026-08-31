@@ -55,6 +55,24 @@ class TestProcessPayroll:
         response = admin_client.post("/api/v2/payroll/payslips/", {}, format="json")
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
+    def test_missing_exchange_rate_does_not_strand_the_batch_in_processing(
+        self, admin_client, sample_employee, usd_tax_bracket
+    ):
+        """
+        Regression: a failed run used to leave the batch in PROCESSING
+        forever (can_process only allows OPEN), permanently blocking every
+        future attempt to process this period - discovered by triggering
+        exactly this on the live deployment.
+        """
+        failed = admin_client.post("/api/v2/payroll/payslips/", {"month": "2026-08"}, format="json")
+        assert failed.status_code == status.HTTP_400_BAD_REQUEST
+        assert "exchange rate" in failed.data["error"].lower()
+
+        DailyZiGRateToUSD.objects.create(date=date.today(), average=Decimal("13.5"))
+        retry = admin_client.post("/api/v2/payroll/payslips/", {"month": "2026-08"}, format="json")
+        assert retry.status_code == status.HTTP_201_CREATED, retry.data
+        assert retry.data["total_processed"] == 1
+
     def test_process_payroll_generates_a_payslip_for_the_active_employee(
         self, admin_client, sample_employee, usd_tax_bracket, exchange_rate
     ):
