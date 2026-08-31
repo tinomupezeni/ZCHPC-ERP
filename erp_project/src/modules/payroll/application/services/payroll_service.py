@@ -109,11 +109,10 @@ class PayrollService:
                 f"Cannot process payroll in {payroll.status.value} status"
             )
 
-        # Start processing
-        payroll.start_processing(command.processed_by)
-        self.payroll_repo.save(payroll)
-
-        # Get required data
+        # Validate required data *before* flipping to PROCESSING - a missing
+        # exchange rate/tax table used to leave the batch stuck in
+        # PROCESSING forever (can_process only allows OPEN), permanently
+        # blocking every future attempt to process this period.
         exchange_rate = self.rate_repo.get_latest()
         if not exchange_rate:
             raise ValidationError("No exchange rate available for payroll processing")
@@ -127,6 +126,10 @@ class PayrollService:
 
         if not usd_tax_table:
             raise ValidationError("No USD tax table available")
+
+        # Start processing
+        payroll.start_processing(command.processed_by)
+        self.payroll_repo.save(payroll)
 
         # Get active employees
         employee_ids = self.employee_provider.get_active_employee_ids()
@@ -159,14 +162,20 @@ class PayrollService:
             except Exception as e:
                 errors.append({"employee_id": emp_id, "error": str(e)})
 
-        # Save all payslips
-        if payslips:
-            self.payslip_repo.save_batch(payslips)
+        # Anything unexpected past this point (e.g. a batch-save failure)
+        # must not leave the batch stuck in PROCESSING - reopen it and
+        # re-raise so the caller sees the real error and can retry.
+        try:
+            if payslips:
+                self.payslip_repo.save_batch(payslips)
 
-        # Calculate summary
-        summary = self._calculate_summary(payslips)
-        payroll.complete_processing(summary)
-        self.payroll_repo.save(payroll)
+            summary = self._calculate_summary(payslips)
+            payroll.complete_processing(summary)
+            self.payroll_repo.save(payroll)
+        except Exception:
+            payroll.status = PayrollStatus.OPEN
+            self.payroll_repo.save(payroll)
+            raise
 
         return ProcessPayrollResult(
             payroll_id=payroll.id,
