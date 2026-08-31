@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { addEmployee } from "@/services/employees.services";
+import { isAtLeastAge, MIN_EMPLOYEE_AGE } from "@/lib/dateOfBirth";
 import {
   addPosition,
   getPositions,
@@ -94,7 +95,14 @@ export const useAddEmployee = (
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
-    setEmployee({ ...employee, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    if (name === "department" && value !== employee.department) {
+      // Position list is scoped to the department; a stale position from the
+      // previous department would otherwise still be submitted with the new one.
+      setEmployee({ ...employee, department: value, position: "" });
+      return;
+    }
+    setEmployee({ ...employee, [name]: value });
   };
 
   const handleCreateDepartment = async () => {
@@ -132,6 +140,12 @@ export const useAddEmployee = (
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!isAtLeastAge(employee.dob)) {
+      toast.error(`Employee must be at least ${MIN_EMPLOYEE_AGE} years old.`);
+      return;
+    }
+
     setLoading(true);
 
     // Convert department and position to integers (or null if empty)
@@ -185,6 +199,8 @@ export const useAddEmployee = (
         ? "National ID already exists."
         : errData?.position_id
         ? errData.position_id
+        : errData?.error
+        ? errData.error
         : "Check inputs.";
       toast.error(typeof msg === 'string' ? msg : "Check inputs.");
     } finally {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { getEmployeeById, updateEmployee } from "@/services/employees.services";
+import { isAtLeastAge, MIN_EMPLOYEE_AGE } from "@/lib/dateOfBirth";
 import { getDepartment, getPositions } from "@/services/hr.services";
 import { Employee, DropdownOption } from "../types/employee";
 
@@ -71,6 +72,11 @@ export const useEmployeeDetail = (initialEmployee: Employee, onUpdate: () => voi
   };
 
   const handleSave = async () => {
+    if (!isAtLeastAge(formData.date_of_birth)) {
+      toast.error(`Employee must be at least ${MIN_EMPLOYEE_AGE} years old.`);
+      return;
+    }
+
     setSaving(true);
     try {
       // Remove the read-only string fields from payload
@@ -90,6 +96,7 @@ export const useEmployeeDetail = (initialEmployee: Employee, onUpdate: () => voi
     } catch (error: any) {
       const errorMsg = error.response?.data?.position_id ||
                        error.response?.data?.department_id ||
+                       error.response?.data?.error ||
                        "Update failed. Check your inputs.";
       toast.error(typeof errorMsg === 'string' ? errorMsg : "Update failed.");
     } finally {
