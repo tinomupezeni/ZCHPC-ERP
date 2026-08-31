@@ -58,6 +58,8 @@ services:
       - DB_USER=${POSTGRES_USER:?POSTGRES_USER must be set}
       - DB_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-http://localhost,http://127.0.0.1}
+      - CORS_ALLOW_ALL_ORIGINS=${CORS_ALLOW_ALL_ORIGINS:-False}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}
     volumes:
       - api_static:/app/staticfiles
       - api_media:/app/mediafiles
