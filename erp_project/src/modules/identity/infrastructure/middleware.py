@@ -47,7 +47,8 @@ class RBACMiddleware:
     EXEMPT_PATHS = [
         "/api/v2/auth/",  # Login/Token endpoints
         "/api/v2/portal/auth/",  # Portal login
-        "/api/v2/portal/public/",  # Public job listings
+        "/api/v2/portal/public/",  # Public job listings (portal module)
+        "/api/v2/recruitment/public/",  # Public job listings/applications (recruitment module)
         "/api/v2/health/",  # Docker/K8s health checks
         "/admin/",  # Django admin (has its own auth system)
         "/__reload__/",  # Dev tool

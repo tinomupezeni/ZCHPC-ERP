@@ -10,9 +10,12 @@ import type {
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
-// Create axios instance without auth for public endpoints
+// Create axios instance without auth for public endpoints.
+// modules/recruitment (not modules/portal, which has a differently-shaped
+// public API - no check-application route, and /apply/ takes the job id in
+// the path instead of the body) is what these calls are actually built against.
 const publicApi = axios.create({
-  baseURL: `${API_URL}/portal/public`,
+  baseURL: `${API_URL}/api/v2/recruitment/public`,
 });
 
 export const jobsService = {

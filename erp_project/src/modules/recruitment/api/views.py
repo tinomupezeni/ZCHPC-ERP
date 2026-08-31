@@ -308,7 +308,7 @@ class PublicApplyView(APIView):
 
             command = SubmitApplicationCommand(
                 job_id=serializer.validated_data["job_id"],
-                national_id=serializer.validated_data.get("national_id"),
+                national_id=serializer.validated_data.get("id_number"),
                 first_name=serializer.validated_data["first_name"],
                 last_name=serializer.validated_data["last_name"],
                 email=serializer.validated_data["email"],
