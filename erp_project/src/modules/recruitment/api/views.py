@@ -63,7 +63,12 @@ class JobListView(APIView):
 
     def get(self, request):
         """Get all jobs with optional filters."""
-        query_serializer = JobQuerySerializer(data=request.query_params)
+        # .dict() (a plain dict) rather than the QueryDict itself: DRF's
+        # BooleanField treats a QueryDict specially (HTML checkbox semantics)
+        # and silently defaults a missing 'internal' key to False instead of
+        # "not provided", which would filter out every internal job whenever
+        # the caller doesn't pass ?internal= at all.
+        query_serializer = JobQuerySerializer(data=request.query_params.dict())
         query_serializer.is_valid(raise_exception=True)
 
         service = get_job_service()
