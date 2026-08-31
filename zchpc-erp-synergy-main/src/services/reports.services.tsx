@@ -9,13 +9,10 @@ export interface ReportData {
 
 export interface ReportSummary {
   total_employees: number;
-  payroll_records: number;
-  total_gross_salary_usd: number;
-  total_net_salary_usd: number;
+  total_gross_usd: number;
+  total_net_usd: number;
   total_paye_usd: number;
   total_nssa_usd: number;
-  total_allowances_usd: number;
-  total_deductions_usd: number;
 }
 
 // Report type to endpoint mapping
@@ -64,6 +61,22 @@ export const fetchReportData = async (
     // Use endpoint directly (already includes correct module path)
     const url = `${endpoint}${queryString ? `?${queryString}` : ""}`;
 
+    // leave/balances/ returns a single per-employee summary object (with a
+    // nested `balances` breakdown), not an array like every other report
+    // endpoint - normalize it here so DynamicReport can render it as rows.
+    if (reportType === "leaveBalance") {
+      const response = await apiClient.get(url);
+      const balances = response.data?.balances ?? [];
+      return balances.map((b: any) => ({
+        id: b.id,
+        leave_type: b.leave_type_name,
+        entitled_days: b.entitled_days,
+        used_days: b.used_days,
+        remaining_days: b.remaining_days,
+        usage_percentage: b.usage_percentage,
+      }));
+    }
+
     const response = await apiClient.get<ReportData[]>(url);
     return response.data;
   } catch (error) {
@@ -88,13 +101,10 @@ export const fetchReportSummary = async (period?: string): Promise<ReportSummary
     // Return empty summary on error to prevent UI crash
     return {
       total_employees: 0,
-      payroll_records: 0,
-      total_gross_salary_usd: 0,
-      total_net_salary_usd: 0,
+      total_gross_usd: 0,
+      total_net_usd: 0,
       total_paye_usd: 0,
       total_nssa_usd: 0,
-      total_allowances_usd: 0,
-      total_deductions_usd: 0,
     };
   }
 };

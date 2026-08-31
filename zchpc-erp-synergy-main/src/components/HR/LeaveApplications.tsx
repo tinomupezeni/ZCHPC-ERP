@@ -81,7 +81,7 @@ const LeaveApplications = () => {
   const fetchLeaveRequests = async () => {
     try {
       setIsLoading(true);
-      const response = await apiClient.get("/leave/requests/");
+      const response = await apiClient.get("/leave/requests/all/");
       setLeaveRequests(response.data);
     } catch (error) {
       console.error("Failed to fetch leave requests:", error);

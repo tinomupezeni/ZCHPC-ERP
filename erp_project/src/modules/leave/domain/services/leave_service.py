@@ -162,6 +162,24 @@ class ILeaveApprovalPolicy(ABC):
         ...
 
     @abstractmethod
+    def can_reject(
+        self,
+        request: LeaveRequest,
+        approver_id: int,
+    ) -> tuple[bool, str]:
+        """
+        Check if request can be rejected.
+
+        Args:
+            request: The leave request
+            approver_id: ID of the approver
+
+        Returns:
+            Tuple of (can_reject, reason)
+        """
+        ...
+
+    @abstractmethod
     def can_auto_approve(self, request: LeaveRequest) -> bool:
         """
         Check if request can be auto-approved.
@@ -200,6 +218,22 @@ class DefaultLeaveApprovalPolicy(ILeaveApprovalPolicy):
         # Cannot self-approve
         if request.employee_id == approver_id:
             return False, "Cannot approve own leave request"
+
+        # Must be pending
+        if not request.is_pending:
+            return False, f"Request is already {request.status.value}"
+
+        return True, ""
+
+    def can_reject(
+        self,
+        request: LeaveRequest,
+        approver_id: int,
+    ) -> tuple[bool, str]:
+        """Check if request can be rejected."""
+        # Cannot self-reject
+        if request.employee_id == approver_id:
+            return False, "Cannot reject own leave request"
 
         # Must be pending
         if not request.is_pending:

@@ -5,6 +5,7 @@ Leave API URL configuration.
 from django.urls import path
 
 from modules.leave.api.views import (
+    AdminLeaveRequestListView,
     InitializeBalancesView,
     LeaveBalanceAdminView,
     LeaveBalanceAdjustView,
@@ -39,6 +40,7 @@ urlpatterns = [
     path("requests/<int:request_id>/", LeaveRequestDetailView.as_view(), name="leave-request-detail"),
     path("requests/<int:request_id>/cancel/", LeaveRequestCancelView.as_view(), name="leave-request-cancel"),
     path("requests/<int:request_id>/review/", LeaveRequestReviewView.as_view(), name="leave-request-review"),
+    path("requests/all/", AdminLeaveRequestListView.as_view(), name="leave-request-all"),
     path("requests/pending/", PendingLeaveRequestsView.as_view(), name="leave-request-pending"),
     path("requests/summary/", LeaveRequestSummaryView.as_view(), name="leave-request-summary"),
 ]

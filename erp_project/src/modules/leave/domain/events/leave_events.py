@@ -47,8 +47,9 @@ class LeaveRejected(DomainEvent):
 
     request_id: int
     employee_id: int
+    leave_type_id: int
     rejected_by_id: int
-    rejected_at: datetime
+    rejection_reason: str
 
     @property
     def event_type(self) -> str:

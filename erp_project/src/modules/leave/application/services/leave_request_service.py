@@ -159,7 +159,6 @@ class LeaveRequestService:
                 start_date=request.start_date,
                 end_date=request.end_date,
                 days=request.days,
-                requested_at=datetime.now(),
             )
         )
 
@@ -184,7 +183,7 @@ class LeaveRequestService:
         # Check approval policy
         can_approve, reason = self._approval_policy.can_approve(
             request=request,
-            reviewer_id=command.reviewer_id,
+            approver_id=command.reviewer_id,
         )
         if not can_approve:
             raise ValidationError(f"Cannot approve request: {reason}")
@@ -233,7 +232,7 @@ class LeaveRequestService:
         # Check approval policy
         can_reject, reason = self._approval_policy.can_reject(
             request=request,
-            reviewer_id=command.reviewer_id,
+            approver_id=command.reviewer_id,
         )
         if not can_reject:
             raise ValidationError(f"Cannot reject request: {reason}")
@@ -248,7 +247,6 @@ class LeaveRequestService:
                 employee_id=request.employee_id,
                 leave_type_id=request.leave_type_id,
                 rejected_by_id=command.reviewer_id,
-                rejected_at=datetime.now(),
                 rejection_reason=command.rejection_reason or "",
             )
         )
@@ -293,7 +291,6 @@ class LeaveRequestService:
                 leave_type_id=request.leave_type_id,
                 days=request.days,
                 was_approved=was_approved,
-                cancelled_at=datetime.now(),
             )
         )
 
