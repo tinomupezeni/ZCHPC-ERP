@@ -179,7 +179,6 @@ else:
             'PORT': os.environ.get('DB_PORT', '5432'),
         }
     }
-    }
 
 # --- CORS ---
 # SECURITY FIX: Default to False. Wildcard CORS is dangerous in production.
