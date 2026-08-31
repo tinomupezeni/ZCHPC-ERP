@@ -6,6 +6,38 @@ from django.db import transaction
 
 JOBS = [
     {
+        # Clearly labeled as a test fixture (not a real posting) - the two
+        # HPC Platforms roles below are real internal-only postings and
+        # correctly don't appear on the public careers page; this one exists
+        # so the public listing/apply flow has something to test against.
+        "title": "[TEST] QA Careers Page Verification Role",
+        "department_name": "Systems Support",
+        "reports_to": "Director - Systems Support",
+        "location": "Harare, Zimbabwe",
+        "is_internal": False,
+        "status": "Open",
+        "description": (
+            "Test fixture used to verify the public careers page and application "
+            "flow end-to-end. Not a real opening - safe to close/delete once "
+            "testing is done."
+        ),
+        "responsibilities": [
+            "Exist as a public, open, non-internal job for QA purposes.",
+        ],
+        "qualifications": [
+            "N/A - test fixture.",
+        ],
+        "competencies": [
+            "N/A - test fixture.",
+        ],
+        "application_process": (
+            "This is a test posting for verifying the public application flow. "
+            "Applications submitted here are test data."
+        ),
+        "contact_email": "hr@hpc.ac.zw",
+        "notes": "Test fixture - not a real job opening.",
+    },
+    {
         "title": "Systems Engineer - HPC Platforms",
         "department_name": "Systems Support",
         "reports_to": "Director - Systems Support",
