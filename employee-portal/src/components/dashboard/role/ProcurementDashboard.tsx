@@ -11,7 +11,7 @@ import {
   FileText,
   Bell,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import type { DashboardSummary } from '@/types/dashboard.types';
@@ -79,6 +79,7 @@ export function ProcurementDashboard({ data }: ProcurementDashboardProps) {
       gradient: 'from-amber-500 to-amber-600',
       shadow: 'shadow-amber-500/25',
       href: '/portal/inventory',
+      badge: null,
     },
     {
       icon: Truck,
@@ -87,6 +88,7 @@ export function ProcurementDashboard({ data }: ProcurementDashboardProps) {
       gradient: 'from-emerald-500 to-emerald-600',
       shadow: 'shadow-emerald-500/25',
       href: '/portal/suppliers',
+      badge: null,
     },
     {
       icon: ClipboardList,
@@ -95,6 +97,7 @@ export function ProcurementDashboard({ data }: ProcurementDashboardProps) {
       gradient: 'from-orange-500 to-orange-600',
       shadow: 'shadow-orange-500/25',
       href: '/portal/requisitions',
+      badge: null,
     },
     {
       icon: FileText,
@@ -103,6 +106,7 @@ export function ProcurementDashboard({ data }: ProcurementDashboardProps) {
       gradient: 'from-purple-500 to-purple-600',
       shadow: 'shadow-purple-500/25',
       href: '/portal/payslips',
+      badge: null,
     },
     {
       icon: Clock,
@@ -111,6 +115,7 @@ export function ProcurementDashboard({ data }: ProcurementDashboardProps) {
       gradient: 'from-cyan-500 to-cyan-600',
       shadow: 'shadow-cyan-500/25',
       href: '/portal/attendance',
+      badge: null,
     },
   ];
 
