@@ -38,8 +38,8 @@ export default function TrainingProgramsPage() {
     try {
       setIsLoading(true);
       const response = await Server.getTrainingPrograms();
-      console.log("Fetched training programs:", response.data);
-      setPrograms(response.data.results);
+      const data = response.data as TrainingProgram[] | { results: TrainingProgram[] };
+      setPrograms(Array.isArray(data) ? data : data?.results ?? []);
     } catch (error) {
       toast({
         title:"Failed to fetch training programs",
