@@ -121,7 +121,10 @@ export const fetchPayrollPeriods = async (): Promise<{ period: string; label: st
 
     for (let i = 0; i < 12; i++) {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const period = date.toISOString().split("T")[0];
+      // Backend period params are YYYY-MM (see payroll/api/views.py
+      // PayrollSummaryView) - toISOString().split("T")[0] was sending the
+      // full YYYY-MM-DD, which 400'd every period except the default.
+      const period = date.toISOString().slice(0, 7);
       const label = date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
       periods.push({ period, label });
     }
