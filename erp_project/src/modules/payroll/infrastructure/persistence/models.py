@@ -239,7 +239,12 @@ class PayrollBatch(models.Model):
     total_nssa_zig = models.DecimalField(max_digits=14, decimal_places=2, default=0)
 
     class Meta:
-        db_table = 'payroll_payrollbatch'
+        # NOT payroll_payrollbatch - that name was already taken on the
+        # production DB by an unrelated, undocumented table (no model or
+        # migration for it anywhere in this repo) with a completely
+        # different schema, linked via a dead payroll_payroll.batch_id FK
+        # that no current code reads. Renamed to avoid colliding with it.
+        db_table = 'payroll_processing_batch'
         ordering = ['-period']
 
     def __str__(self):
