@@ -91,7 +91,10 @@ class SubmitApplicationRequestSerializer(serializers.Serializer):
     """Serializer for submitting a job application."""
 
     job_id = serializers.IntegerField()
-    national_id = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    # External field name matches CheckApplicationRequestSerializer/
+    # ApplicationStatusCheckRequestSerializer (and the frontend); it maps to
+    # SubmitApplicationCommand.national_id below.
+    id_number = serializers.CharField(max_length=20, required=False, allow_blank=True)
     first_name = serializers.CharField(max_length=100)
     last_name = serializers.CharField(max_length=100)
     email = serializers.EmailField()

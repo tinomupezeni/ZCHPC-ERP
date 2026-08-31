@@ -217,6 +217,20 @@ CORS_ALLOW_CREDENTIALS = os.environ.get("CORS_ALLOW_CREDENTIALS", "False").lower
     "yes",
 )
 
+# Chrome's Private Network Access policy blocks a page served from a public
+# origin from calling a private/local IP (e.g. a public HTTPS frontend
+# calling an internal 10.x backend directly) unless the server opts in via
+# Access-Control-Allow-Private-Network on the preflight response. This is
+# an internal tool reached that way in some deployments, so opt in - but
+# this doesn't address browsers that separately block the mixed-content
+# case (an https:// page calling a plain http:// backend); the backend
+# should be reached over https for those deployments regardless.
+CORS_ALLOW_PRIVATE_NETWORK = os.environ.get("CORS_ALLOW_PRIVATE_NETWORK", "True").lower() in (
+    "true",
+    "1",
+    "yes",
+)
+
 CORS_ALLOW_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 CORS_ALLOW_HEADERS = [
     "accept",
