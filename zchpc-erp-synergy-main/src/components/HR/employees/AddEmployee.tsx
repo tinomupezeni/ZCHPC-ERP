@@ -1,6 +1,7 @@
 import { Loader, X, Plus, Check, X as CancelIcon } from "lucide-react";
 import TaxAndDeductionsDropdown from "./TaxAndDeductions";
 import { useAddEmployee } from "@/hooks/useAddEmployee";
+import { maxDateOfBirth, MIN_EMPLOYEE_AGE } from "@/lib/dateOfBirth";
 
 export default function AddEmployee({ setShowModal, fetchEmployees }) {
   const {
@@ -95,9 +96,13 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
                   name="dob"
                   value={employee.dob}
                   onChange={handleChange}
+                  max={maxDateOfBirth()}
                   required
                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 />
+                <span className="text-xs text-gray-500">
+                  Employee must be at least {MIN_EMPLOYEE_AGE} years old
+                </span>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
