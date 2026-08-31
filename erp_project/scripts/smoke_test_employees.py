@@ -23,7 +23,7 @@ Exits 0 if every step passes, 1 on the first failure.
 import argparse
 import os
 import sys
-from datetime import date
+from datetime import date, datetime
 
 import requests
 
@@ -83,7 +83,9 @@ class EmployeeCrudSmokeTest:
     def create_employee(self):
         today = date.today()
         dob = today.replace(year=today.year - 30)
-        suffix = today.strftime("%Y%m%d%H%M%S")
+        # date.today() has no time component - strftime("%H%M%S") on it is
+        # always "000000", so every same-day re-run collided on this email.
+        suffix = datetime.now().strftime("%Y%m%d%H%M%S%f")
         payload = {
             "first_name": "Smoke",
             "surname": "Test",
