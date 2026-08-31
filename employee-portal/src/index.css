@@ -380,3 +380,62 @@ html {
 .finance-only td { height: 28px; }
 @media (max-width: 640px) { .claim-paper { padding: 24px 12px; min-height: 0; font-size: 8px; } .claim-header { grid-template-columns: 38px 1fr 42px; min-height: 82px; gap: 3px; } .claim-crest { width: 34px; height: 34px; font-size: 6px; } .claim-header img { width: 40px; height: 38px; } .claim-brand { margin-bottom: 10px; font-size: 7px; } .claim-header h1 { font-size: 10px; } .claim-header p { font-size: 6px; } .claim-grid, .claim-middle { gap: 6px; } .claim-grid th, .claim-grid td, .banking th, .banking td, .claim-expenses th, .claim-expenses td, .finance-only th, .finance-only td { padding: 2px; } .declaration { font-size: 7px; } }
 @media print { .ta-page { padding: 0; background: #fff; } .ta-actions { display: none; } .claim-paper { width: 210mm; min-height: 297mm; padding: 11mm 14mm 9mm; border: 0; box-shadow: none; } @page { size: A4 portrait; margin: 0; } }
+
+.official-forms-page { min-height: 100vh; padding: 24px; background: #edf0ed; color: #242424; font-family: Arial, Helvetica, sans-serif; }
+.official-toolbar { width: min(100%, 794px); margin: 0 auto 16px; display: flex; align-items: end; justify-content: space-between; gap: 20px; font-family: var(--font-inter); }
+.official-toolbar h2 { margin: 0; font-size: 22px; color: #17212b; }
+.official-toolbar p { margin: 4px 0 0; color: #68737b; font-size: 13px; }
+.official-toolbar .eyebrow { margin: 0 0 4px; color: #176b65; font-size: 10px; font-weight: 700; letter-spacing: .12em; }
+.form-tabs { width: min(100%, 794px); margin: 0 auto 16px; display: flex; gap: 4px; border-bottom: 1px solid #aeb5b2; font-family: var(--font-inter); }
+.form-tabs button { border: 0; border-bottom: 3px solid transparent; padding: 10px 13px; background: transparent; color: #5d686d; cursor: pointer; font-size: 12px; font-weight: 600; }
+.form-tabs button.active { border-bottom-color: #176b65; color: #176b65; background: #e1e8e3; }
+.official-paper { box-sizing: border-box; width: min(100%, 794px); min-height: 1123px; margin: 0 auto; padding: 52px 70px 46px; background: #fffef9; border: 1px solid #c2c5bf; box-shadow: 0 5px 20px rgba(0,0,0,.12); font-size: 10px; line-height: 1.25; }
+.official-header { display: grid; grid-template-columns: 72px 1fr 72px; align-items: center; gap: 8px; min-height: 112px; text-align: center; }
+.official-header img { width: 60px; height: 60px; object-fit: contain; filter: grayscale(1) contrast(1.4); }
+.official-crest { width: 54px; height: 54px; display: grid; place-items: center; border: 1px solid #666; border-radius: 50%; color: #555; font: bold 9px Georgia, serif; }
+.official-heading { font-size: 13px; font-weight: 700; }
+.official-heading strong { display: block; margin-bottom: 18px; font-size: 17px; }
+.official-heading h1 { margin: 15px 0 8px; font-size: 16px; line-height: 1.15; }
+.official-heading p { margin: 0; font-size: 8px; font-weight: 400; line-height: 1.25; }
+.official-dash { margin: 12px 0 24px; border-top: 2px dashed #333; }
+.official-paper h2 { margin: 14px 0 6px; font-size: 11px; }
+.official-bold { margin: 14px 0 2px; font-weight: 700; }
+.official-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.official-table th, .official-table td { border: 1px solid #777; padding: 4px 6px; text-align: left; vertical-align: middle; font-weight: 400; }
+.official-table th { font-weight: 700; }
+.official-table input, .official-line input { box-sizing: border-box; width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; color: inherit; }
+.official-table input:focus, .official-line input:focus { border-bottom: 1px solid #176b65; }
+.leave-identity th { width: 50%; }
+.leave-identity tr { height: 21px; }
+.leave-types th:first-child { width: 35%; }
+.leave-types th:nth-child(2) { width: 34%; }
+.leave-types tr { height: 25px; }
+.official-line { display: flex; align-items: baseline; gap: 5px; min-height: 25px; margin: 4px 0; }
+.official-line span { flex: 0 0 auto; font-weight: 700; }
+.official-line input { border-bottom: 1px dotted #555; }
+.official-line-wide { margin-top: 4px; }
+.official-two-lines { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.leave-approval { margin-top: 15px; }
+.leave-approval th { height: 38px; }
+.leave-approval td { height: 98px; vertical-align: top; }
+.leave-approval td span { display: block; margin-top: 28px; }
+.official-person-grid, .finance-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.official-person-grid .official-table tr { height: 27px; }
+.official-person-grid .official-table th { width: 31%; }
+.official-person-grid .official-table:last-child tr:last-child { height: 103px; vertical-align: top; }
+.budget-row td { position: relative; padding-top: 24px; vertical-align: top; }
+.budget-row span { position: absolute; top: 4px; right: 13px; font-weight: 700; }
+.budget-row input { display: block; height: 17px; border-bottom: 1px solid #aaa; }
+.period-line { min-height: 27px; padding: 8px 5px 0; border-bottom: 1px solid #777; }
+.period-line input { width: 84px; margin: 0 5px; border: 0; border-bottom: 1px dotted #555; outline: 0; background: transparent; font: inherit; }
+.period-line span { float: right; font-weight: 700; }
+.finance-columns { margin-top: 0; }
+.finance-columns > div > p { margin: 5px 4px 12px; font-size: 9px; }
+.allowance-table th { width: 70%; }
+.allowance-table td { height: 26px; }
+.finance-use { width: 52%; margin: 14px 0 0 auto; }
+.finance-use caption { padding: 5px; border: 1px solid #777; border-bottom: 0; font-weight: 700; }
+.finance-use th { width: 42%; }
+.finance-use td { height: 25px; }
+@media (max-width: 640px) { .official-forms-page { padding: 8px; } .official-toolbar { align-items: start; flex-direction: column; gap: 10px; } .official-toolbar h2 { font-size: 18px; } .form-tabs { overflow-x: auto; } .form-tabs button { white-space: nowrap; padding-inline: 9px; } .official-paper { min-height: 0; padding: 28px 15px; font-size: 8px; } .official-header { grid-template-columns: 38px 1fr 42px; min-height: 82px; gap: 3px; } .official-header img { width: 40px; height: 40px; } .official-crest { width: 34px; height: 34px; font-size: 6px; } .official-heading { font-size: 9px; } .official-heading strong { margin-bottom: 8px; font-size: 12px; } .official-heading h1 { margin: 9px 0 5px; font-size: 10px; } .official-heading p { font-size: 6px; } .official-table th, .official-table td { padding: 2px; } .official-two-lines, .official-person-grid, .finance-columns { gap: 6px; } .finance-columns > div > p { font-size: 7px; } }
+@media print { .official-forms-page { padding: 0; background: #fff; } .official-toolbar, .form-tabs { display: none; } .official-paper { width: 210mm; min-height: 297mm; padding: 13mm 18mm 11mm; border: 0; box-shadow: none; } @page { size: A4 portrait; margin: 0; } }

@@ -25,6 +25,9 @@ function App() {
           {/* QR Display for office - standalone page without layout */}
           <Route path="/attendance/qr-display" element={<QRDisplayPage />} />
 
+          {/* Blank official documents can be viewed and printed without portal login */}
+          <Route path="/forms" element={<TravelAuthorisationPage />} />
+
           {/* Public careers routes - default landing page */}
           <Route element={<PublicLayout />}>
             <Route path="/" element={<Navigate to="/careers" replace />} />
