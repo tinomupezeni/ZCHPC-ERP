@@ -7,8 +7,22 @@ from django.utils import timezone
 
 class LeaveType(models.Model):
     """Type of leave (Annual, Sick, etc.)."""
+    ACCRUAL_POLICY_CHOICES = [
+        ('Annual', 'Granted in full at the start of the year'),
+        ('Monthly', 'Accrues monthly'),
+    ]
+
     name = models.CharField(max_length=100, unique=True)
     default_days_allowed = models.IntegerField(default=0)
+    # These 3 fields exist as NOT NULL columns on the production database
+    # (human_resources_leavetype) with no migration or prior model field
+    # behind them - added directly to the DB at some point, outside Django's
+    # migration system. Declared here (with Python-level defaults, since
+    # there are no DB-level defaults) so the ORM can actually INSERT rows;
+    # nothing in the app reads or sets them yet.
+    accrual_policy = models.CharField(max_length=20, choices=ACCRUAL_POLICY_CHOICES, default='Annual')
+    accrual_rate = models.DecimalField(max_digits=6, decimal_places=4, default=0)
+    is_statutory = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'human_resources_leavetype'
