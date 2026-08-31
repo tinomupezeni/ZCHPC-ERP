@@ -81,6 +81,14 @@ class Payroll(models.Model):
     def __str__(self):
         return f"{self.employee} - {self.period.strftime('%B %Y')} - {self.get_status_display()}"
 
+    @property
+    def gross_usd(self):
+        return (self.base_salary_usd or 0) + (self.total_allowances_usd or 0)
+
+    @property
+    def gross_zig(self):
+        return (self.base_salary_zig or 0) + (self.total_allowances_zig or 0)
+
     def save(self, *args, **kwargs):
         if not self.period:
             self.period = timezone.now().replace(day=1)
@@ -195,3 +203,44 @@ class StatutoryProfile(models.Model):
 
     class Meta:
         db_table = 'payroll_statutoryprofile'
+
+
+class PayrollBatch(models.Model):
+    """
+    A payroll "run" for a period - tracks processing status and summary
+    totals across all payslips generated for that period. Distinct from
+    `Payroll` above, which (despite the name) is the per-employee payslip
+    table; nothing previously backed the domain Payroll aggregate.
+    """
+    STATUS_CHOICES = [
+        ('Open', 'Open'),
+        ('Processing', 'Processing'),
+        ('Closed', 'Closed'),
+    ]
+
+    period = models.DateField(unique=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Open')
+    processed_at = models.DateTimeField(null=True, blank=True)
+    processed_by = models.UUIDField(null=True, blank=True)  # CustomUser.id is a UUID, not an int
+    closed_at = models.DateTimeField(null=True, blank=True)
+    closed_by = models.UUIDField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(default=timezone.now)
+
+    total_employees = models.IntegerField(default=0)
+    total_gross_usd = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total_gross_zig = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total_net_usd = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total_net_zig = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total_paye_usd = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total_paye_zig = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total_nssa_usd = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total_nssa_zig = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+
+    class Meta:
+        db_table = 'payroll_payrollbatch'
+        ordering = ['-period']
+
+    def __str__(self):
+        return f"Payroll batch {self.period.strftime('%B %Y')} - {self.status}"

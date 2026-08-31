@@ -33,6 +33,10 @@ from modules.payroll.infrastructure.persistence.django_allowance_repository impo
     DjangoEmployeeAllowanceRepository,
     DjangoEmployeeDeductionRepository,
 )
+from modules.payroll.infrastructure.persistence.django_payroll_repository import DjangoPayrollRepository
+from modules.payroll.infrastructure.persistence.django_employee_payroll_provider import (
+    DjangoEmployeePayrollInfoProvider,
+)
 from modules.payroll.api.serializers import (
     TaxBracketSerializer,
     CreateTaxBracketSerializer,
@@ -252,6 +256,50 @@ class PayslipListView(APIView):
 
         serializer = PayslipListSerializer(payslips, many=True)
         return Response(serializer.data)
+
+    def post(self, request):
+        """Process payroll for a period - generates a payslip for every active employee who doesn't already have one."""
+        period_str = request.data.get("month") or request.data.get("period")
+        if not period_str:
+            return Response(
+                {"error": "month parameter required (YYYY-MM format)"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            period = PayrollPeriod.from_string(period_str)
+        except ValueError:
+            return Response(
+                {"error": "Invalid period format. Use YYYY-MM"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        service = PayrollService(
+            payroll_repository=DjangoPayrollRepository(),
+            payslip_repository=DjangoPayslipRepository(),
+            tax_repository=DjangoTaxTableRepository(),
+            exchange_rate_repository=DjangoExchangeRateRepository(),
+            allowance_repository=DjangoEmployeeAllowanceRepository(),
+            deduction_repository=DjangoEmployeeDeductionRepository(),
+            employee_provider=DjangoEmployeePayrollInfoProvider(),
+        )
+
+        try:
+            command = ProcessPayrollCommand(period=period, processed_by=request.user.id)
+            result = service.process_payroll(command)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            {
+                "payroll_id": result.payroll_id,
+                "total_processed": len(result.processed),
+                "total_skipped": len(result.skipped),
+                "total_errors": len(result.errors),
+                "errors": result.errors,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class PayslipDetailView(APIView):

@@ -2,7 +2,6 @@
 AllowanceType and EmployeeAllowance entities.
 """
 
-from dataclasses import dataclass
 from decimal import Decimal
 from typing import Optional
 
@@ -11,28 +10,41 @@ from shared.domain.exceptions import ValidationError
 from modules.payroll.domain.value_objects import Currency
 
 
-@dataclass
 class AllowanceType(AggregateRoot[int]):
     """
     Aggregate root for allowance types.
 
     Defines types of allowances (Housing, Transport, etc.)
     with optional default amounts.
+
+    Plain class with an explicit __init__ (not @dataclass) - AggregateRoot's
+    own __init__(self, id) sets up identity/domain-event bookkeeping and a
+    dataclass on a subclass generates its own __init__ that never calls it,
+    so `id` (an inherited read-only property) can't even be added as a
+    dataclass field. See LeaveRequest for the same working pattern.
     """
 
-    name: str
-    description: Optional[str] = None
-    default_amount: Decimal = Decimal("0")
-    default_currency: Currency = Currency.USD
-    is_taxable: bool = True
-    is_active: bool = True
-
-    def __post_init__(self) -> None:
-        """Validate allowance type."""
-        if not self.name or not self.name.strip():
+    def __init__(
+        self,
+        id: Optional[int],
+        name: str,
+        description: Optional[str] = None,
+        default_amount: Decimal = Decimal("0"),
+        default_currency: Currency = Currency.USD,
+        is_taxable: bool = True,
+        is_active: bool = True,
+    ) -> None:
+        if not name or not name.strip():
             raise ValidationError("Allowance type name is required")
-        if self.default_amount < 0:
+        if default_amount < 0:
             raise ValidationError("Default amount cannot be negative")
+        super().__init__(id)
+        self.name = name
+        self.description = description
+        self.default_amount = default_amount
+        self.default_currency = default_currency
+        self.is_taxable = is_taxable
+        self.is_active = is_active
 
     def update(
         self,
@@ -67,24 +79,33 @@ class AllowanceType(AggregateRoot[int]):
         self.is_active = True
 
 
-@dataclass
 class EmployeeAllowance(Entity[int]):
     """
     Entity linking an employee to an allowance type.
 
     Stores the specific amount for this employee.
+
+    Plain class with an explicit __init__ (not @dataclass) - see
+    AllowanceType above for why.
     """
 
-    employee_id: int
-    allowance_type_id: int
-    allowance_type_name: str
-    amount: Decimal
-    currency: Currency
-
-    def __post_init__(self) -> None:
-        """Validate employee allowance."""
-        if self.amount < 0:
+    def __init__(
+        self,
+        id: Optional[int],
+        employee_id: int,
+        allowance_type_id: int,
+        allowance_type_name: str,
+        amount: Decimal,
+        currency: Currency,
+    ) -> None:
+        if amount < 0:
             raise ValidationError("Allowance amount cannot be negative")
+        super().__init__(id)
+        self.employee_id = employee_id
+        self.allowance_type_id = allowance_type_id
+        self.allowance_type_name = allowance_type_name
+        self.amount = amount
+        self.currency = currency
 
     def update_amount(self, amount: Decimal, currency: Optional[Currency] = None) -> None:
         """Update the allowance amount."""

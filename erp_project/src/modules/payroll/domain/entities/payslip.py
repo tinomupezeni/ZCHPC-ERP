@@ -2,7 +2,6 @@
 Payslip aggregate root.
 """
 
-from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
@@ -17,60 +16,89 @@ from modules.payroll.domain.value_objects import (
 )
 
 
-@dataclass
 class Payslip(AggregateRoot[int]):
     """
     Aggregate root for individual employee payslips.
 
     Contains all salary components for a single employee in a pay period.
     Supports dual-currency (USD and ZIG) calculations.
+
+    Plain class with an explicit __init__ (not @dataclass) - AggregateRoot's
+    own __init__(self, id) sets up identity/domain-event bookkeeping and a
+    dataclass on a subclass generates its own __init__ that never calls it,
+    so `id` (an inherited read-only property) can't even be added as a
+    dataclass field. See LeaveRequest for the same working pattern.
     """
 
-    # Core relationships
-    payroll_id: Optional[int]
-    employee_id: int
-    period: PayrollPeriod
-
-    # Earnings breakdown
-    base_salary_usd: Decimal = Decimal("0")
-    base_salary_zig: Decimal = Decimal("0")
-    total_allowances_usd: Decimal = Decimal("0")
-    total_allowances_zig: Decimal = Decimal("0")
-
-    # Gross calculation
-    gross_usd: Decimal = Decimal("0")
-    gross_zig: Decimal = Decimal("0")
-
-    # Statutory deductions
-    paye_usd: Decimal = Decimal("0")
-    paye_zig: Decimal = Decimal("0")
-    aids_levy_usd: Decimal = Decimal("0")
-    aids_levy_zig: Decimal = Decimal("0")
-    nssa_employee_usd: Decimal = Decimal("0")
-    nssa_employee_zig: Decimal = Decimal("0")
-    nssa_employer_usd: Decimal = Decimal("0")
-    nssa_employer_zig: Decimal = Decimal("0")
-
-    # Other deductions
-    other_deductions_usd: Decimal = Decimal("0")
-    other_deductions_zig: Decimal = Decimal("0")
-
-    # Total deductions
-    total_deductions_usd: Decimal = Decimal("0")
-    total_deductions_zig: Decimal = Decimal("0")
-
-    # Net salary
-    net_salary_usd: Decimal = Decimal("0")
-    net_salary_zig: Decimal = Decimal("0")
-
-    # Exchange rate used
-    exchange_rate: Decimal = Decimal("0")
-
-    # Status and metadata
-    status: PayslipStatus = PayslipStatus.DRAFT
-    notes: str = ""
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    def __init__(
+        self,
+        id: Optional[int],
+        payroll_id: Optional[int],
+        employee_id: int,
+        period: PayrollPeriod,
+        # Earnings breakdown
+        base_salary_usd: Decimal = Decimal("0"),
+        base_salary_zig: Decimal = Decimal("0"),
+        total_allowances_usd: Decimal = Decimal("0"),
+        total_allowances_zig: Decimal = Decimal("0"),
+        # Gross calculation
+        gross_usd: Decimal = Decimal("0"),
+        gross_zig: Decimal = Decimal("0"),
+        # Statutory deductions
+        paye_usd: Decimal = Decimal("0"),
+        paye_zig: Decimal = Decimal("0"),
+        aids_levy_usd: Decimal = Decimal("0"),
+        aids_levy_zig: Decimal = Decimal("0"),
+        nssa_employee_usd: Decimal = Decimal("0"),
+        nssa_employee_zig: Decimal = Decimal("0"),
+        nssa_employer_usd: Decimal = Decimal("0"),
+        nssa_employer_zig: Decimal = Decimal("0"),
+        # Other deductions
+        other_deductions_usd: Decimal = Decimal("0"),
+        other_deductions_zig: Decimal = Decimal("0"),
+        # Total deductions
+        total_deductions_usd: Decimal = Decimal("0"),
+        total_deductions_zig: Decimal = Decimal("0"),
+        # Net salary
+        net_salary_usd: Decimal = Decimal("0"),
+        net_salary_zig: Decimal = Decimal("0"),
+        # Exchange rate used
+        exchange_rate: Decimal = Decimal("0"),
+        # Status and metadata
+        status: PayslipStatus = PayslipStatus.DRAFT,
+        notes: str = "",
+        created_at: Optional[datetime] = None,
+        updated_at: Optional[datetime] = None,
+    ) -> None:
+        super().__init__(id)
+        self.payroll_id = payroll_id
+        self.employee_id = employee_id
+        self.period = period
+        self.base_salary_usd = base_salary_usd
+        self.base_salary_zig = base_salary_zig
+        self.total_allowances_usd = total_allowances_usd
+        self.total_allowances_zig = total_allowances_zig
+        self.gross_usd = gross_usd
+        self.gross_zig = gross_zig
+        self.paye_usd = paye_usd
+        self.paye_zig = paye_zig
+        self.aids_levy_usd = aids_levy_usd
+        self.aids_levy_zig = aids_levy_zig
+        self.nssa_employee_usd = nssa_employee_usd
+        self.nssa_employee_zig = nssa_employee_zig
+        self.nssa_employer_usd = nssa_employer_usd
+        self.nssa_employer_zig = nssa_employer_zig
+        self.other_deductions_usd = other_deductions_usd
+        self.other_deductions_zig = other_deductions_zig
+        self.total_deductions_usd = total_deductions_usd
+        self.total_deductions_zig = total_deductions_zig
+        self.net_salary_usd = net_salary_usd
+        self.net_salary_zig = net_salary_zig
+        self.exchange_rate = exchange_rate
+        self.status = status
+        self.notes = notes
+        self.created_at = created_at
+        self.updated_at = updated_at
 
     def calculate_totals(self) -> None:
         """Recalculate gross, deductions, and net totals."""

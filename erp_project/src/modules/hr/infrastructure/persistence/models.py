@@ -38,12 +38,30 @@ class Department(models.Model):
     pass
 
 class EmployeeAllowance(models.Model):
-    # TODO: Add fields for EmployeeAllowance model
-    pass
+    """
+    A specific allowance amount assigned to one employee.
+
+    Fields match what DjangoEmployeeAllowanceRepository (payroll module) has
+    always expected - this model was previously an empty stub, so every
+    allowance lookup during payroll processing raised a FieldError.
+    """
+    employee = models.ForeignKey('Employees', on_delete=models.CASCADE, related_name='allowances')
+    allowance_type = models.ForeignKey(AllowanceType, on_delete=models.PROTECT)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    currency = models.CharField(max_length=10, default='USD')
 
 class EmployeeDeduction(models.Model):
-    # TODO: Add fields for EmployeeDeduction model
-    pass
+    """
+    A specific deduction amount assigned to one employee.
+
+    Fields match what DjangoEmployeeDeductionRepository (payroll module) has
+    always expected - this model was previously an empty stub, so every
+    deduction lookup during payroll processing raised a FieldError.
+    """
+    employee = models.ForeignKey('Employees', on_delete=models.CASCADE, related_name='deductions')
+    deduction_type = models.ForeignKey(DeductionType, on_delete=models.PROTECT)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    currency = models.CharField(max_length=10, default='USD')
 
 class EmployeePayrollConfig(models.Model):
     # TODO: Add fields for EmployeePayrollConfig model
