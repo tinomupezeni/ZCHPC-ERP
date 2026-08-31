@@ -2,7 +2,6 @@
 TaxTable aggregate root for managing tax brackets.
 """
 
-from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 from typing import List, Optional
@@ -12,23 +11,35 @@ from shared.domain.exceptions import ValidationError
 from modules.payroll.domain.value_objects import Currency, TaxBracket
 
 
-@dataclass
 class TaxTable(AggregateRoot[int]):
     """
     Aggregate root for tax tables containing brackets.
 
     Each tax table is currency-specific and has an effective date.
     Supports Zimbabwe's progressive PAYE tax system.
+
+    Plain class with an explicit __init__ (not @dataclass) - AggregateRoot's
+    own __init__(self, id) sets up identity/domain-event bookkeeping and a
+    dataclass on a subclass generates its own __init__ that never calls it,
+    so `id` (an inherited read-only property) can't even be added as a
+    dataclass field. See LeaveRequest for the same working pattern.
     """
 
-    currency: Currency
-    effective_from: date
-    brackets: List[TaxBracket] = field(default_factory=list)
-    provider: Optional[str] = None  # Source of tax rates (e.g., "ZIMRA")
-    is_active: bool = True
-
-    def __post_init__(self) -> None:
-        """Validate and sort brackets."""
+    def __init__(
+        self,
+        id: Optional[int],
+        currency: Currency,
+        effective_from: date,
+        brackets: Optional[List[TaxBracket]] = None,
+        provider: Optional[str] = None,  # Source of tax rates (e.g., "ZIMRA")
+        is_active: bool = True,
+    ) -> None:
+        super().__init__(id)
+        self.currency = currency
+        self.effective_from = effective_from
+        self.brackets = brackets if brackets is not None else []
+        self.provider = provider
+        self.is_active = is_active
         self._validate_brackets()
         self._sort_brackets()
 

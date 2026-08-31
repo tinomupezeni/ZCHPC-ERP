@@ -2,7 +2,6 @@
 ExchangeRate aggregate root for currency conversion.
 """
 
-from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
@@ -12,25 +11,37 @@ from shared.domain.exceptions import ValidationError
 from modules.payroll.domain.value_objects import Currency
 
 
-@dataclass
 class ExchangeRate(AggregateRoot[int]):
     """
     Aggregate root for daily exchange rates.
 
     Stores the ZIG to USD conversion rate for a specific date.
     Used for dual-currency payroll calculations.
+
+    Plain class with an explicit __init__ (not @dataclass) - AggregateRoot's
+    own __init__(self, id) sets up identity/domain-event bookkeeping and a
+    dataclass on a subclass generates its own __init__ that never calls it,
+    so `id` (an inherited read-only property) can't even be added as a
+    dataclass field. See LeaveRequest for the same working pattern.
     """
 
-    rate_date: date
-    zig_to_usd_rate: Decimal  # How many USD for 1 ZIG (typically < 1)
-    source: Optional[str] = None  # Source of rate (e.g., "RBZ", "Zimpricecheck")
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-
-    def __post_init__(self) -> None:
-        """Validate exchange rate."""
-        if self.zig_to_usd_rate <= 0:
+    def __init__(
+        self,
+        id: Optional[int],
+        rate_date: date,
+        zig_to_usd_rate: Decimal,  # How many USD for 1 ZIG (typically < 1)
+        source: Optional[str] = None,  # Source of rate (e.g., "RBZ", "Zimpricecheck")
+        created_at: Optional[datetime] = None,
+        updated_at: Optional[datetime] = None,
+    ) -> None:
+        if zig_to_usd_rate <= 0:
             raise ValidationError("Exchange rate must be positive")
+        super().__init__(id)
+        self.rate_date = rate_date
+        self.zig_to_usd_rate = zig_to_usd_rate
+        self.source = source
+        self.created_at = created_at
+        self.updated_at = updated_at
 
     @property
     def usd_to_zig_rate(self) -> Decimal:

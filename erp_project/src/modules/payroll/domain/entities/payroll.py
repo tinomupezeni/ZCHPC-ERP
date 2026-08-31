@@ -45,35 +45,62 @@ class PayrollSummary:
         return self.total_gross_zig + self.total_nssa_employer_zig
 
 
-@dataclass
 class Payroll(AggregateRoot[int]):
     """
     Aggregate root for payroll batches.
 
     Manages the processing of payroll for a specific period.
     Contains summary information for all payslips in the batch.
+
+    Plain class with an explicit __init__ (not @dataclass) - AggregateRoot's
+    own __init__(self, id) sets up identity/domain-event bookkeeping and a
+    dataclass on a subclass generates its own __init__ that never calls it,
+    so `id` (an inherited read-only property) can't even be added as a
+    dataclass field. See LeaveRequest for the same working pattern.
     """
 
-    period: PayrollPeriod
-    status: PayrollStatus = PayrollStatus.OPEN
-    processed_at: Optional[datetime] = None
-    processed_by: Optional[int] = None  # User ID
-    closed_at: Optional[datetime] = None
-    closed_by: Optional[int] = None  # User ID
-    notes: str = ""
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-
-    # Summary fields (calculated from payslips)
-    total_employees: int = 0
-    total_gross_usd: Decimal = Decimal("0")
-    total_gross_zig: Decimal = Decimal("0")
-    total_net_usd: Decimal = Decimal("0")
-    total_net_zig: Decimal = Decimal("0")
-    total_paye_usd: Decimal = Decimal("0")
-    total_paye_zig: Decimal = Decimal("0")
-    total_nssa_usd: Decimal = Decimal("0")
-    total_nssa_zig: Decimal = Decimal("0")
+    def __init__(
+        self,
+        id: Optional[int],
+        period: PayrollPeriod,
+        status: PayrollStatus = PayrollStatus.OPEN,
+        processed_at: Optional[datetime] = None,
+        processed_by: Optional[int] = None,  # User ID
+        closed_at: Optional[datetime] = None,
+        closed_by: Optional[int] = None,  # User ID
+        notes: str = "",
+        created_at: Optional[datetime] = None,
+        updated_at: Optional[datetime] = None,
+        # Summary fields (calculated from payslips)
+        total_employees: int = 0,
+        total_gross_usd: Decimal = Decimal("0"),
+        total_gross_zig: Decimal = Decimal("0"),
+        total_net_usd: Decimal = Decimal("0"),
+        total_net_zig: Decimal = Decimal("0"),
+        total_paye_usd: Decimal = Decimal("0"),
+        total_paye_zig: Decimal = Decimal("0"),
+        total_nssa_usd: Decimal = Decimal("0"),
+        total_nssa_zig: Decimal = Decimal("0"),
+    ) -> None:
+        super().__init__(id)
+        self.period = period
+        self.status = status
+        self.processed_at = processed_at
+        self.processed_by = processed_by
+        self.closed_at = closed_at
+        self.closed_by = closed_by
+        self.notes = notes
+        self.created_at = created_at
+        self.updated_at = updated_at
+        self.total_employees = total_employees
+        self.total_gross_usd = total_gross_usd
+        self.total_gross_zig = total_gross_zig
+        self.total_net_usd = total_net_usd
+        self.total_net_zig = total_net_zig
+        self.total_paye_usd = total_paye_usd
+        self.total_paye_zig = total_paye_zig
+        self.total_nssa_usd = total_nssa_usd
+        self.total_nssa_zig = total_nssa_zig
 
     def start_processing(self, user_id: int) -> None:
         """Begin processing the payroll."""
@@ -87,7 +114,15 @@ class Payroll(AggregateRoot[int]):
         self.updated_at = datetime.now()
 
     def complete_processing(self, summary: PayrollSummary) -> None:
-        """Complete payroll processing with summary."""
+        """
+        Complete payroll processing with summary.
+
+        Returns to OPEN (not a new "processed" status - PayrollStatus has
+        none) so the period can be re-processed later to pick up newly
+        added employees; process_payroll() already skips anyone who has a
+        payslip for the period, so a re-run only fills in gaps. Closing a
+        period for good is a separate, explicit close() action.
+        """
         if self.status != PayrollStatus.PROCESSING:
             raise ValidationError(
                 f"Cannot complete: payroll is {self.status.value}"
@@ -105,6 +140,7 @@ class Payroll(AggregateRoot[int]):
         self.total_nssa_zig = (
             summary.total_nssa_employee_zig + summary.total_nssa_employer_zig
         )
+        self.status = PayrollStatus.OPEN
         self.updated_at = datetime.now()
 
     def close(self, user_id: int) -> None:
