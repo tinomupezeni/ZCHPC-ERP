@@ -264,8 +264,8 @@ class PublicJobDetailView(APIView):
         service = get_job_service()
         try:
             job = service.get_job(job_id)
-            # Only return if job is open and not internal
-            if job.status != "Open" or job.is_internal:
+            # Public careers page shows all open jobs, internal or not.
+            if job.status != "Open":
                 return Response(
                     {"error": "Job not found"},
                     status=status.HTTP_404_NOT_FOUND,
