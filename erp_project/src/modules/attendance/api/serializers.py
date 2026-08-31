@@ -52,6 +52,17 @@ class AttendanceSummaryQuerySerializer(serializers.Serializer):
     month = serializers.IntegerField(required=False, min_value=1, max_value=12)
 
 
+class AdminAttendanceQuerySerializer(serializers.Serializer):
+    """Serializer for admin attendance list query parameters."""
+
+    department_id = serializers.IntegerField(required=False)
+    employee_id = serializers.IntegerField(required=False)
+    start_date = serializers.DateField(required=False)
+    end_date = serializers.DateField(required=False)
+    page = serializers.IntegerField(required=False, default=1, min_value=1)
+    page_size = serializers.IntegerField(required=False, default=20, min_value=1, max_value=200)
+
+
 # =============================================================================
 # Response Serializers
 # =============================================================================
@@ -102,6 +113,23 @@ class AttendanceHistoryResponseSerializer(serializers.Serializer):
     page_size = serializers.IntegerField()
     total_pages = serializers.IntegerField()
     results = AttendanceRecordResponseSerializer(many=True)
+
+
+class AdminAttendanceRecordResponseSerializer(AttendanceRecordResponseSerializer):
+    """Attendance record enriched with employee/department names for admin views."""
+
+    employee_name = serializers.CharField()
+    department_name = serializers.CharField(allow_null=True)
+
+
+class AdminAttendanceListResponseSerializer(serializers.Serializer):
+    """Serializer for paginated admin attendance list responses."""
+
+    count = serializers.IntegerField()
+    page = serializers.IntegerField()
+    page_size = serializers.IntegerField()
+    total_pages = serializers.IntegerField()
+    results = AdminAttendanceRecordResponseSerializer(many=True)
 
 
 class QRTokenResponseSerializer(serializers.Serializer):

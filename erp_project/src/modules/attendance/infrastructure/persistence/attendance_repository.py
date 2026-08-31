@@ -72,6 +72,28 @@ class DjangoAttendanceRepository(IAttendanceRepository):
         )
         return [self._to_entity(r) for r in db_records]
 
+    def get_filtered(
+        self,
+        department_id: int | None = None,
+        employee_id: int | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> Sequence[AttendanceRecord]:
+        """Get attendance records filtered by department/employee/date range."""
+        queryset = self.model.objects.all()
+
+        if department_id is not None:
+            queryset = queryset.filter(employee__department_id=department_id)
+        if employee_id is not None:
+            queryset = queryset.filter(employee_id=employee_id)
+        if start_date is not None:
+            queryset = queryset.filter(date__gte=start_date)
+        if end_date is not None:
+            queryset = queryset.filter(date__lte=end_date)
+
+        queryset = queryset.order_by("-date", "employee__first_name")
+        return [self._to_entity(r) for r in queryset]
+
     def save(self, record: AttendanceRecord) -> AttendanceRecord:
         """Save attendance record."""
         time_in = record.time_in.to_time() if record.time_in else None

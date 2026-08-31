@@ -11,6 +11,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from modules.attendance.api.serializers import (
+    AdminAttendanceListResponseSerializer,
+    AdminAttendanceQuerySerializer,
+    AdminAttendanceRecordResponseSerializer,
     AttendanceHistoryQuerySerializer,
     AttendanceHistoryResponseSerializer,
     AttendanceRecordResponseSerializer,
@@ -34,6 +37,7 @@ from modules.attendance.application.services import (
 )
 from modules.attendance.infrastructure.persistence.attendance_repository import DjangoAttendanceRepository
 from modules.attendance.infrastructure.persistence.qr_token_repository import DjangoQRTokenRepository
+from modules.identity.infrastructure.permissions import IsHRorAdmin
 
 
 def get_attendance_service() -> AttendanceService:
@@ -309,6 +313,78 @@ class AttendanceSummaryView(APIView):
             return employee.id
         except Employees.DoesNotExist:
             return None
+
+
+class AdminAttendanceListView(APIView):
+    """
+    Admin/HR endpoint listing attendance records across employees.
+
+    Supports filtering by department, employee, and date range - unlike
+    AttendanceHistoryView, which is scoped to the requesting user only.
+    """
+
+    permission_classes = [IsAuthenticated, IsHRorAdmin]
+
+    def get(self, request):
+        """List attendance records, optionally filtered."""
+        query_serializer = AdminAttendanceQuerySerializer(data=request.query_params)
+        query_serializer.is_valid(raise_exception=True)
+        filters = query_serializer.validated_data
+
+        service = get_attendance_service()
+        all_records = service.get_filtered_history(
+            department_id=filters.get("department_id"),
+            employee_id=filters.get("employee_id"),
+            start_date=filters.get("start_date"),
+            end_date=filters.get("end_date"),
+        )
+
+        page = filters.get("page", 1)
+        page_size = filters.get("page_size", 20)
+        total = len(all_records)
+        total_pages = (total + page_size - 1) // page_size if total else 0
+        start_idx = (page - 1) * page_size
+        page_records = all_records[start_idx : start_idx + page_size]
+
+        employee_info = self._employee_display_info({r.employee_id for r in page_records})
+
+        results = []
+        for record in page_records:
+            data = AttendanceRecordResponseSerializer(record).data
+            info = employee_info.get(record.employee_id, {})
+            data["employee_name"] = info.get("name", "Unknown")
+            data["department_name"] = info.get("department")
+            results.append(data)
+
+        response_data = {
+            "count": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "results": results,
+        }
+
+        return Response(
+            AdminAttendanceListResponseSerializer(response_data).data,
+            status=status.HTTP_200_OK,
+        )
+
+    def _employee_display_info(self, employee_ids: set) -> dict:
+        """Bulk-fetch employee name/department for the given employee IDs."""
+        from modules.hr.infrastructure.persistence.models import Employees
+
+        if not employee_ids:
+            return {}
+
+        employees = Employees.objects.filter(id__in=employee_ids).select_related("department")
+
+        info = {}
+        for employee in employees:
+            info[employee.id] = {
+                "name": f"{employee.first_name} {employee.surname}".strip(),
+                "department": employee.department.name if employee.department else None,
+            }
+        return info
 
 
 class QRTokenView(APIView):

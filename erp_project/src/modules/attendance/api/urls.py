@@ -5,6 +5,7 @@ Attendance API URL configuration.
 from django.urls import path
 
 from modules.attendance.api.views import (
+    AdminAttendanceListView,
     AttendanceHistoryView,
     AttendanceStatusView,
     AttendanceSummaryView,
@@ -24,6 +25,8 @@ urlpatterns = [
     path("status/", AttendanceStatusView.as_view(), name="status"),
     path("history/", AttendanceHistoryView.as_view(), name="history"),
     path("summary/", AttendanceSummaryView.as_view(), name="summary"),
+    # Admin/HR: attendance across employees, with filters
+    path("all/", AdminAttendanceListView.as_view(), name="admin_list"),
     # QR-based clock in
     path("qr/token/", QRTokenView.as_view(), name="qr_token"),
     path("qr/clock-in/", QRClockInView.as_view(), name="qr_clock_in"),
