@@ -214,19 +214,19 @@ const HrReports = () => {
         />
         <SummaryCard
           title="Total Gross Salary"
-          value={formatCurrency(summary?.total_gross_salary_usd || 0)}
-          subtitle={`${summary?.payroll_records || 0} payroll records`}
+          value={formatCurrency(summary?.total_gross_usd || 0)}
+          subtitle="For selected period"
         />
         <SummaryCard
           title="Total Net Salary"
-          value={formatCurrency(summary?.total_net_salary_usd || 0)}
+          value={formatCurrency(summary?.total_net_usd || 0)}
           subtitle="After deductions"
           accent="text-green-600"
         />
         <SummaryCard
           title="Total Deductions"
-          value={formatCurrency((summary?.total_paye_usd || 0) + (summary?.total_nssa_usd || 0) + (summary?.total_deductions_usd || 0))}
-          subtitle="PAYE, NSSA & Other"
+          value={formatCurrency((summary?.total_paye_usd || 0) + (summary?.total_nssa_usd || 0))}
+          subtitle="PAYE & NSSA"
           accent="text-orange-600"
         />
       </div>

@@ -9,8 +9,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from modules.identity.infrastructure.permissions import IsHRorAdmin
+
 from modules.leave.api.serializers import (
     AdjustLeaveBalanceRequestSerializer,
+    AdminLeaveRequestResponseSerializer,
     CreateLeaveTypeRequestSerializer,
     LeaveBalanceQuerySerializer,
     LeaveBalanceResponseSerializer,
@@ -415,6 +418,31 @@ class LeaveRequestListView(APIView):
             )
 
 
+class AdminLeaveRequestListView(APIView):
+    """
+    Admin/HR endpoint listing leave requests across all employees.
+
+    Unlike LeaveRequestListView, which is scoped to the requesting user's
+    own linked Employees record, this returns every request regardless of
+    employee or status - what the HR "Leave Applications" admin page needs.
+    """
+
+    permission_classes = [IsAuthenticated, IsHRorAdmin]
+
+    def get(self, request):
+        """List all leave requests, most recently requested first."""
+        from modules.leave.infrastructure.persistence.models import LeaveRequest as LeaveRequestModel
+
+        requests = LeaveRequestModel.objects.select_related(
+            "employee", "leave_type", "reviewed_by"
+        ).all()
+
+        return Response(
+            AdminLeaveRequestResponseSerializer(requests, many=True).data,
+            status=status.HTTP_200_OK,
+        )
+
+
 class LeaveRequestDetailView(APIView):
     """Retrieve a specific leave request."""
 
@@ -466,7 +494,10 @@ class LeaveRequestReviewView(APIView):
     def post(self, request, request_id: int):
         """Review a leave request."""
         reviewer_id = get_employee_id(request.user)
-        if not reviewer_id:
+        # A staff/superuser HR admin reviewing on the organization's behalf
+        # isn't necessarily linked to their own Employees record - only
+        # require the link for ordinary (non-admin) reviewers.
+        if not reviewer_id and not (request.user.is_staff or request.user.is_superuser):
             return Response(
                 {"error": "User is not linked to an employee record"},
                 status=status.HTTP_400_BAD_REQUEST,

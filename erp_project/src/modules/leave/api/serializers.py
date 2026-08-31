@@ -137,6 +137,38 @@ class LeaveRequestResponseSerializer(serializers.Serializer):
     reviewed_at = serializers.CharField(allow_null=True)
 
 
+class AdminLeaveRequestResponseSerializer(serializers.Serializer):
+    """
+    Leave request serializer for the admin-wide listing (all employees, all
+    statuses). Field names match the HR admin frontend's LeaveRequest
+    interface exactly - unlike LeaveRequestResponseSerializer, which is
+    shaped for the employee self-service DTO instead.
+    """
+
+    id = serializers.IntegerField()
+    employee = serializers.IntegerField(source="employee_id")
+    employee_name = serializers.SerializerMethodField()
+    leave_type = serializers.IntegerField(source="leave_type_id")
+    leave_type_name = serializers.CharField(source="leave_type.name")
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+    number_of_days = serializers.IntegerField()
+    reason = serializers.CharField()
+    status = serializers.CharField()
+    requested_on = serializers.DateTimeField()
+    reviewed_by = serializers.IntegerField(source="reviewed_by_id", allow_null=True)
+    reviewed_by_name = serializers.SerializerMethodField()
+    review_date = serializers.DateTimeField(allow_null=True)
+
+    def get_employee_name(self, obj) -> str:
+        return f"{obj.employee.first_name} {obj.employee.surname}".strip()
+
+    def get_reviewed_by_name(self, obj) -> str | None:
+        if not obj.reviewed_by_id:
+            return None
+        return f"{obj.reviewed_by.first_name} {obj.reviewed_by.surname}".strip()
+
+
 class LeaveRequestSummaryResponseSerializer(serializers.Serializer):
     """Serializer for leave request summary responses."""
 
