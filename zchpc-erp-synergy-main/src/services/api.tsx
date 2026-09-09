@@ -1,8 +1,8 @@
 // src/api.js
 import axios from 'axios';
 
-// const API_URL = ''
-export const API_BASE_URL = (typeof __API_URL__ !== "undefined" ? __API_URL__ : "") + "/api/v2/";
+const API_URL = 'http://127.0.0.1:8000/'
+export const API_BASE_URL = API_URL + "api/v2/";
 
 const api = axios.create({
   baseURL: API_BASE_URL,

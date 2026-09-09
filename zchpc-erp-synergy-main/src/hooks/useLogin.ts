@@ -40,19 +40,19 @@ export const useLogin = () => {
       }
 
       // For regular users, check for employee profile and role
-      const rawRole = loggedInUser?.employee_profile?.role || loggedInUser?.role;
+     // const rawRole = loggedInUser?.employee_profile?.role || loggedInUser?.role;
 
-      if (rawRole) {
-        const roleKey = rawRole.toLowerCase();
-        toast.success(`Welcome back, ${loggedInUser.first_name}!`);
+     // if (rawRole) {
+       // const roleKey = rawRole.toLowerCase();
+       // toast.success(`Welcome back, ${loggedInUser.first_name}!`);
         // Set pending navigation - useEffect will handle actual navigation
-        const targetRoute = ROLE_ROUTES[roleKey] || "/dashboard";
-        setPendingNavigation(targetRoute);
-      } else {
+      //  const targetRoute = ROLE_ROUTES[roleKey] || "/dashboard";
+       // setPendingNavigation(targetRoute);
+     // } else {
         // Regular user without role/profile - this is an error
-        toast.error("User profile incomplete. Contact Admin.");
-        setIsSubmitting(false);
-      }
+       // toast.error("User profile incomplete. Contact Admin.");
+      //  setIsSubmitting(false);
+    //  }
     } catch (error) {
       toast.error("Authentication failed. Please check your credentials.");
       setIsSubmitting(false);
