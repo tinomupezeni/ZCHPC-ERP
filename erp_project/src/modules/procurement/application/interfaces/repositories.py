@@ -113,20 +113,12 @@ class IBudgetCenterRepository(ABC):
         ...
 
     @abstractmethod
-    def allocate_budget(
-        self,
-        budget_center_id: int,
-        amount: Decimal
-    ) -> BudgetCenter:
+    def allocate_budget(self, budget_center_id: int, amount: Decimal) -> BudgetCenter:
         """Allocate budget from a budget center."""
         ...
 
     @abstractmethod
-    def release_budget(
-        self,
-        budget_center_id: int,
-        amount: Decimal
-    ) -> BudgetCenter:
+    def release_budget(self, budget_center_id: int, amount: Decimal) -> BudgetCenter:
         """Release allocated budget back to budget center."""
         ...
 
@@ -141,12 +133,12 @@ class IPurchaseRequestRepository(ABC):
 
     @abstractmethod
     def save(self, request: PurchaseRequest) -> PurchaseRequest:
-        """Save a purchase request with its items."""
+        """Save a purchase request with its items and decisions."""
         ...
 
     @abstractmethod
     def get_by_id(self, request_id: int) -> Optional[PurchaseRequest]:
-        """Get a request by ID with all items."""
+        """Get a request by ID with all items and decisions."""
         ...
 
     @abstractmethod
@@ -160,18 +152,28 @@ class IPurchaseRequestRepository(ABC):
         ...
 
     @abstractmethod
-    def get_pending(self) -> List[PurchaseRequest]:
-        """Get pending requests."""
+    def get_pending_department_head(self) -> List[PurchaseRequest]:
+        """Get requests pending Department Head approval."""
         ...
 
     @abstractmethod
-    def get_pending_level1(self) -> List[PurchaseRequest]:
-        """Get requests pending Level 1 approval."""
+    def get_pending_accounts(self) -> List[PurchaseRequest]:
+        """Get requests pending Accounts verification."""
         ...
 
     @abstractmethod
-    def get_pending_level2(self) -> List[PurchaseRequest]:
-        """Get requests pending Level 2 approval."""
+    def get_pending_gm(self) -> List[PurchaseRequest]:
+        """Get requests pending GM recommendation."""
+        ...
+
+    @abstractmethod
+    def get_pending_director(self) -> List[PurchaseRequest]:
+        """Get requests pending Director approval."""
+        ...
+
+    @abstractmethod
+    def get_pending_procurement(self) -> List[PurchaseRequest]:
+        """Get requests pending Procurement processing."""
         ...
 
     @abstractmethod
@@ -180,25 +182,8 @@ class IPurchaseRequestRepository(ABC):
         ...
 
     @abstractmethod
-    def get_by_budget_center(
-        self,
-        budget_center_id: int
-    ) -> List[PurchaseRequest]:
-        """Get requests by budget center."""
-        ...
-
-    @abstractmethod
-    def update_status(
-        self,
-        request_id: int,
-        status: RequestStatus
-    ) -> PurchaseRequest:
-        """Update request status."""
-        ...
-
-    @abstractmethod
     def delete(self, request_id: int) -> bool:
-        """Delete a request (only if pending)."""
+        """Delete a request (only if pending/draft)."""
         ...
 
 

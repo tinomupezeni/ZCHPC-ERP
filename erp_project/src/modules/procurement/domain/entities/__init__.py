@@ -8,6 +8,7 @@ from modules.procurement.domain.entities.budget_center import BudgetCenter
 from modules.procurement.domain.entities.purchase_request import (
     PurchaseRequest,
     PurchaseRequestItem,
+    PurchaseRequestDecision,
 )
 from modules.procurement.domain.entities.purchase_order import PurchaseOrder
 
@@ -17,5 +18,7 @@ __all__ = [
     "BudgetCenter",
     "PurchaseRequest",
     "PurchaseRequestItem",
+    "PurchaseRequestDecision",
     "PurchaseOrder",
 ]
+
