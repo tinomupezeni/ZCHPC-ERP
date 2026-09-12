@@ -3,7 +3,7 @@ PurchaseRequest aggregate root with line items.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import List, Optional
 
@@ -14,6 +14,20 @@ from modules.procurement.domain.value_objects import (
     DecisionStage,
     DecisionType,
 )
+
+
+def _utc_now() -> datetime:
+    """
+    Current instant as a timezone-aware UTC datetime.
+
+    Timestamps produced here are persisted against timezone-aware columns, so
+    they must carry an offset - a naive value would be guessed at by the
+    storage layer and silently shifted by the server's timezone.
+
+    Uses the standard library rather than django.utils.timezone so the domain
+    layer stays free of framework imports.
+    """
+    return datetime.now(timezone.utc)
 
 
 @dataclass
@@ -105,7 +119,7 @@ class PurchaseRequest(AggregateRoot[int]):
         actor_id: int,
         reason: str = "",
     ):
-        now = datetime.now()
+        now = _utc_now()
         decision_obj = PurchaseRequestDecision(
             purchase_request_id=self.id,
             stage=stage,
@@ -122,7 +136,7 @@ class PurchaseRequest(AggregateRoot[int]):
             raise ValidationError(f"Cannot submit from status {self.status.value}")
         self.validate_for_submission()
         self.status = RequestStatus.PENDING_DEPARTMENT_HEAD
-        self.updated_at = datetime.now()
+        self.updated_at = _utc_now()
 
     def approve_by_department_head(self, actor_id: int) -> None:
         if self.status != RequestStatus.PENDING_DEPARTMENT_HEAD:
@@ -133,7 +147,7 @@ class PurchaseRequest(AggregateRoot[int]):
         self._append_decision(
             DecisionStage.DEPARTMENT_HEAD, DecisionType.APPROVED, actor_id
         )
-        self.updated_at = datetime.now()
+        self.updated_at = _utc_now()
 
     def verify_by_accounts(self, actor_id: int) -> None:
         if self.status != RequestStatus.PENDING_ACCOUNTS:
@@ -142,7 +156,7 @@ class PurchaseRequest(AggregateRoot[int]):
             )
         self.status = RequestStatus.PENDING_GM
         self._append_decision(DecisionStage.ACCOUNTS, DecisionType.VERIFIED, actor_id)
-        self.updated_at = datetime.now()
+        self.updated_at = _utc_now()
 
     def recommend_by_gm(self, actor_id: int) -> None:
         if self.status != RequestStatus.PENDING_GM:
@@ -151,7 +165,7 @@ class PurchaseRequest(AggregateRoot[int]):
             )
         self.status = RequestStatus.PENDING_DIRECTOR
         self._append_decision(DecisionStage.GM, DecisionType.RECOMMENDED, actor_id)
-        self.updated_at = datetime.now()
+        self.updated_at = _utc_now()
 
     def approve_by_director(self, actor_id: int) -> None:
         if self.status != RequestStatus.PENDING_DIRECTOR:
@@ -160,7 +174,7 @@ class PurchaseRequest(AggregateRoot[int]):
             )
         self.status = RequestStatus.PENDING_PROCUREMENT
         self._append_decision(DecisionStage.DIRECTOR, DecisionType.APPROVED, actor_id)
-        self.updated_at = datetime.now()
+        self.updated_at = _utc_now()
 
     def process_by_procurement(self, actor_id: int) -> None:
         if self.status != RequestStatus.PENDING_PROCUREMENT:
@@ -169,8 +183,8 @@ class PurchaseRequest(AggregateRoot[int]):
             )
         self.status = RequestStatus.PROCESSED
         self.processed_by = actor_id
-        self.processed_at = datetime.now()
-        self.updated_at = datetime.now()
+        self.processed_at = _utc_now()
+        self.updated_at = _utc_now()
 
     def reject(self, actor_id: int, reason: str) -> None:
         if not reason or not reason.strip():
@@ -190,7 +204,7 @@ class PurchaseRequest(AggregateRoot[int]):
 
         self.status = RequestStatus.REJECTED
         self._append_decision(stage, DecisionType.REJECTED, actor_id, reason)
-        self.updated_at = datetime.now()
+        self.updated_at = _utc_now()
 
     def correct_and_resubmit(self) -> None:
         if self.status != RequestStatus.REJECTED:
@@ -198,21 +212,21 @@ class PurchaseRequest(AggregateRoot[int]):
                 f"Can only correct and resubmit rejected requests. Current: {self.status.value}"
             )
         self.status = RequestStatus.DRAFT
-        self.updated_at = datetime.now()
+        self.updated_at = _utc_now()
 
     def add_item(self, item: PurchaseRequestItem) -> None:
         if self.status not in (RequestStatus.DRAFT, RequestStatus.REJECTED):
             raise ValidationError("Can only add items when DRAFT or REJECTED")
         item.request_id = self.id
         self.items.append(item)
-        self.updated_at = datetime.now()
+        self.updated_at = _utc_now()
 
     def remove_item(self, index: int) -> bool:
         if self.status not in (RequestStatus.DRAFT, RequestStatus.REJECTED):
             raise ValidationError("Can only remove items when DRAFT or REJECTED")
         if 0 <= index < len(self.items):
             self.items.pop(index)
-            self.updated_at = datetime.now()
+            self.updated_at = _utc_now()
             return True
         return False
 
@@ -226,7 +240,7 @@ class PurchaseRequest(AggregateRoot[int]):
         designation: str,
         contact: str,
     ) -> "PurchaseRequest":
-        now = datetime.now()
+        now = _utc_now()
         pr = cls(
             requester_id=requester_id,
             requester_name=requester_name,

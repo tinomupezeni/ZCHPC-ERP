@@ -5,27 +5,18 @@ Authentication uses real JWTs rather than force_authenticate, because
 middleware runs before DRF's view-level authentication helpers - the same
 reason tests/unit/modules/identity/test_security.py does it this way.
 
-Middleware isolation
---------------------
-RBACMiddleware gates every /api/v2/procurement/ request against the hard-coded
-ROLE_PERMISSIONS map, keyed by role *name*, which grants procurement access to
-only four role names. Slice 4's fine-grained capabilities live in a different
-store (hr.Role.permissions) and are never consulted there. Since hr.Role.name
-is unique, distinct capability sets cannot all share a name the middleware
-accepts.
-
-These tests therefore run with that legacy middleware removed, so they exercise
-the Slice 5 API boundary and Slice 4 authorization rather than the legacy URL
-gate. The gate itself is covered by TestRbacMiddlewareBlocker, which asserts
-its current blocking behaviour so the documented blocker stays visible.
+Roles
+-----
+Each actor gets its own role carrying exactly the capability under test.
+RBACMiddleware now derives route access from hr.Role.permissions, so holding a
+purchase request capability is enough to reach the procurement routes - no
+middleware overrides and no role-name tricks are needed.
 """
 
 from decimal import Decimal
 
 import pytest
-from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.test import override_settings
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
 
@@ -45,23 +36,6 @@ from modules.procurement.infrastructure.persistence.models import (
 )
 
 User = get_user_model()
-
-LEGACY_URL_GATES = (
-    "modules.identity.infrastructure.middleware.RBACMiddleware",
-    "modules.identity.infrastructure.middleware.ModuleAccessMiddleware",
-)
-
-MIDDLEWARE_WITHOUT_LEGACY_GATES = [
-    m for m in settings.MIDDLEWARE if m not in LEGACY_URL_GATES
-]
-
-
-@pytest.fixture
-def without_legacy_url_gates():
-    """Run the request through everything except the legacy URL-level gates."""
-    with override_settings(MIDDLEWARE=MIDDLEWARE_WITHOUT_LEGACY_GATES):
-        yield
-
 
 @pytest.fixture
 def anonymous_client():
@@ -95,7 +69,10 @@ def make_employee(db, departments):
     """Create a user + employee + role carrying exactly the given capabilities."""
     counter = {"n": 0}
 
-    def _make(name, permissions, department="it", position="Officer"):
+    def _make(
+        name, permissions, department="it", position="Officer",
+        role_name="STAFF",
+    ):
         counter["n"] += 1
         # designation on a purchase request is a snapshot of the employee's
         # position, which the aggregate requires to be non-empty
@@ -105,7 +82,7 @@ def make_employee(db, departments):
             else None
         )
         role = Role.objects.create(
-            name=f"TEST_ROLE_{counter['n']}",
+            name=f"{role_name}_{counter['n']}",
             display_name=name,
             permissions=list(permissions),
         )

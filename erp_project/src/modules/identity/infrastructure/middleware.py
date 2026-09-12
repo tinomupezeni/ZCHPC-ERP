@@ -4,8 +4,11 @@ Authentication and authorization middleware for the Identity module.
 
 from django.urls import resolve
 from django.http import JsonResponse
-from .permissions import ROLE_PERMISSIONS
-import fnmatch
+from .route_access import (
+    grants_module_access,
+    module_for_app,
+    permission_set_for_user,
+)
 
 
 class JWTAuthenticationMiddleware:
@@ -41,7 +44,14 @@ class JWTAuthenticationMiddleware:
 
 
 class RBACMiddleware:
-    """Role-Based Access Control middleware (Fail-Closed)."""
+    """
+    Coarse route access control (Fail-Closed).
+
+    Decides only whether an authenticated user may reach a route family, using
+    the authoritative permission model (``hr.Role.permissions``). Per-operation
+    and per-record authorization belongs to each module's own authorization
+    layer, which runs after this gate.
+    """
 
     # Paths that are entirely public or handled by other systems
     EXEMPT_PATHS = [
@@ -93,7 +103,7 @@ class RBACMiddleware:
             if request.user.is_superuser:
                 return self.get_response(request)
 
-            # 4. Resolve URL to permission string
+            # 4. Resolve the URL to the route family it belongs to
             try:
                 resolver_match = resolve(path)
                 app_name = resolver_match.app_name or ""
@@ -102,41 +112,27 @@ class RBACMiddleware:
                 # Fail-closed: If URL has no name, we can't verify permissions safely
                 if not app_name or not url_name:
                     return JsonResponse({"detail": "Permission denied."}, status=403)
-
-                view_perm = f"{app_name}.{url_name}"
             except Exception:
                 # FAIL-CLOSED: If URL doesn't exist or can't be resolved, deny.
                 return JsonResponse({"detail": "Permission denied."}, status=403)
 
-            # 5. Get user role (Fail-Closed)
-            user_role = getattr(request.user, "role", None)
-            if user_role is None:
-                try:
-                    employee = request.user.employee_profile
-                    if employee:
-                        role_obj = getattr(employee, "role", None)
-                        user_role = (
-                            getattr(role_obj, "name", None) if role_obj else None
-                        )
-                except Exception:
-                    # FAIL-CLOSED: If we can't determine the role, deny access.
-                    return JsonResponse(
-                        {"detail": "Unable to determine user permissions."}, status=403
-                    )
+            # 5. Load the user's permissions (Fail-Closed)
+            try:
+                permissions = permission_set_for_user(request.user)
+            except Exception:
+                # FAIL-CLOSED: If we can't determine permissions, deny access.
+                return JsonResponse(
+                    {"detail": "Unable to determine user permissions."}, status=403
+                )
 
-            # If after all checks, user_role is still None, deny.
-            if not user_role:
+            if permissions is None:
                 return JsonResponse({"detail": "Permission denied."}, status=403)
 
-            # Normalize role name
-            user_role = user_role.upper().replace(" ", "_").replace("-", "_")
-            allowed_perms = ROLE_PERMISSIONS.get(user_role, [])
-
-            # 6. Check permissions
-            if self._has_permission(view_perm, allowed_perms, app_name):
+            # 6. Coarse check: does the user hold anything in this module?
+            if grants_module_access(permissions, module_for_app(app_name)):
                 return self.get_response(request)
 
-            # FAIL-CLOSED: Deny if no explicit permission
+            # FAIL-CLOSED: Deny if no permission covers this route family
             return JsonResponse(
                 {"detail": "You do not have permission to access this resource."},
                 status=403,
@@ -144,27 +140,6 @@ class RBACMiddleware:
 
         # 7. Non-API, non-admin, non-media paths pass through (e.g., root '/')
         return self.get_response(request)
-
-    def _has_permission(self, view_perm, allowed_perms, app_name):
-        """Check if the view permission matches any allowed permission pattern."""
-        for perm in allowed_perms:
-            if perm == "*":
-                return True
-
-            if perm.endswith(".*"):
-                perm_app = perm[:-2]
-                if app_name and (app_name == perm_app or app_name.startswith(perm_app)):
-                    return True
-                if view_perm.startswith(perm_app + "."):
-                    return True
-
-            if perm == view_perm:
-                return True
-
-            if fnmatch.fnmatch(view_perm, perm):
-                return True
-
-        return False
 
 
 class ModuleAccessMiddleware:
@@ -194,14 +169,14 @@ class ModuleAccessMiddleware:
         parts = request.path.split('/')
         if len(parts) < 4:
             return self.get_response(request)
-            
+
         module_identifier = parts[3]
-        
+
         # Check if the module is active in the database
         try:
             from modules.identity.infrastructure.persistence.models import SystemModule
             module = SystemModule.objects.filter(identifier=module_identifier).first()
-            
+
             # If the module is registered but inactive, block access
             if module and not module.is_active:
                 return JsonResponse(

@@ -18,7 +18,7 @@ from modules.procurement.infrastructure.persistence.models import (
     PurchaseRequest as PurchaseRequestModel,
 )
 
-pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("without_legacy_url_gates")]
+pytestmark = pytest.mark.django_db
 
 
 # =============================================================================
@@ -397,9 +397,16 @@ class TestErrorMapping:
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_malformed_id_is_not_routed(self, client_for, api_url, requester):
-        assert (
-            client_for(requester).get(f"{api_url}not-a-number/").status_code
-            == status.HTTP_404_NOT_FOUND
+        """
+        An id that matches no URL pattern never reaches a view. The route gate
+        fails closed on anything it cannot resolve, so this is refused rather
+        than routed - either way, no handler runs.
+        """
+        assert client_for(requester).get(
+            f"{api_url}not-a-number/"
+        ).status_code in (
+            status.HTTP_403_FORBIDDEN,
+            status.HTTP_404_NOT_FOUND,
         )
 
     @pytest.mark.parametrize(

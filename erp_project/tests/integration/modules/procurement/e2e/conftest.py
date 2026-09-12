@@ -10,20 +10,12 @@ obtain credentials from the real login endpoint, so every request traverses:
 Nothing here calls a use case directly, and nothing is force-authenticated.
 Assertions check persisted database state, not just status codes.
 
-Role naming
------------
-RBACMiddleware gates /api/v2/procurement/ on the role *name* alone, via the
-hard-coded ROLE_PERMISSIONS map, normalising it with
-``.upper().replace(" ", "_").replace("-", "_")``. Because hr.Role.name is
-unique, several distinct roles can only clear that gate by using different
-spellings that normalise onto the same accepted key. That is what these
-fixtures do - it lets each actor carry precisely its own Slice 4 capability
-while still passing through the real middleware.
-
-That workaround is itself evidence of the production blocker: the middleware
-never consults hr.Role.permissions, so genuine roles such as
-DEPARTMENT_MANAGER or ACCOUNTANT are still rejected before Slice 4 runs. See
-test_purchase_request_rbac_blocker.py.
+Roles
+-----
+Actors use realistic organizational role names (Department Manager, Accountant,
+General Manager, Director, Procurement Officer, Regular Staff). Route access is
+granted by each role's own hr.Role.permissions, which is what RBACMiddleware
+now reads, so no role-name tricks are needed.
 """
 
 
@@ -49,16 +41,7 @@ REQUESTS_URL = "/api/v2/procurement/requests/"
 LOGIN_URL = "/api/v2/auth/token/"
 PASSWORD = "IntegrationPass123!"
 
-# Role-name spellings that all normalise to a key RBACMiddleware accepts.
-ROLE_SPELLINGS = [
-    "PROCUREMENT_OFFICER",
-    "Procurement Officer",
-    "procurement-officer",
-    "Procurement-Officer",
-    "procurement officer",
-    "PROCUREMENT",
-    "Procurement",
-]
+
 
 
 # =============================================================================
@@ -76,12 +59,11 @@ def org(db):
     )
 
     User = get_user_model()
-    spellings = iter(ROLE_SPELLINGS)
 
-    def make(name, title, permissions, department):
+    def make(name, title, role_name, permissions, department):
         role = Role.objects.create(
-            name=next(spellings),
-            display_name=title,
+            name=role_name,
+            display_name=role_name.replace("_", " ").title(),
             permissions=list(permissions),
         )
         slug = name.lower().replace(" ", ".")
@@ -106,25 +88,46 @@ def org(db):
         "requester": make(
             "Riley Requester",
             "Systems Developer",
+            "REGULAR_STAFF",
             [P.CREATE, P.VIEW, P.SUBMIT, P.CORRECT, P.RESUBMIT],
             it,
         ),
         "department_head": make(
-            "Hana Head", "IT Manager", [P.DEPARTMENT_HEAD_APPROVE, P.VIEW, P.REJECT], it
+            "Hana Head",
+            "IT Manager",
+            "DEPARTMENT_MANAGER",
+            [P.DEPARTMENT_HEAD_APPROVE, P.VIEW, P.REJECT],
+            it,
         ),
         "accounts": make(
-            "Adam Accounts", "Accountant", [P.ACCOUNTS_VERIFY, P.VIEW, P.REJECT], finance
+            "Adam Accounts",
+            "Accountant",
+            "ACCOUNTANT",
+            [P.ACCOUNTS_VERIFY, P.VIEW, P.REJECT],
+            finance,
         ),
         "gm": make(
-            "Gina Manager", "General Manager", [P.GM_RECOMMEND, P.VIEW, P.REJECT], it
+            "Gina Manager",
+            "General Manager",
+            "GENERAL_MANAGER",
+            [P.GM_RECOMMEND, P.VIEW, P.REJECT],
+            it,
         ),
         "director": make(
-            "Dana Director", "Director", [P.DIRECTOR_APPROVE, P.VIEW, P.REJECT], it
+            "Dana Director",
+            "Director",
+            "DIRECTOR",
+            [P.DIRECTOR_APPROVE, P.VIEW, P.REJECT],
+            it,
         ),
         "procurement": make(
-            "Pat Procure", "Procurement Officer", [P.PROCESS, P.VIEW], it
+            "Pat Procure",
+            "Procurement Officer",
+            "PROCUREMENT_OFFICER",
+            [P.PROCESS, P.VIEW],
+            it,
         ),
-        "outsider": make("Nora Nobody", "Intern", [], it),
+        "outsider": make("Nora Nobody", "Intern", "INTERN", [], it),
     }
 
     # The authoritative department-head relationship from Slice 4.

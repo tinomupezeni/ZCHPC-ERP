@@ -368,6 +368,66 @@ class TestPurchaseRequest:
         assert request.processed_by == 6
         assert request.processed_at is not None
 
+    def test_processed_at_is_timezone_aware(self):
+        """
+        processed_at is persisted to a timezone-aware column, so it must carry
+        an offset rather than being guessed at by the storage layer.
+        """
+        from datetime import timezone
+
+        request = self._make_request()
+        request.add_item(self._make_item())
+        request.submit()
+        request.approve_by_department_head(2)
+        request.verify_by_accounts(3)
+        request.recommend_by_gm(4)
+        request.approve_by_director(5)
+
+        request.process_by_procurement(6)
+
+        assert request.processed_at.tzinfo is not None
+        assert request.processed_at.utcoffset() == timezone.utc.utcoffset(None)
+
+    def test_processed_at_is_the_current_instant(self):
+        """The timestamp is now, not shifted by the server's timezone."""
+        from datetime import datetime, timedelta, timezone
+
+        before = datetime.now(timezone.utc)
+        request = self._make_request()
+        request.add_item(self._make_item())
+        request.submit()
+        request.approve_by_department_head(2)
+        request.verify_by_accounts(3)
+        request.recommend_by_gm(4)
+        request.approve_by_director(5)
+
+        request.process_by_procurement(6)
+
+        after = datetime.now(timezone.utc)
+        assert before <= request.processed_at <= after
+        assert after - before < timedelta(minutes=1)
+
+    def test_aggregate_timestamps_are_mutually_comparable(self):
+        """
+        Every timestamp the aggregate produces carries an offset, so they can
+        be compared with each other and with database-loaded values without
+        raising on a naive/aware mismatch.
+        """
+        request = self._make_request()
+        request.add_item(self._make_item())
+        request.submit()
+        request.approve_by_department_head(2)
+        request.verify_by_accounts(3)
+        request.recommend_by_gm(4)
+        request.approve_by_director(5)
+        request.process_by_procurement(6)
+
+        assert request.created_at.tzinfo is not None
+        assert request.updated_at.tzinfo is not None
+        assert request.created_at <= request.updated_at
+        assert request.processed_at <= request.updated_at
+        assert all(d.created_at.tzinfo is not None for d in request.decisions)
+
     def test_invalid_transitions_are_rejected(self):
         """Spec #13: Invalid stage transitions are rejected."""
         from shared.domain.exceptions import ValidationError
