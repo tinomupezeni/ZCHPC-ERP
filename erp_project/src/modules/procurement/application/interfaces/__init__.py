@@ -9,6 +9,9 @@ from modules.procurement.application.interfaces.repositories import (
     IPurchaseRequestRepository,
     IPurchaseOrderRepository,
 )
+from modules.procurement.application.interfaces.organization import (
+    IOrganizationalDirectory,
+)
 
 __all__ = [
     "ISupplierRepository",
@@ -16,4 +19,5 @@ __all__ = [
     "IBudgetCenterRepository",
     "IPurchaseRequestRepository",
     "IPurchaseOrderRepository",
+    "IOrganizationalDirectory",
 ]

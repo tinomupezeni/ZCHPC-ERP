@@ -4,6 +4,14 @@ Purchase Request Application Use Cases.
 These classes orchestrate the business workflow for purchase requests
 by delegating domain rules to the aggregate root and persisting
 changes via the repository.
+
+Each use case authorizes the acting employee before invoking the domain:
+
+    authorize actor -> load aggregate -> authorize actor for this record
+    -> invoke domain method -> save aggregate
+
+Authorization lives entirely in PurchaseRequestAuthorizationPolicy; the domain
+remains authoritative over which state transitions are legal.
 """
 
 from dataclasses import dataclass, field
@@ -12,6 +20,10 @@ from typing import List
 
 from shared.domain.exceptions import NotFoundError
 from modules.procurement.domain.entities import PurchaseRequest, PurchaseRequestItem
+from modules.procurement.application.authorization import (
+    Actor,
+    PurchaseRequestAuthorizationPolicy,
+)
 from modules.procurement.application.interfaces import IPurchaseRequestRepository
 
 
@@ -39,11 +51,41 @@ class CreatePurchaseRequestDTO:
     items: List[PurchaseRequestItemDTO] = field(default_factory=list)
 
 
-class CreatePurchaseRequest:
-    def __init__(self, repository: IPurchaseRequestRepository) -> None:
-        self.repository = repository
+class BasePurchaseRequestUseCase:
+    """
+    Shared wiring for authorized purchase request use cases.
 
-    def execute(self, dto: CreatePurchaseRequestDTO) -> PurchaseRequest:
+    The policy is a required collaborator so that no use case can be
+    constructed without an authorization decision point.
+    """
+
+    def __init__(
+        self,
+        repository: IPurchaseRequestRepository,
+        policy: PurchaseRequestAuthorizationPolicy,
+    ) -> None:
+        self.repository = repository
+        self.policy = policy
+
+    def _load(self, request_id: int, actor: Actor) -> PurchaseRequest:
+        """
+        Load the aggregate for an authenticated actor.
+
+        Authentication is checked first so an anonymous caller cannot learn
+        whether a given purchase request exists.
+        """
+        self.policy.require_authenticated(actor)
+
+        request = self.repository.get_by_id(request_id)
+        if request is None:
+            raise NotFoundError(f"Purchase request {request_id} not found")
+        return request
+
+
+class CreatePurchaseRequest(BasePurchaseRequestUseCase):
+    def execute(self, dto: CreatePurchaseRequestDTO, actor: Actor) -> PurchaseRequest:
+        self.policy.authorize_create(actor, requester_id=dto.requester_id)
+
         request = PurchaseRequest.create(
             requester_id=dto.requester_id,
             requester_name=dto.requester_name,
@@ -66,105 +108,82 @@ class CreatePurchaseRequest:
         return self.repository.save(request)
 
 
-class SubmitPurchaseRequest:
-    def __init__(self, repository: IPurchaseRequestRepository) -> None:
-        self.repository = repository
+class ViewPurchaseRequest(BasePurchaseRequestUseCase):
+    """Read a single purchase request."""
 
-    def execute(self, request_id: int) -> PurchaseRequest:
-        request = self.repository.get_by_id(request_id)
-        if request is None:
-            raise NotFoundError(f"Purchase request {request_id} not found")
+    def execute(self, request_id: int, actor: Actor) -> PurchaseRequest:
+        request = self._load(request_id, actor)
+        self.policy.authorize_view(actor, request)
+        return request
+
+
+class SubmitPurchaseRequest(BasePurchaseRequestUseCase):
+    def execute(self, request_id: int, actor: Actor) -> PurchaseRequest:
+        request = self._load(request_id, actor)
+        self.policy.authorize_submit(actor, request)
 
         request.submit()
         return self.repository.save(request)
 
 
-class ApprovePurchaseRequestByDepartmentHead:
-    def __init__(self, repository: IPurchaseRequestRepository) -> None:
-        self.repository = repository
+class ApprovePurchaseRequestByDepartmentHead(BasePurchaseRequestUseCase):
+    def execute(self, request_id: int, actor: Actor) -> PurchaseRequest:
+        request = self._load(request_id, actor)
+        self.policy.authorize_department_head_approval(actor, request)
 
-    def execute(self, request_id: int, actor_id: int) -> PurchaseRequest:
-        request = self.repository.get_by_id(request_id)
-        if request is None:
-            raise NotFoundError(f"Purchase request {request_id} not found")
-
-        request.approve_by_department_head(actor_id)
+        request.approve_by_department_head(actor.employee_id)
         return self.repository.save(request)
 
 
-class VerifyPurchaseRequestByAccounts:
-    def __init__(self, repository: IPurchaseRequestRepository) -> None:
-        self.repository = repository
+class VerifyPurchaseRequestByAccounts(BasePurchaseRequestUseCase):
+    def execute(self, request_id: int, actor: Actor) -> PurchaseRequest:
+        request = self._load(request_id, actor)
+        self.policy.authorize_accounts_verification(actor, request)
 
-    def execute(self, request_id: int, actor_id: int) -> PurchaseRequest:
-        request = self.repository.get_by_id(request_id)
-        if request is None:
-            raise NotFoundError(f"Purchase request {request_id} not found")
-
-        request.verify_by_accounts(actor_id)
+        request.verify_by_accounts(actor.employee_id)
         return self.repository.save(request)
 
 
-class RecommendPurchaseRequestByGM:
-    def __init__(self, repository: IPurchaseRequestRepository) -> None:
-        self.repository = repository
+class RecommendPurchaseRequestByGM(BasePurchaseRequestUseCase):
+    def execute(self, request_id: int, actor: Actor) -> PurchaseRequest:
+        request = self._load(request_id, actor)
+        self.policy.authorize_gm_recommendation(actor, request)
 
-    def execute(self, request_id: int, actor_id: int) -> PurchaseRequest:
-        request = self.repository.get_by_id(request_id)
-        if request is None:
-            raise NotFoundError(f"Purchase request {request_id} not found")
-
-        request.recommend_by_gm(actor_id)
+        request.recommend_by_gm(actor.employee_id)
         return self.repository.save(request)
 
 
-class ApprovePurchaseRequestByDirector:
-    def __init__(self, repository: IPurchaseRequestRepository) -> None:
-        self.repository = repository
+class ApprovePurchaseRequestByDirector(BasePurchaseRequestUseCase):
+    def execute(self, request_id: int, actor: Actor) -> PurchaseRequest:
+        request = self._load(request_id, actor)
+        self.policy.authorize_director_approval(actor, request)
 
-    def execute(self, request_id: int, actor_id: int) -> PurchaseRequest:
-        request = self.repository.get_by_id(request_id)
-        if request is None:
-            raise NotFoundError(f"Purchase request {request_id} not found")
-
-        request.approve_by_director(actor_id)
+        request.approve_by_director(actor.employee_id)
         return self.repository.save(request)
 
 
-class ProcessPurchaseRequestByProcurement:
-    def __init__(self, repository: IPurchaseRequestRepository) -> None:
-        self.repository = repository
+class ProcessPurchaseRequestByProcurement(BasePurchaseRequestUseCase):
+    def execute(self, request_id: int, actor: Actor) -> PurchaseRequest:
+        request = self._load(request_id, actor)
+        self.policy.authorize_processing(actor, request)
 
-    def execute(self, request_id: int, actor_id: int) -> PurchaseRequest:
-        request = self.repository.get_by_id(request_id)
-        if request is None:
-            raise NotFoundError(f"Purchase request {request_id} not found")
-
-        request.process_by_procurement(actor_id)
+        request.process_by_procurement(actor.employee_id)
         return self.repository.save(request)
 
 
-class RejectPurchaseRequest:
-    def __init__(self, repository: IPurchaseRequestRepository) -> None:
-        self.repository = repository
+class RejectPurchaseRequest(BasePurchaseRequestUseCase):
+    def execute(self, request_id: int, actor: Actor, reason: str) -> PurchaseRequest:
+        request = self._load(request_id, actor)
+        self.policy.authorize_rejection(actor, request)
 
-    def execute(self, request_id: int, actor_id: int, reason: str) -> PurchaseRequest:
-        request = self.repository.get_by_id(request_id)
-        if request is None:
-            raise NotFoundError(f"Purchase request {request_id} not found")
-
-        request.reject(actor_id, reason)
+        request.reject(actor.employee_id, reason)
         return self.repository.save(request)
 
 
-class CorrectAndResubmitPurchaseRequest:
-    def __init__(self, repository: IPurchaseRequestRepository) -> None:
-        self.repository = repository
-
-    def execute(self, request_id: int) -> PurchaseRequest:
-        request = self.repository.get_by_id(request_id)
-        if request is None:
-            raise NotFoundError(f"Purchase request {request_id} not found")
+class CorrectAndResubmitPurchaseRequest(BasePurchaseRequestUseCase):
+    def execute(self, request_id: int, actor: Actor) -> PurchaseRequest:
+        request = self._load(request_id, actor)
+        self.policy.authorize_correction_and_resubmission(actor, request)
 
         request.correct_and_resubmit()
         return self.repository.save(request)
