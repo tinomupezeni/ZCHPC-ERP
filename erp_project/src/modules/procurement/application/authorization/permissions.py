@@ -17,6 +17,8 @@ Note on wildcards: the existing ``Permission`` semantics mean a role granted
 hold part of the workflow must be granted the explicit strings.
 """
 
+from enum import Enum
+
 
 class PurchaseRequestPermissions:
     """Capability strings for the Purchase Request workflow."""
@@ -52,6 +54,43 @@ class PurchaseRequestPermissions:
             cls.RESUBMIT,
             cls.PROCESS,
         ]
+
+
+class PurchaseRequestListScope(str, Enum):
+    """
+    The named collections of purchase requests a client may ask for.
+
+    Listing is never unscoped: MINE returns the actor's own requests, and each
+    PENDING_* scope is a workflow queue guarded by that stage's capability, so
+    holding the plain ``view`` permission never exposes the whole table.
+    """
+
+    MINE = "mine"
+    PENDING_DEPARTMENT_HEAD = "pending-department-head"
+    PENDING_ACCOUNTS = "pending-accounts"
+    PENDING_GM = "pending-gm"
+    PENDING_DIRECTOR = "pending-director"
+    PENDING_PROCUREMENT = "pending-procurement"
+
+    @property
+    def required_permission(self) -> str:
+        """The capability that grants access to this collection."""
+        return _LIST_SCOPE_PERMISSIONS[self]
+
+    def __str__(self) -> str:
+        return self.value
+
+
+_LIST_SCOPE_PERMISSIONS: dict[PurchaseRequestListScope, str] = {
+    PurchaseRequestListScope.MINE: PurchaseRequestPermissions.VIEW,
+    PurchaseRequestListScope.PENDING_DEPARTMENT_HEAD: (
+        PurchaseRequestPermissions.DEPARTMENT_HEAD_APPROVE
+    ),
+    PurchaseRequestListScope.PENDING_ACCOUNTS: PurchaseRequestPermissions.ACCOUNTS_VERIFY,
+    PurchaseRequestListScope.PENDING_GM: PurchaseRequestPermissions.GM_RECOMMEND,
+    PurchaseRequestListScope.PENDING_DIRECTOR: PurchaseRequestPermissions.DIRECTOR_APPROVE,
+    PurchaseRequestListScope.PENDING_PROCUREMENT: PurchaseRequestPermissions.PROCESS,
+}
 
 
 # Capabilities every requester needs to raise and maintain their own request.

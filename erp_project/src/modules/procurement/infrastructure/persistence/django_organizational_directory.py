@@ -42,6 +42,14 @@ class DjangoOrganizationalDirectory(IOrganizationalDirectory):
             .first()
         )
 
+    def get_headed_department_ids(self, employee_id: int) -> set[int]:
+        """Ids of every department this employee heads."""
+        return set(
+            self.department_model.objects.filter(head_id=employee_id).values_list(
+                "id", flat=True
+            )
+        )
+
     def get_department_id(self, employee_id: int) -> int | None:
         """Department the employee belongs to, or None if unknown/unassigned."""
         return (

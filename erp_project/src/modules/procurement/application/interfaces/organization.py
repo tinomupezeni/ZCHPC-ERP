@@ -24,6 +24,17 @@ class IOrganizationalDirectory(ABC):
         pass
 
     @abstractmethod
+    def get_headed_department_ids(self, employee_id: int) -> set[int]:
+        """
+        Every department this employee is recorded as the head of.
+
+        The same ``Department.head`` relationship read in the other direction,
+        so a workflow queue can be narrowed to the departments an actor is
+        actually accountable for.
+        """
+        pass
+
+    @abstractmethod
     def get_department_id(self, employee_id: int) -> int | None:
         """Department the employee belongs to, or None if unknown/unassigned."""
         pass

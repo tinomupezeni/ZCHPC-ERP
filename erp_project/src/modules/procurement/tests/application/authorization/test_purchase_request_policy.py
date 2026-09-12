@@ -23,10 +23,12 @@ from modules.procurement.domain.value_objects import RequestStatus
 from modules.procurement.application.authorization import (
     Actor,
     PurchaseRequestAuthorizationPolicy,
+    PurchaseRequestListScope as Scope,
     PurchaseRequestPermissions as P,
 )
 from modules.procurement.application.use_cases import (
     CreatePurchaseRequest,
+    ListPurchaseRequests,
     CreatePurchaseRequestDTO,
     PurchaseRequestItemDTO,
     ViewPurchaseRequest,
@@ -95,6 +97,9 @@ class StubDirectory:
 
     def get_department_head_id(self, department_id):
         return self.heads.get(department_id)
+
+    def get_headed_department_ids(self, employee_id):
+        return {d for d, head in self.heads.items() if head == employee_id}
 
     def get_department_id(self, employee_id):
         return self.departments.get(employee_id)
@@ -731,6 +736,106 @@ class TestCorrectAndResubmitAuthorization:
         assert exc.value.code == "NOT_REQUESTER"
         assert rejected.status == RequestStatus.REJECTED
         repository.save.assert_not_called()
+
+
+# =============================================================================
+# Listing
+# =============================================================================
+
+
+class TestListAuthorization:
+    """Listing is scoped; the plain view capability never exposes the table."""
+
+    @pytest.fixture
+    def repository(self):
+        repo = Mock()
+        repo.get_by_requester.return_value = []
+        repo.get_pending_department_head.return_value = []
+        repo.get_pending_accounts.return_value = []
+        repo.get_pending_gm.return_value = []
+        repo.get_pending_director.return_value = []
+        repo.get_pending_procurement.return_value = []
+        return repo
+
+    def test_default_scope_returns_only_the_actors_own_requests(
+        self, repository, policy, directory
+    ):
+        actor = make_actor(REQUESTER_ID, [P.VIEW], IT_DEPARTMENT_ID)
+
+        ListPurchaseRequests(repository, policy, directory).execute(actor)
+
+        repository.get_by_requester.assert_called_once_with(REQUESTER_ID)
+        repository.get_pending_department_head.assert_not_called()
+
+    def test_view_permission_alone_does_not_open_a_workflow_queue(
+        self, repository, policy, directory
+    ):
+        actor = make_actor(REQUESTER_ID, [P.VIEW], IT_DEPARTMENT_ID)
+
+        with pytest.raises(AuthorizationError) as exc:
+            ListPurchaseRequests(repository, policy, directory).execute(
+                actor, Scope.PENDING_ACCOUNTS
+            )
+
+        assert exc.value.code == "PERMISSION_DENIED"
+        repository.get_pending_accounts.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "scope,permission,reader",
+        [
+            (Scope.PENDING_ACCOUNTS, P.ACCOUNTS_VERIFY, "get_pending_accounts"),
+            (Scope.PENDING_GM, P.GM_RECOMMEND, "get_pending_gm"),
+            (Scope.PENDING_DIRECTOR, P.DIRECTOR_APPROVE, "get_pending_director"),
+            (Scope.PENDING_PROCUREMENT, P.PROCESS, "get_pending_procurement"),
+        ],
+    )
+    def test_each_queue_needs_its_own_stage_capability(
+        self, repository, policy, directory, scope, permission, reader
+    ):
+        holder = make_actor(5, [permission], FINANCE_DEPARTMENT_ID)
+
+        ListPurchaseRequests(repository, policy, directory).execute(holder, scope)
+
+        getattr(repository, reader).assert_called_once()
+
+    def test_department_head_queue_is_narrowed_to_headed_departments(
+        self, repository, policy, directory
+    ):
+        mine = make_request(RequestStatus.PENDING_DEPARTMENT_HEAD)
+        other = make_request(RequestStatus.PENDING_DEPARTMENT_HEAD)
+        other.department_id = FINANCE_DEPARTMENT_ID
+        repository.get_pending_department_head.return_value = [mine, other]
+        head_of_it = make_actor(IT_HEAD_ID, [P.DEPARTMENT_HEAD_APPROVE], IT_DEPARTMENT_ID)
+
+        results = ListPurchaseRequests(repository, policy, directory).execute(
+            head_of_it, Scope.PENDING_DEPARTMENT_HEAD
+        )
+
+        assert results == [mine]
+
+    def test_department_head_queue_is_empty_without_a_directory(
+        self, repository, policy
+    ):
+        """Fails closed rather than listing every department's queue."""
+        repository.get_pending_department_head.return_value = [
+            make_request(RequestStatus.PENDING_DEPARTMENT_HEAD)
+        ]
+        head = make_actor(IT_HEAD_ID, [P.DEPARTMENT_HEAD_APPROVE], IT_DEPARTMENT_ID)
+
+        results = ListPurchaseRequests(repository, policy, directory=None).execute(
+            head, Scope.PENDING_DEPARTMENT_HEAD
+        )
+
+        assert results == []
+
+    def test_anonymous_actor_cannot_list(self, repository, policy, directory):
+        with pytest.raises(AuthorizationError) as exc:
+            ListPurchaseRequests(repository, policy, directory).execute(
+                Actor.anonymous()
+            )
+
+        assert exc.value.code == "UNAUTHENTICATED"
+        repository.get_by_requester.assert_not_called()
 
 
 # =============================================================================

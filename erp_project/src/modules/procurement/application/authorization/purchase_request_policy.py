@@ -13,6 +13,7 @@ from shared.domain.exceptions import AuthorizationError
 
 from modules.procurement.application.authorization.actor import Actor
 from modules.procurement.application.authorization.permissions import (
+    PurchaseRequestListScope,
     PurchaseRequestPermissions,
 )
 from modules.procurement.application.interfaces import IOrganizationalDirectory
@@ -91,6 +92,29 @@ class PurchaseRequestAuthorizationPolicy:
         """
         self.require_authenticated(actor)
         self._require_permission(actor, PurchaseRequestPermissions.VIEW)
+
+    def authorize_list(
+        self, actor: Actor | None, scope: PurchaseRequestListScope
+    ) -> None:
+        """
+        Listing is scoped, never unrestricted.
+
+        ``MINE`` needs the view capability; each workflow queue needs that
+        stage's own capability, so holding ``view`` alone never discloses other
+        people's requests. Which records a scope actually yields is the listing
+        use case's job - this only decides whether the actor may ask.
+        """
+        self.require_authenticated(actor)
+        self._require_permission(actor, scope.required_permission)
+
+        if scope is not PurchaseRequestListScope.MINE:
+            return
+
+        if not actor.is_admin and actor.employee_id is None:
+            raise AuthorizationError(
+                "Listing your own purchase requests requires an employee profile",
+                code="NO_EMPLOYEE_PROFILE",
+            )
 
     def authorize_submit(self, actor: Actor | None, request: PurchaseRequest) -> None:
         """Only the requester submits their own request."""

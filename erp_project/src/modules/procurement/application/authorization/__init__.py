@@ -11,6 +11,7 @@ from modules.procurement.application.authorization.actor import (
 )
 from modules.procurement.application.authorization.permissions import (
     DEFAULT_PURCHASE_REQUEST_ROLE_PERMISSIONS,
+    PurchaseRequestListScope,
     PurchaseRequestPermissions,
 )
 from modules.procurement.application.authorization.purchase_request_policy import (
@@ -21,6 +22,7 @@ __all__ = [
     "Actor",
     "ADMIN_ROLE_NAMES",
     "PurchaseRequestPermissions",
+    "PurchaseRequestListScope",
     "DEFAULT_PURCHASE_REQUEST_ROLE_PERMISSIONS",
     "PurchaseRequestAuthorizationPolicy",
 ]

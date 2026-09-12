@@ -23,8 +23,12 @@ from modules.procurement.domain.entities import PurchaseRequest, PurchaseRequest
 from modules.procurement.application.authorization import (
     Actor,
     PurchaseRequestAuthorizationPolicy,
+    PurchaseRequestListScope,
 )
-from modules.procurement.application.interfaces import IPurchaseRequestRepository
+from modules.procurement.application.interfaces import (
+    IOrganizationalDirectory,
+    IPurchaseRequestRepository,
+)
 
 
 @dataclass
@@ -115,6 +119,69 @@ class ViewPurchaseRequest(BasePurchaseRequestUseCase):
         request = self._load(request_id, actor)
         self.policy.authorize_view(actor, request)
         return request
+
+
+class ListPurchaseRequests(BasePurchaseRequestUseCase):
+    """
+    Read a named collection of purchase requests.
+
+    Listing is always scoped - there is no "all requests" collection. MINE
+    returns the actor's own; each workflow queue returns the requests waiting
+    at that stage, and the department head queue is narrowed to the departments
+    the actor is actually recorded as heading.
+    """
+
+    def __init__(
+        self,
+        repository: IPurchaseRequestRepository,
+        policy: PurchaseRequestAuthorizationPolicy,
+        directory: IOrganizationalDirectory | None = None,
+    ) -> None:
+        super().__init__(repository, policy)
+        self.directory = directory
+
+    def execute(
+        self,
+        actor: Actor,
+        scope: PurchaseRequestListScope = PurchaseRequestListScope.MINE,
+    ) -> List[PurchaseRequest]:
+        self.policy.authorize_list(actor, scope)
+
+        if scope is PurchaseRequestListScope.MINE:
+            return self.repository.get_by_requester(actor.employee_id)
+
+        if scope is PurchaseRequestListScope.PENDING_DEPARTMENT_HEAD:
+            pending = self.repository.get_pending_department_head()
+            return self._only_headed_departments(actor, pending)
+
+        return _QUEUE_READERS[scope](self.repository)
+
+    def _only_headed_departments(
+        self, actor: Actor, requests: List[PurchaseRequest]
+    ) -> List[PurchaseRequest]:
+        """
+        Narrow the department head queue to what this actor could act on.
+
+        Mirrors the authorization rule rather than restating it: a request the
+        policy would refuse is a request the actor should not see queued.
+        """
+        if actor.is_admin:
+            return requests
+        if self.directory is None or actor.employee_id is None:
+            return []
+
+        headed = self.directory.get_headed_department_ids(actor.employee_id)
+        return [r for r in requests if r.department_id in headed]
+
+
+_QUEUE_READERS = {
+    PurchaseRequestListScope.PENDING_ACCOUNTS: lambda repo: repo.get_pending_accounts(),
+    PurchaseRequestListScope.PENDING_GM: lambda repo: repo.get_pending_gm(),
+    PurchaseRequestListScope.PENDING_DIRECTOR: lambda repo: repo.get_pending_director(),
+    PurchaseRequestListScope.PENDING_PROCUREMENT: (
+        lambda repo: repo.get_pending_procurement()
+    ),
+}
 
 
 class SubmitPurchaseRequest(BasePurchaseRequestUseCase):
