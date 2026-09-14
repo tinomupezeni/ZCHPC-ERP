@@ -12,32 +12,34 @@ Follows existing project conventions:
 - Mock repository injected via constructor
 """
 
-import pytest
-from unittest.mock import Mock
 from decimal import Decimal
+from types import SimpleNamespace
+from unittest.mock import Mock
 
-from shared.domain.exceptions import NotFoundError, ValidationError
+import pytest
+
 from modules.identity.domain.value_objects import PermissionSet
-from modules.procurement.domain.entities import PurchaseRequest, PurchaseRequestItem
-from modules.procurement.domain.value_objects import RequestStatus
 from modules.procurement.application.authorization import (
     Actor,
     PurchaseRequestAuthorizationPolicy,
 )
 from modules.procurement.application.use_cases.purchase_request_use_cases import (
+    ApprovePurchaseRequestByDepartmentHead,
+    ApprovePurchaseRequestByDirector,
+    CorrectAndResubmitPurchaseRequest,
     CreatePurchaseRequest,
     CreatePurchaseRequestDTO,
-    PurchaseRequestItemDTO,
-    ViewPurchaseRequest,
-    SubmitPurchaseRequest,
-    ApprovePurchaseRequestByDepartmentHead,
-    VerifyPurchaseRequestByAccounts,
-    RecommendPurchaseRequestByGM,
-    ApprovePurchaseRequestByDirector,
     ProcessPurchaseRequestByProcurement,
+    PurchaseRequestItemDTO,
+    RecommendPurchaseRequestByGM,
     RejectPurchaseRequest,
-    CorrectAndResubmitPurchaseRequest,
+    SubmitPurchaseRequest,
+    VerifyPurchaseRequestByAccounts,
+    ViewPurchaseRequest,
 )
+from modules.procurement.domain.entities import PurchaseRequest, PurchaseRequestItem
+from modules.procurement.domain.value_objects import RequestStatus
+from shared.domain.exceptions import NotFoundError, ValidationError
 
 REQUESTER_ID = 1
 DEPARTMENT_ID = 10
@@ -67,6 +69,28 @@ def authorized_actor(employee_id, department_id=DEPARTMENT_ID):
 def repository():
     repo = Mock()
     repo.save.side_effect = lambda x: x
+    return repo
+
+
+@pytest.fixture
+def category_repository():
+    """
+    Stub category repository (Slice F11-A).
+
+    Category #1 is active and resolves to AccountChart #77; category #2
+    exists but is inactive; category #3 does not exist at all
+    (get_by_id returns None).
+    """
+    repo = Mock()
+
+    def get_by_id(category_id):
+        if category_id == 1:
+            return SimpleNamespace(id=1, name="IT Consumables", account_chart_id=77, is_active=True)
+        if category_id == 2:
+            return SimpleNamespace(id=2, name="Discontinued", account_chart_id=88, is_active=False)
+        return None
+
+    repo.get_by_id.side_effect = get_by_id
     return repo
 
 
@@ -107,8 +131,8 @@ def draft_request_with_item():
 class TestCreatePurchaseRequest:
     """Tests for the CreatePurchaseRequest use case."""
 
-    def test_creates_request_with_items(self, repository, policy, requester):
-        use_case = CreatePurchaseRequest(repository, policy)
+    def test_creates_request_with_items(self, repository, policy, category_repository, requester):
+        use_case = CreatePurchaseRequest(repository, policy, category_repository)
         dto = CreatePurchaseRequestDTO(
             requester_id=REQUESTER_ID,
             requester_name="Jane Doe",
@@ -134,11 +158,12 @@ class TestCreatePurchaseRequest:
         assert result.designation == "Manager"
         assert len(result.items) == 1
         assert result.items[0].description == "Desk"
+        assert result.items[0].budget_code_id == 10
         assert result.status == RequestStatus.DRAFT
         repository.save.assert_called_once()
 
-    def test_creates_request_without_items(self, repository, policy, requester):
-        use_case = CreatePurchaseRequest(repository, policy)
+    def test_creates_request_without_items(self, repository, policy, category_repository, requester):
+        use_case = CreatePurchaseRequest(repository, policy, category_repository)
         dto = CreatePurchaseRequestDTO(
             requester_id=REQUESTER_ID,
             requester_name="Jane Doe",
@@ -153,6 +178,117 @@ class TestCreatePurchaseRequest:
         assert result.status == RequestStatus.DRAFT
         assert len(result.items) == 0
         repository.save.assert_called_once()
+
+
+class TestCreatePurchaseRequestCategoryResolution:
+    """
+    Slice F11-A: category_id -> budget_code_id resolution, entirely inside
+    CreatePurchaseRequest._resolve_budget_code_id. No keyword matching, no
+    description-based inference is exercised or possible here - the stub
+    category_repository only ever answers by category_id.
+    """
+
+    def _item(self, **overrides):
+        defaults = {
+            "description": "Keyboard",
+            "quantity": 1,
+            "expected_delivery_period": "2 weeks",
+            "estimated_cost": Decimal("50.00"),
+        }
+        defaults.update(overrides)
+        return PurchaseRequestItemDTO(**defaults)
+
+    def _dto(self, item):
+        return CreatePurchaseRequestDTO(
+            requester_id=REQUESTER_ID,
+            requester_name="Jane Doe",
+            department_id=2,
+            department_name="HR",
+            designation="Manager",
+            contact="123",
+            items=[item],
+        )
+
+    def test_active_category_resolves_to_its_account_chart_id(
+        self, repository, policy, category_repository, requester
+    ):
+        use_case = CreatePurchaseRequest(repository, policy, category_repository)
+        dto = self._dto(self._item(category_id=1))
+
+        result = use_case.execute(dto, requester)
+
+        assert result.items[0].budget_code_id == 77
+        category_repository.get_by_id.assert_called_once_with(1)
+
+    def test_unknown_category_raises_validation_error(
+        self, repository, policy, category_repository, requester
+    ):
+        use_case = CreatePurchaseRequest(repository, policy, category_repository)
+        dto = self._dto(self._item(category_id=999))
+
+        with pytest.raises(ValidationError) as exc:
+            use_case.execute(dto, requester)
+
+        assert exc.value.code == "CATEGORY_NOT_FOUND"
+        repository.save.assert_not_called()
+
+    def test_inactive_category_raises_validation_error(
+        self, repository, policy, category_repository, requester
+    ):
+        use_case = CreatePurchaseRequest(repository, policy, category_repository)
+        dto = self._dto(self._item(category_id=2))
+
+        with pytest.raises(ValidationError) as exc:
+            use_case.execute(dto, requester)
+
+        assert exc.value.code == "CATEGORY_INACTIVE"
+        repository.save.assert_not_called()
+
+    def test_neither_category_nor_budget_code_raises_validation_error(
+        self, repository, policy, category_repository, requester
+    ):
+        use_case = CreatePurchaseRequest(repository, policy, category_repository)
+        dto = self._dto(self._item())
+
+        with pytest.raises(ValidationError) as exc:
+            use_case.execute(dto, requester)
+
+        assert exc.value.code == "MISSING_BUDGET_CLASSIFICATION"
+        repository.save.assert_not_called()
+
+    def test_category_id_wins_even_if_budget_code_id_is_also_supplied(
+        self, repository, policy, category_repository, requester
+    ):
+        """
+        The employee must not be able to control the resulting GL account by
+        also supplying budget_code_id - category_id, when present, is
+        authoritative regardless. (The API serializer separately rejects
+        this combination outright; this pins the use case's own guarantee
+        for any caller that reaches it directly.)
+        """
+        use_case = CreatePurchaseRequest(repository, policy, category_repository)
+        dto = self._dto(self._item(category_id=1, budget_code_id=999999))
+
+        result = use_case.execute(dto, requester)
+
+        assert result.items[0].budget_code_id == 77
+
+    def test_description_never_influences_resolution(
+        self, repository, policy, category_repository, requester
+    ):
+        """
+        No keyword/description-based classification exists anywhere in this
+        path - the exact same category_id resolves identically regardless
+        of what the item's free-text description says.
+        """
+        use_case = CreatePurchaseRequest(repository, policy, category_repository)
+        dto = self._dto(
+            self._item(category_id=1, description="Completely unrelated text about fuel and travel")
+        )
+
+        result = use_case.execute(dto, requester)
+
+        assert result.items[0].budget_code_id == 77
 
 
 class TestViewPurchaseRequest:

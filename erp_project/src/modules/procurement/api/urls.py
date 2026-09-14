@@ -50,6 +50,13 @@ urlpatterns = [
         name="budget-center-detail"
     ),
 
+    # Purchase Request Categories (Slice F11-A - employee-facing lookup)
+    path(
+        "purchase-request-categories/",
+        purchase_request_views.purchase_request_categories_list,
+        name="purchase-request-category-list"
+    ),
+
     # Purchase Requests (redesigned workflow)
     path(
         "requests/",

@@ -16,22 +16,17 @@ from rest_framework.decorators import api_view
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from shared.domain.exceptions import (
-    AuthorizationError,
-    BusinessRuleViolationError,
-    ConflictError,
-    DomainException,
-    NotFoundError,
-    ValidationError,
-)
-
 from modules.procurement.api.actors import actor_from_request, requester_identity
 from modules.procurement.api.purchase_request_serializers import (
     CreatePurchaseRequestInputSerializer,
     ListPurchaseRequestsQuerySerializer,
+    PurchaseRequestCategorySerializer,
     PurchaseRequestListSerializer,
     PurchaseRequestSerializer,
     RejectPurchaseRequestInputSerializer,
+)
+from modules.procurement.application.authorization import (
+    PurchaseRequestAuthorizationPolicy,
 )
 from modules.procurement.application.use_cases import (
     ApprovePurchaseRequestByDepartmentHead,
@@ -39,6 +34,7 @@ from modules.procurement.application.use_cases import (
     CorrectAndResubmitPurchaseRequest,
     CreatePurchaseRequest,
     CreatePurchaseRequestDTO,
+    ListActivePurchaseRequestCategories,
     ListPurchaseRequests,
     ProcessPurchaseRequestByProcurement,
     PurchaseRequestItemDTO,
@@ -48,20 +44,29 @@ from modules.procurement.application.use_cases import (
     VerifyPurchaseRequestByAccounts,
     ViewPurchaseRequest,
 )
-from modules.procurement.application.authorization import (
-    PurchaseRequestAuthorizationPolicy,
-)
 from modules.procurement.infrastructure.persistence.django_organizational_directory import (
     DjangoOrganizationalDirectory,
 )
+from modules.procurement.infrastructure.persistence.django_purchase_request_category_repository import (
+    DjangoPurchaseRequestCategoryRepository,
+)
 from modules.procurement.infrastructure.persistence.django_purchase_request_repository import (
     DjangoPurchaseRequestRepository,
+)
+from shared.domain.exceptions import (
+    AuthorizationError,
+    BusinessRuleViolationError,
+    ConflictError,
+    DomainException,
+    NotFoundError,
+    ValidationError,
 )
 
 # Composition root for the purchase request slice.
 _repository = DjangoPurchaseRequestRepository()
 _directory = DjangoOrganizationalDirectory()
 _policy = PurchaseRequestAuthorizationPolicy(directory=_directory)
+_category_repository = DjangoPurchaseRequestCategoryRepository()
 
 
 def _handle_domain_error(exc: DomainException) -> Response:
@@ -139,20 +144,48 @@ def purchase_request_list(request: Request) -> Response:
                 quantity=item["quantity"],
                 expected_delivery_period=item["expected_delivery_period"],
                 estimated_cost=Decimal(item["estimated_cost"]),
-                budget_code_id=item["budget_code_id"],
+                # Exactly one of these is present per item - enforced by
+                # PurchaseRequestItemInputSerializer.validate() above, both
+                # optional here since a plain dict lookup would otherwise
+                # KeyError on whichever one the employee didn't supply.
+                budget_code_id=item.get("budget_code_id"),
+                category_id=item.get("category_id"),
             )
             for item in serializer.validated_data["items"]
         ],
     )
 
     try:
-        result = CreatePurchaseRequest(_repository, _policy).execute(dto, actor)
+        result = CreatePurchaseRequest(
+            _repository, _policy, _category_repository
+        ).execute(dto, actor)
     except DomainException as exc:
         return _handle_domain_error(exc)
 
     return Response(
         PurchaseRequestSerializer(result).data, status=status.HTTP_201_CREATED
     )
+
+
+@api_view(["GET"])
+def purchase_request_categories_list(request: Request) -> Response:
+    """
+    List the Purchase Request categories currently selectable by the caller
+    (Slice F11-A).
+
+    Employee-facing only: id + name, nothing about the underlying
+    AccountChart row. Requires the same capability as raising a request
+    (see PurchaseRequestAuthorizationPolicy.authorize_list_categories) -
+    this is deliberately not routed through /api/v2/accounts/*, which
+    ordinary requesters are not, and should not be, granted access to.
+    """
+    use_case = ListActivePurchaseRequestCategories(_category_repository, _policy)
+    try:
+        results = use_case.execute(actor_from_request(request))
+    except DomainException as exc:
+        return _handle_domain_error(exc)
+
+    return Response(PurchaseRequestCategorySerializer(results, many=True).data)
 
 
 @api_view(["GET"])

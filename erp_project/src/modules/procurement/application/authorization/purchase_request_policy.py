@@ -9,8 +9,6 @@ It never decides whether a state transition is legal - that stays with the
 PurchaseRequest aggregate, which is invoked after authorization passes.
 """
 
-from shared.domain.exceptions import AuthorizationError
-
 from modules.procurement.application.authorization.actor import Actor
 from modules.procurement.application.authorization.permissions import (
     PurchaseRequestListScope,
@@ -19,6 +17,7 @@ from modules.procurement.application.authorization.permissions import (
 from modules.procurement.application.interfaces import IOrganizationalDirectory
 from modules.procurement.domain.entities import PurchaseRequest
 from modules.procurement.domain.value_objects import RequestStatus
+from shared.domain.exceptions import AuthorizationError
 
 
 class PurchaseRequestAuthorizationPolicy:
@@ -75,6 +74,18 @@ class PurchaseRequestAuthorizationPolicy:
                     "requester_id": requester_id,
                 },
             )
+
+    def authorize_list_categories(self, actor: Actor | None) -> None:
+        """
+        Listing Purchase Request categories (Slice F11-A) requires the same
+        capability as raising a request. Deliberately not a new permission:
+        seeing the category list is only useful to someone who could use one
+        to create a request, and every role granted CREATE already needs to
+        see it - introducing a separate category-view permission would just
+        be a second knob that has to be kept in sync with the first.
+        """
+        self.require_authenticated(actor)
+        self._require_permission(actor, PurchaseRequestPermissions.CREATE)
 
     def authorize_view(
         self,

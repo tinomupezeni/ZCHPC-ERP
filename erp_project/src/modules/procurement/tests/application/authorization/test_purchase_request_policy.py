@@ -12,36 +12,40 @@ Follows existing project conventions:
 - Mock repository injected via constructor
 """
 
-import pytest
-from unittest.mock import Mock
 from decimal import Decimal
+from unittest.mock import Mock
 
-from shared.domain.exceptions import AuthorizationError, NotFoundError, ValidationError
+import pytest
+
 from modules.identity.domain.value_objects import PermissionSet
-from modules.procurement.domain.entities import PurchaseRequest, PurchaseRequestItem
-from modules.procurement.domain.value_objects import RequestStatus
 from modules.procurement.application.authorization import (
     Actor,
     PurchaseRequestAuthorizationPolicy,
+)
+from modules.procurement.application.authorization import (
     PurchaseRequestListScope as Scope,
+)
+from modules.procurement.application.authorization import (
     PurchaseRequestPermissions as P,
 )
 from modules.procurement.application.use_cases import (
-    CreatePurchaseRequest,
-    ListPurchaseRequests,
-    CreatePurchaseRequestDTO,
-    PurchaseRequestItemDTO,
-    ViewPurchaseRequest,
-    SubmitPurchaseRequest,
     ApprovePurchaseRequestByDepartmentHead,
-    VerifyPurchaseRequestByAccounts,
-    RecommendPurchaseRequestByGM,
     ApprovePurchaseRequestByDirector,
-    ProcessPurchaseRequestByProcurement,
-    RejectPurchaseRequest,
     CorrectAndResubmitPurchaseRequest,
+    CreatePurchaseRequest,
+    CreatePurchaseRequestDTO,
+    ListPurchaseRequests,
+    ProcessPurchaseRequestByProcurement,
+    PurchaseRequestItemDTO,
+    RecommendPurchaseRequestByGM,
+    RejectPurchaseRequest,
+    SubmitPurchaseRequest,
+    VerifyPurchaseRequestByAccounts,
+    ViewPurchaseRequest,
 )
-
+from modules.procurement.domain.entities import PurchaseRequest, PurchaseRequestItem
+from modules.procurement.domain.value_objects import RequestStatus
+from shared.domain.exceptions import AuthorizationError, NotFoundError, ValidationError
 
 # Organizational fixture used throughout:
 #   IT department (id 10)      - head #2, requester #1, non-head colleague #6
@@ -113,6 +117,13 @@ def repository():
 
 
 @pytest.fixture
+def category_repository():
+    """Unused by every test in this file - none exercise category_id - but
+    CreatePurchaseRequest requires the collaborator to be constructed."""
+    return Mock()
+
+
+@pytest.fixture
 def directory():
     """#2 heads IT, #3 heads Finance; #1 and #6 are ordinary IT staff."""
     return StubDirectory(
@@ -169,8 +180,8 @@ class TestUnauthenticatedActor:
 
         repository.save.assert_not_called()
 
-    def test_anonymous_create_is_denied(self, repository, policy):
-        use_case = CreatePurchaseRequest(repository, policy)
+    def test_anonymous_create_is_denied(self, repository, policy, category_repository):
+        use_case = CreatePurchaseRequest(repository, policy, category_repository)
         dto = CreatePurchaseRequestDTO(
             requester_id=REQUESTER_ID,
             requester_name="John Doe",
@@ -230,30 +241,34 @@ class TestCreateAuthorization:
             ],
         )
 
-    def test_actor_without_create_permission_is_denied(self, repository, policy, dto):
+    def test_actor_without_create_permission_is_denied(
+        self, repository, policy, category_repository, dto
+    ):
         actor = make_actor(REQUESTER_ID, [P.VIEW], IT_DEPARTMENT_ID)
 
         with pytest.raises(AuthorizationError) as exc:
-            CreatePurchaseRequest(repository, policy).execute(dto, actor)
+            CreatePurchaseRequest(repository, policy, category_repository).execute(dto, actor)
 
         assert exc.value.code == "PERMISSION_DENIED"
         repository.save.assert_not_called()
 
-    def test_actor_with_create_permission_is_allowed(self, repository, policy, dto):
+    def test_actor_with_create_permission_is_allowed(
+        self, repository, policy, category_repository, dto
+    ):
         actor = make_actor(REQUESTER_ID, [P.CREATE], IT_DEPARTMENT_ID)
 
-        result = CreatePurchaseRequest(repository, policy).execute(dto, actor)
+        result = CreatePurchaseRequest(repository, policy, category_repository).execute(dto, actor)
 
         assert result.requester_id == REQUESTER_ID
         repository.save.assert_called_once()
 
     def test_cannot_raise_a_request_in_somebody_elses_name(
-        self, repository, policy, dto
+        self, repository, policy, category_repository, dto
     ):
         actor = make_actor(2, [P.CREATE], IT_DEPARTMENT_ID)
 
         with pytest.raises(AuthorizationError) as exc:
-            CreatePurchaseRequest(repository, policy).execute(dto, actor)
+            CreatePurchaseRequest(repository, policy, category_repository).execute(dto, actor)
 
         assert exc.value.code == "REQUESTER_MISMATCH"
         repository.save.assert_not_called()

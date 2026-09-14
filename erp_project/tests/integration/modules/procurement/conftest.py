@@ -15,9 +15,10 @@ middleware overrides and no role-name tricks are needed.
 
 from decimal import Decimal
 
-import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
+
+import pytest
 from rest_framework_simplejwt.tokens import AccessToken
 
 from modules.accounts.infrastructure.persistence.models import AccountChart
@@ -32,6 +33,11 @@ from modules.procurement.application.authorization import (
 )
 from modules.procurement.infrastructure.persistence.models import (
     PurchaseRequest as PurchaseRequestModel,
+)
+from modules.procurement.infrastructure.persistence.models import (
+    PurchaseRequestCategory as PurchaseRequestCategoryModel,
+)
+from modules.procurement.infrastructure.persistence.models import (
     PurchaseRequestItem as PurchaseRequestItemModel,
 )
 
@@ -61,6 +67,34 @@ def departments(db):
 def budget_code(db):
     return AccountChart.objects.create(
         code="1001", name="Hardware", account_type="regular"
+    )
+
+
+@pytest.fixture
+def category_url():
+    """Base path for the Purchase Request category lookup (Slice F11-A)."""
+    return "/api/v2/procurement/purchase-request-categories/"
+
+
+@pytest.fixture
+def category(db):
+    """An active Purchase Request category, mapped to its own AccountChart row."""
+    account = AccountChart.objects.create(
+        code="20000/01/101/021/300", name="IT Consumables", account_type="regular"
+    )
+    return PurchaseRequestCategoryModel.objects.create(
+        name="IT Consumables", account_chart=account, is_active=True
+    )
+
+
+@pytest.fixture
+def inactive_category(db):
+    """A Purchase Request category that exists but may no longer be selected."""
+    account = AccountChart.objects.create(
+        code="20000/01/101/022/300", name="Software Subscriptions", account_type="regular"
+    )
+    return PurchaseRequestCategoryModel.objects.create(
+        name="Software Subscriptions", account_chart=account, is_active=False
     )
 
 

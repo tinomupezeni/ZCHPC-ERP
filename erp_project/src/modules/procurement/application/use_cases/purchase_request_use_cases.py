@@ -16,10 +16,7 @@ remains authoritative over which state transitions are legal.
 
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import List
 
-from shared.domain.exceptions import NotFoundError
-from modules.procurement.domain.entities import PurchaseRequest, PurchaseRequestItem
 from modules.procurement.application.authorization import (
     Actor,
     PurchaseRequestAuthorizationPolicy,
@@ -27,19 +24,34 @@ from modules.procurement.application.authorization import (
 )
 from modules.procurement.application.interfaces import (
     IOrganizationalDirectory,
+    IPurchaseRequestCategoryRepository,
     IPurchaseRequestRepository,
 )
+from modules.procurement.domain.entities import PurchaseRequest, PurchaseRequestItem
+from shared.domain.exceptions import NotFoundError, ValidationError
 
 
 @dataclass
 class PurchaseRequestItemDTO:
-    """DTO for creating a purchase request item."""
+    """
+    DTO for creating a purchase request item.
+
+    Exactly one of category_id/budget_code_id must be supplied per item -
+    CreatePurchaseRequest resolves category_id to a budget_code_id itself
+    (Slice F11-A); neither field is meant to be optional in the sense of
+    "may be left out entirely". budget_code_id stays direct-FK, unchanged
+    from before this slice, for callers that already know the exact
+    AccountChart row (e.g. back-office/admin use) - see
+    CreatePurchaseRequest._resolve_budget_code_id for exactly how the two
+    inputs are reconciled and which one wins if both are somehow present.
+    """
 
     description: str
     quantity: int
     expected_delivery_period: str
     estimated_cost: Decimal
-    budget_code_id: int
+    budget_code_id: int | None = None
+    category_id: int | None = None
 
 
 @dataclass
@@ -52,7 +64,7 @@ class CreatePurchaseRequestDTO:
     department_name: str
     designation: str
     contact: str
-    items: List[PurchaseRequestItemDTO] = field(default_factory=list)
+    items: list[PurchaseRequestItemDTO] = field(default_factory=list)
 
 
 class BasePurchaseRequestUseCase:
@@ -87,6 +99,25 @@ class BasePurchaseRequestUseCase:
 
 
 class CreatePurchaseRequest(BasePurchaseRequestUseCase):
+    """
+    Creates a draft purchase request.
+
+    category_repository is what makes Slice F11-A's employee-facing category
+    selection possible: each item's category_id (if supplied) is resolved to
+    a concrete budget_code_id here, before the domain entity is ever built.
+    PurchaseRequestItem itself is unchanged - it still only ever receives a
+    plain budget_code_id int, exactly as before this slice.
+    """
+
+    def __init__(
+        self,
+        repository: IPurchaseRequestRepository,
+        policy: PurchaseRequestAuthorizationPolicy,
+        category_repository: IPurchaseRequestCategoryRepository,
+    ) -> None:
+        super().__init__(repository, policy)
+        self.category_repository = category_repository
+
     def execute(self, dto: CreatePurchaseRequestDTO, actor: Actor) -> PurchaseRequest:
         self.policy.authorize_create(actor, requester_id=dto.requester_id)
 
@@ -105,11 +136,50 @@ class CreatePurchaseRequest(BasePurchaseRequestUseCase):
                 quantity=item_dto.quantity,
                 expected_delivery_period=item_dto.expected_delivery_period,
                 estimated_cost=item_dto.estimated_cost,
-                budget_code_id=item_dto.budget_code_id,
+                budget_code_id=self._resolve_budget_code_id(item_dto),
             )
             request.add_item(item)
 
         return self.repository.save(request)
+
+    def _resolve_budget_code_id(self, item_dto: "PurchaseRequestItemDTO") -> int:
+        """
+        Resolve one item's budget_code_id.
+
+        category_id always wins when present, even if budget_code_id was
+        also somehow supplied on the same item: the employee-facing category
+        path must be the one actually in control of the resulting GL
+        account, not whatever the client additionally sent. This is the
+        enforcement point for "an ordinary employee must not be able to
+        choose an arbitrary AccountChart ID" - not the serializer, which is
+        just the first line of defence.
+
+        No keyword matching, no description-based inference, no AccountChart
+        code-prefix or account_type logic - the category->account mapping in
+        PurchaseRequestCategory is the sole, Finance-curated source of truth
+        (see the F11 investigation for why those alternatives were rejected).
+        """
+        if item_dto.category_id is not None:
+            category = self.category_repository.get_by_id(item_dto.category_id)
+            if category is None:
+                raise ValidationError(
+                    f"Purchase request category {item_dto.category_id} does not exist",
+                    code="CATEGORY_NOT_FOUND",
+                )
+            if not category.is_active:
+                raise ValidationError(
+                    f"Purchase request category {item_dto.category_id} is not active",
+                    code="CATEGORY_INACTIVE",
+                )
+            return category.account_chart_id
+
+        if item_dto.budget_code_id is not None:
+            return item_dto.budget_code_id
+
+        raise ValidationError(
+            "Each item requires either category_id or budget_code_id",
+            code="MISSING_BUDGET_CLASSIFICATION",
+        )
 
 
 class ViewPurchaseRequest(BasePurchaseRequestUseCase):
@@ -144,7 +214,7 @@ class ListPurchaseRequests(BasePurchaseRequestUseCase):
         self,
         actor: Actor,
         scope: PurchaseRequestListScope = PurchaseRequestListScope.MINE,
-    ) -> List[PurchaseRequest]:
+    ) -> list[PurchaseRequest]:
         self.policy.authorize_list(actor, scope)
 
         if scope is PurchaseRequestListScope.MINE:
@@ -157,8 +227,8 @@ class ListPurchaseRequests(BasePurchaseRequestUseCase):
         return _QUEUE_READERS[scope](self.repository)
 
     def _only_headed_departments(
-        self, actor: Actor, requests: List[PurchaseRequest]
-    ) -> List[PurchaseRequest]:
+        self, actor: Actor, requests: list[PurchaseRequest]
+    ) -> list[PurchaseRequest]:
         """
         Narrow the department head queue to what this actor could act on.
 

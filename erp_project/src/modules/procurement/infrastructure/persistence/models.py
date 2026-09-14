@@ -145,7 +145,7 @@ class PurchaseRequest(models.Model):
         return super().save(*args, **kwargs)
 
     def __str__(self):
-        return self.requisition_number or f'PR (unsaved)'
+        return self.requisition_number or 'PR (unsaved)'
 
 
 class PurchaseRequestItem(models.Model):
@@ -199,6 +199,57 @@ class PurchaseRequestItem(models.Model):
 
     def __str__(self):
         return f"{self.description[:50]} x {self.quantity}"
+
+
+class PurchaseRequestCategory(models.Model):
+    """
+    Employee-facing Purchase Request category (Slice F11-A).
+
+    This is the mapping foundation described in the F11 investigation:
+    PurchaseRequestCategory -> AccountChart. It exists so an employee can
+    pick a plain-language category ("IT Consumables") instead of a raw GL
+    code - AccountChart remains the sole source of truth for the account
+    itself (code, name, external_account_type); nothing here duplicates
+    those fields, only references the row via account_chart_id.
+
+    The mapping is Finance-curated, not inferred: there is deliberately no
+    keyword matching, code-prefix logic, or description-based guessing
+    anywhere in how a category resolves to an account (see
+    modules.procurement.application.use_cases.purchase_request_use_cases
+    .CreatePurchaseRequest._resolve_budget_code_id). A category with no
+    obvious, unambiguous account is simply not seeded, rather than mapped
+    to a guess - see the F11 investigation's Bucket B/C/D categories and
+    the funding-source-ambiguous ones, none of which are seeded here.
+
+    account_chart is a OneToOneField rather than a plain ForeignKey so two
+    employee-facing categories can never silently point at the same GL
+    account.
+    """
+
+    name = models.CharField(
+        max_length=100, unique=True,
+        help_text='Employee-facing label, e.g. "IT Consumables" - not a GL account name',
+    )
+    account_chart = models.OneToOneField(
+        'accounts.AccountChart', on_delete=models.PROTECT,
+        related_name='purchase_request_category',
+        help_text='The single AccountChart row this category resolves to',
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text='Inactive categories are kept (for historical requests) but cannot be selected for new ones',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'procurement_purchaserequestcategory'
+        verbose_name_plural = 'Purchase request categories'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
 
 class PurchaseRequestAttachment(models.Model):
     """
