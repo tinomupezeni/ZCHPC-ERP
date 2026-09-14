@@ -18,6 +18,7 @@ import {
   Fuel,
   ClipboardCheck,
   Scale,
+  ShoppingBag,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -36,6 +37,7 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
     { path: '/portal', label: 'Dashboard', icon: Home, description: 'Overview & stats' },
     { path: '/portal/attendance', label: 'Attendance', icon: Clock, description: 'Clock in/out' },
     { path: '/portal/leave', label: 'Leave', icon: CalendarDays, description: 'Request time off' },
+    { path: '/portal/purchase-requests', label: 'Purchase Requests', icon: ShoppingBag, description: 'Raise a requisition' },
     { path: '/portal/payslips', label: 'Payslips', icon: FileText, description: 'View earnings' },
     { path: '/portal/fuel-requisitions', label: 'Fuel Requisitions', icon: Fuel, description: 'Submit fuel request' },
     { path: '/portal/stores-requisitions', label: 'Stores Requisitions', icon: ClipboardCheck, description: 'Submit stores request' },
@@ -45,6 +47,7 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
     { path: '/portal', label: 'Dashboard', icon: Home, description: 'HR overview' },
     { path: '/portal/employees', label: 'Employees', icon: Users, description: 'Manage employees' },
     { path: '/portal/leave', label: 'Leave Management', icon: CalendarDays, description: 'Review requests' },
+    { path: '/portal/purchase-requests', label: 'Purchase Requests', icon: ShoppingBag, description: 'Raise a requisition' },
     { path: '/careers', label: 'Recruitment', icon: UserPlus, description: 'Job postings & apps' },
     { path: '/portal/attendance', label: 'Attendance', icon: Clock, description: 'Track records' },
     { path: '/portal/payslips', label: 'My Payslips', icon: FileText, description: 'Your earnings' },
@@ -52,6 +55,7 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
   manager: [
     { path: '/portal', label: 'Dashboard', icon: Home, description: 'Team overview' },
     { path: '/portal/leave', label: 'Leave Approvals', icon: ClipboardList, description: 'Review team leave' },
+    { path: '/portal/purchase-requests', label: 'Purchase Requests', icon: ShoppingBag, description: 'Raise a requisition' },
     { path: '/portal/fuel-requisitions', label: 'Fuel Requisitions', icon: Fuel, description: 'Approve fuel requests' },
     { path: '/portal/stores-requisitions', label: 'Stores Requisitions', icon: ClipboardCheck, description: 'Approve stores requests' },
     { path: '/portal/comparative-schedules', label: 'Comparative Schedules', icon: Scale, description: 'Approve schedules' },
@@ -68,6 +72,7 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
     { path: '/portal/stores-requisitions', label: 'Stores Requisitions', icon: ClipboardCheck, description: 'Approve stores requests' },
     { path: '/portal/comparative-schedules', label: 'Comparative Schedules', icon: Scale, description: 'Approve schedules' },
     { path: '/portal/leave', label: 'Leave', icon: CalendarDays, description: 'Request time off' },
+    { path: '/portal/purchase-requests', label: 'Purchase Requests', icon: ShoppingBag, description: 'Raise a requisition' },
     { path: '/portal/payslips', label: 'My Payslips', icon: FileText, description: 'Your earnings' },
     { path: '/portal/attendance', label: 'Attendance', icon: Clock, description: 'Clock in/out' },
   ],
@@ -80,6 +85,7 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
     { path: '/portal/inventory', label: 'Inventory', icon: Package, description: 'Stock levels' },
     { path: '/portal/suppliers', label: 'Suppliers', icon: Users, description: 'Vendor records' },
     { path: '/portal/leave', label: 'Leave', icon: CalendarDays, description: 'Request time off' },
+    { path: '/portal/purchase-requests', label: 'Purchase Requests', icon: ShoppingBag, description: 'Raise a requisition' },
     { path: '/portal/payslips', label: 'My Payslips', icon: FileText, description: 'Your earnings' },
     { path: '/portal/attendance', label: 'Attendance', icon: Clock, description: 'Clock in/out' },
   ],
@@ -95,6 +101,7 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
     { path: '/portal/reports', label: 'Reports', icon: BarChart2, description: 'System-wide reports' },
     { path: '/portal/attendance', label: 'Attendance', icon: Clock, description: 'Track records' },
     { path: '/portal/leave', label: 'Leave', icon: CalendarDays, description: 'Manage leave' },
+    { path: '/portal/purchase-requests', label: 'Purchase Requests', icon: ShoppingBag, description: 'Raise a requisition' },
     { path: '/portal/settings', label: 'Settings', icon: Settings, description: 'System config' },
   ],
 };
