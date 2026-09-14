@@ -72,6 +72,7 @@ class DjangoDepartmentRepository(IDepartmentRepository):
         self.model.objects.filter(id=department.id).update(
             name=department.name,
             description=department.description or "",
+            head_id=department.head_id,
         )
 
     @transaction.atomic
@@ -86,4 +87,8 @@ class DjangoDepartmentRepository(IDepartmentRepository):
             id=db_dept.id,
             name=db_dept.name,
             description=db_dept.description or "",
+            # .head_id reads the raw foreign key column without a query,
+            # the same way modules.procurement.infrastructure.persistence
+            # .django_organizational_directory already reads it.
+            head_id=db_dept.head_id,
         )
