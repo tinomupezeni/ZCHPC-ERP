@@ -286,19 +286,40 @@ class TestPurchaseRequest:
             request.submit()
 
     def test_total_equals_sum_of_line_costs(self):
-        """Spec #5: Request total equals the SUM of line estimated costs."""
+        """Spec #5: Request total equals the SUM of each line's quantity x unit cost."""
         request = self._make_request()
         request.add_item(self._make_item("Laptop", 2, "2000.00"))
         request.add_item(self._make_item("Mouse", 5, "150.00"))
-        assert request.total_estimated_cost == Decimal("2150.00")
+        # (2 x 2000.00) + (5 x 150.00) = 4000.00 + 750.00
+        assert request.total_estimated_cost == Decimal("4750.00")
 
-    def test_quantity_does_not_multiply_estimated_cost(self):
-        """Spec #6: Quantity does NOT multiply estimated_cost."""
+    def test_quantity_multiplies_estimated_unit_cost(self):
+        """
+        Spec #6 (corrected): estimated_cost is a per-unit price, so quantity
+        DOES multiply it to produce each line's contribution to the total.
+
+        Regression: this previously asserted the opposite (quantity did NOT
+        multiply estimated_cost) - a codified bug that matched a stale
+        domain-property implementation and a stale model docstring, both
+        also fixed alongside this test. A quantity-10, $1.00-unit-cost line
+        rendered as a $1.00 total everywhere instead of $10.00.
+        """
         request = self._make_request()
         request.add_item(self._make_item("Laptop", 10, "10.00"))
         request.add_item(self._make_item("Gadget", 5, "20.00"))
-        # 10.00 + 20.00 = 30.00 (NOT 10*10 + 5*20)
-        assert request.total_estimated_cost == Decimal("30.00")
+        # (10 x 10.00) + (5 x 20.00) = 100.00 + 100.00
+        assert request.total_estimated_cost == Decimal("200.00")
+
+    def test_total_uses_quantity_10_unit_cost_1_equals_10(self):
+        """Regression for the exact reported bug: qty 10 x $1.00 unit cost = $10.00, not $1.00."""
+        request = self._make_request()
+        request.add_item(self._make_item("Widget", 10, "1.00"))
+        assert request.total_estimated_cost == Decimal("10.00")
+
+    def test_total_is_zero_for_a_zero_cost_item(self):
+        request = self._make_request()
+        request.add_item(self._make_item("Free sample", 3, "0.00"))
+        assert request.total_estimated_cost == Decimal("0.00")
 
     def test_submit_draft_to_pending_department_head(self):
         """Spec #7: DRAFT -> PENDING_DEPARTMENT_HEAD works."""
@@ -581,6 +602,118 @@ class TestPurchaseRequest:
             advance_to_stage(request)
             request.reject(99, "Rejected at this stage")
             assert request.status == RequestStatus.REJECTED
+
+    # ---------------------------------------------------------------
+    # replace_items (Slice 2 draft editing)
+    # ---------------------------------------------------------------
+
+    def test_replace_items_succeeds_from_draft(self):
+        request = self._make_request()
+        request.add_item(self._make_item("Original"))
+
+        request.replace_items([self._make_item("Replacement", qty=3, cost="30.00")])
+
+        assert len(request.items) == 1
+        assert request.items[0].description == "Replacement"
+        assert request.total_estimated_cost == Decimal("90.00")  # 3 x $30.00
+
+    def test_replace_items_rejects_from_rejected(self):
+        """
+        Deliberately narrower than add_item/remove_item: a REJECTED request
+        must first be returned to DRAFT via correct_and_resubmit() - Slice 2's
+        application layer does that itself before calling replace_items, so
+        the REJECTED -> DRAFT transition only ever happens together with an
+        actual saved correction.
+        """
+        from shared.domain.exceptions import ValidationError
+
+        request = self._make_request()
+        request.add_item(self._make_item())
+        request.submit()
+        request.reject(2, "Wrong items")
+        assert request.status == RequestStatus.REJECTED
+
+        with pytest.raises(ValidationError, match="REJECTED"):
+            request.replace_items([self._make_item("New")])
+        # Nothing changed.
+        assert request.status == RequestStatus.REJECTED
+        assert request.items[0].description == "Widget"
+
+    def test_replace_items_rejects_from_every_pending_stage_and_processed(self):
+        from shared.domain.exceptions import ValidationError
+
+        for advance_to_stage in [
+            lambda r: None,  # PENDING_DEPARTMENT_HEAD
+            lambda r: r.approve_by_department_head(2),  # PENDING_ACCOUNTS
+            lambda r: (r.approve_by_department_head(2), r.verify_by_accounts(3)),  # PENDING_GM
+            lambda r: (
+                r.approve_by_department_head(2),
+                r.verify_by_accounts(3),
+                r.recommend_by_gm(4),
+            ),  # PENDING_DIRECTOR
+            lambda r: (
+                r.approve_by_department_head(2),
+                r.verify_by_accounts(3),
+                r.recommend_by_gm(4),
+                r.approve_by_director(5),
+            ),  # PENDING_PROCUREMENT
+            lambda r: (
+                r.approve_by_department_head(2),
+                r.verify_by_accounts(3),
+                r.recommend_by_gm(4),
+                r.approve_by_director(5),
+                r.process_by_procurement(6),
+            ),  # PROCESSED
+        ]:
+            request = self._make_request()
+            request.add_item(self._make_item())
+            request.submit()
+            advance_to_stage(request)
+            with pytest.raises(ValidationError):
+                request.replace_items([self._make_item("New")])
+
+    def test_replace_items_error_code_is_request_not_editable(self):
+        from shared.domain.exceptions import ValidationError
+
+        request = self._make_request()
+        request.add_item(self._make_item())
+        request.submit()
+        with pytest.raises(ValidationError) as exc_info:
+            request.replace_items([self._make_item("New")])
+        assert exc_info.value.code == "REQUEST_NOT_EDITABLE"
+
+    def test_replace_items_assigns_request_id_to_each_item(self):
+        request = self._make_request()
+        request._id = 42
+        request.add_item(self._make_item())
+
+        new_item = self._make_item("New")
+        request.replace_items([new_item])
+
+        assert new_item.request_id == 42
+
+    def test_correct_and_resubmit_then_replace_items_is_a_legal_sequence(self):
+        """
+        The exact composition UpdatePurchaseRequestItems performs for a
+        REJECTED request: correct_and_resubmit() first, then replace_items()
+        becomes legal since status is now DRAFT.
+        """
+        request = self._make_request()
+        request.add_item(self._make_item())
+        request.submit()
+        request.reject(2, "Wrong items")
+
+        request.correct_and_resubmit()
+        assert request.status == RequestStatus.DRAFT
+
+        request.replace_items([self._make_item("Corrected", qty=2, cost="20.00")])
+        assert request.status == RequestStatus.DRAFT
+        assert request.items[0].description == "Corrected"
+
+        request.submit()
+        assert request.status == RequestStatus.PENDING_DEPARTMENT_HEAD
+        # The original rejection decision is preserved throughout.
+        assert any(d.decision == DecisionType.REJECTED for d in request.decisions)
 
 
 class TestPurchaseOrder:

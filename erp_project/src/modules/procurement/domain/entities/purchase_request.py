@@ -103,8 +103,10 @@ class PurchaseRequest(AggregateRoot[int]):
 
     @property
     def total_estimated_cost(self) -> Decimal:
-        """Total estimated cost is the sum of the line estimated costs (which are already totals)."""
-        return sum((item.estimated_cost for item in self.items), Decimal("0"))
+        """Sum of each line's quantity x estimated unit cost - estimated_cost is a per-unit price, not a line total."""
+        return sum(
+            (item.quantity * item.estimated_cost for item in self.items), Decimal("0")
+        )
 
     def validate_for_submission(self) -> None:
         if not self.items:
@@ -229,6 +231,28 @@ class PurchaseRequest(AggregateRoot[int]):
             self.updated_at = _utc_now()
             return True
         return False
+
+    def replace_items(self, items: List[PurchaseRequestItem]) -> None:
+        """
+        Replace the entire item collection (Slice 2 draft editing).
+
+        DRAFT only - deliberately narrower than add_item/remove_item's
+        DRAFT-or-REJECTED guard. A REJECTED request must first be returned to
+        DRAFT via correct_and_resubmit(); UpdatePurchaseRequestItems (the
+        application layer) does exactly that immediately before calling this,
+        as one atomic save, so the REJECTED -> DRAFT transition only ever
+        happens together with an actual saved correction - never merely
+        because an employee opened the editor and then walked away.
+        """
+        if self.status != RequestStatus.DRAFT:
+            raise ValidationError(
+                f"Cannot edit items from status {self.status.value}",
+                code="REQUEST_NOT_EDITABLE",
+            )
+        for item in items:
+            item.request_id = self.id
+        self.items = items
+        self.updated_at = _utc_now()
 
     @classmethod
     def create(

@@ -151,19 +151,23 @@ export function PurchaseRequestItemsForm({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor={`cost-${item.key}`}>Estimated Cost (USD)</Label>
+                  <Label htmlFor={`cost-${item.key}`}>Estimated Unit Cost (USD)</Label>
                   <Input
                     id={`cost-${item.key}`}
                     type="number"
                     min={0}
                     step="0.01"
-                    placeholder="0.00"
+                    placeholder="0.00 per unit"
                     value={item.estimated_cost}
                     onChange={(e) => updateItem(item.key, { estimated_cost: e.target.value })}
                     disabled={disabled}
                   />
-                  {itemErrors.estimated_cost && (
+                  {itemErrors.estimated_cost ? (
                     <p className="text-sm text-destructive">{itemErrors.estimated_cost}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Cost per unit - multiplied by quantity below to get the line total.
+                    </p>
                   )}
                 </div>
 

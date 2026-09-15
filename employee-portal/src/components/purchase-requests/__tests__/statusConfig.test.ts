@@ -3,6 +3,7 @@ import {
   STATUS_LABELS,
   STATUS_MESSAGES,
   getActionBucket,
+  getEditCtaLabel,
   getProgressLabel,
   getWaitingHelperLine,
   isActionRequired,
@@ -114,6 +115,27 @@ describe('getProgressLabel', () => {
     expect(getProgressLabel('PENDING_PROCUREMENT')).toBeNull();
     expect(getProgressLabel('PROCESSED')).toBeNull();
     expect(getProgressLabel('REJECTED')).toBeNull();
+  });
+});
+
+describe('getEditCtaLabel', () => {
+  it('returns "Continue Editing" for DRAFT and "Review & Correct" for REJECTED', () => {
+    expect(getEditCtaLabel('DRAFT')).toBe('Continue Editing');
+    expect(getEditCtaLabel('REJECTED')).toBe('Review & Correct');
+  });
+
+  it('returns null for every non-action-required status', () => {
+    const nonActionable: PurchaseRequestStatus[] = [
+      'PENDING_DEPARTMENT_HEAD',
+      'PENDING_ACCOUNTS',
+      'PENDING_GM',
+      'PENDING_DIRECTOR',
+      'PENDING_PROCUREMENT',
+      'PROCESSED',
+    ];
+    for (const status of nonActionable) {
+      expect(getEditCtaLabel(status)).toBeNull();
+    }
   });
 });
 

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { PurchaseRequestDetail } from '../PurchaseRequestDetail';
 import type { PurchaseRequest } from '@/types/purchase-request.types';
 
@@ -23,6 +24,7 @@ function baseRequest(overrides: Partial<PurchaseRequest> = {}): PurchaseRequest 
         expected_delivery_period: '2 weeks',
         estimated_cost: '800.00',
         budget_code_id: 42,
+        category: { id: 5, name: 'IT Equipment', is_active: true },
       },
     ],
     decisions: [
@@ -46,7 +48,7 @@ function baseRequest(overrides: Partial<PurchaseRequest> = {}): PurchaseRequest 
 describe('PurchaseRequestDetail', () => {
   it('shows requester details from the API', () => {
     render(
-      <PurchaseRequestDetail request={baseRequest()} isOpen onClose={vi.fn()} />
+      <PurchaseRequestDetail request={baseRequest()} isOpen onClose={vi.fn()} onEdit={vi.fn()} />
     );
     expect(screen.getByText('Richard Matsika')).toBeInTheDocument();
     expect(screen.getByText('Systems Administrator')).toBeInTheDocument();
@@ -54,19 +56,20 @@ describe('PurchaseRequestDetail', () => {
     expect(screen.getByText('IT Department')).toBeInTheDocument();
   });
 
-  it('shows line items with quantity, delivery period and cost', () => {
+  it('shows line items with quantity, delivery period, unit cost and line total', () => {
     render(
-      <PurchaseRequestDetail request={baseRequest()} isOpen onClose={vi.fn()} />
+      <PurchaseRequestDetail request={baseRequest()} isOpen onClose={vi.fn()} onEdit={vi.fn()} />
     );
     expect(screen.getByText('Laptop')).toBeInTheDocument();
     expect(screen.getByText('Qty: 1')).toBeInTheDocument();
     expect(screen.getByText('Delivery: 2 weeks')).toBeInTheDocument();
-    expect(screen.getByText('Cost: $800.00')).toBeInTheDocument();
+    expect(screen.getByText('Unit Cost: $800.00')).toBeInTheDocument();
+    expect(screen.getByText('Line Total: $800.00')).toBeInTheDocument();
   });
 
   it('shows the total estimated cost and a human-friendly current status', () => {
     render(
-      <PurchaseRequestDetail request={baseRequest()} isOpen onClose={vi.fn()} />
+      <PurchaseRequestDetail request={baseRequest()} isOpen onClose={vi.fn()} onEdit={vi.fn()} />
     );
     expect(screen.getByText('$800.00')).toBeInTheDocument();
     expect(screen.getAllByText('Awaiting Accounts Verification').length).toBeGreaterThan(0);
@@ -75,7 +78,7 @@ describe('PurchaseRequestDetail', () => {
 
   it('shows a status hero explaining what the state means, with no action-implying CTA', () => {
     render(
-      <PurchaseRequestDetail request={baseRequest()} isOpen onClose={vi.fn()} />
+      <PurchaseRequestDetail request={baseRequest()} isOpen onClose={vi.fn()} onEdit={vi.fn()} />
     );
     expect(
       screen.getByText('Approved by your department head — Accounts is now verifying the budget.')
@@ -85,22 +88,29 @@ describe('PurchaseRequestDetail', () => {
     }
   });
 
-  it('shows a "Not Submitted" hero for a draft, with no editing CTA', () => {
+  it('shows a "Not Submitted" hero for a draft, with a "Continue Editing" CTA that opens the editor', async () => {
+    const user = userEvent.setup();
+    const onEdit = vi.fn();
     render(
-      <PurchaseRequestDetail request={baseRequest({ status: 'DRAFT', decisions: [] })} isOpen onClose={vi.fn()} />
+      <PurchaseRequestDetail
+        request={baseRequest({ status: 'DRAFT', decisions: [] })}
+        isOpen
+        onClose={vi.fn()}
+        onEdit={onEdit}
+      />
     );
     expect(screen.getAllByText('Not Submitted').length).toBeGreaterThan(0);
     expect(
       screen.getByText("This request is saved but hasn't been sent for approval yet.")
     ).toBeInTheDocument();
-    for (const name of [/continue/i, /edit/i]) {
-      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
-    }
+
+    await user.click(screen.getByRole('button', { name: /continue editing/i }));
+    expect(onEdit).toHaveBeenCalledWith(1);
   });
 
   it('never renders the raw budget/GL code anywhere', () => {
     render(
-      <PurchaseRequestDetail request={baseRequest()} isOpen onClose={vi.fn()} />
+      <PurchaseRequestDetail request={baseRequest()} isOpen onClose={vi.fn()} onEdit={vi.fn()} />
     );
     // budget_code_id: 42 must never surface as visible text.
     expect(screen.queryByText(/budget_code_id/i)).not.toBeInTheDocument();
@@ -109,7 +119,7 @@ describe('PurchaseRequestDetail', () => {
 
   it('shows the approval workflow read-only, with no approval controls', () => {
     render(
-      <PurchaseRequestDetail request={baseRequest()} isOpen onClose={vi.fn()} />
+      <PurchaseRequestDetail request={baseRequest()} isOpen onClose={vi.fn()} onEdit={vi.fn()} />
     );
     expect(screen.getByText('Approval Workflow')).toBeInTheDocument();
     expect(screen.getByText('Department Head')).toBeInTheDocument();
@@ -126,7 +136,7 @@ describe('PurchaseRequestDetail', () => {
 
   it('marks reached stages as decided and later stages as not reached', () => {
     render(
-      <PurchaseRequestDetail request={baseRequest()} isOpen onClose={vi.fn()} />
+      <PurchaseRequestDetail request={baseRequest()} isOpen onClose={vi.fn()} onEdit={vi.fn()} />
     );
     // Department Head already approved; the request is now pending Accounts.
     const stages = screen.getByText('Approval Workflow').closest('div')!;
@@ -148,7 +158,7 @@ describe('PurchaseRequestDetail', () => {
         },
       ],
     });
-    render(<PurchaseRequestDetail request={rejected} isOpen onClose={vi.fn()} />);
+    render(<PurchaseRequestDetail request={rejected} isOpen onClose={vi.fn()} onEdit={vi.fn()} />);
 
     // "Correction Required" is the employee-facing status (badge + hero);
     // "Rejected" is retained only to describe the historical decision event
@@ -162,7 +172,9 @@ describe('PurchaseRequestDetail', () => {
     expect(screen.queryByText('Completed')).not.toBeInTheDocument();
   });
 
-  it('does not render any editing/correction/resubmission CTA for a rejected request', () => {
+  it('shows a "Review & Correct" CTA for a rejected request that opens the editor', async () => {
+    const user = userEvent.setup();
+    const onEdit = vi.fn();
     const rejected = baseRequest({
       status: 'REJECTED',
       decisions: [
@@ -176,16 +188,24 @@ describe('PurchaseRequestDetail', () => {
         },
       ],
     });
-    render(<PurchaseRequestDetail request={rejected} isOpen onClose={vi.fn()} />);
+    render(<PurchaseRequestDetail request={rejected} isOpen onClose={vi.fn()} onEdit={onEdit} />);
 
-    for (const name of [/continue/i, /edit/i, /\bcorrect\b/i, /resubmit/i]) {
+    await user.click(screen.getByRole('button', { name: /review & correct/i }));
+    expect(onEdit).toHaveBeenCalledWith(1);
+  });
+
+  it('does not render an editing CTA for a non-actionable (waiting) status', () => {
+    render(
+      <PurchaseRequestDetail request={baseRequest()} isOpen onClose={vi.fn()} onEdit={vi.fn()} />
+    );
+    for (const name of [/continue editing/i, /review & correct/i]) {
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
     }
   });
 
   it('shows procurement info only once actually returned by the API', () => {
     const { rerender } = render(
-      <PurchaseRequestDetail request={baseRequest()} isOpen onClose={vi.fn()} />
+      <PurchaseRequestDetail request={baseRequest()} isOpen onClose={vi.fn()} onEdit={vi.fn()} />
     );
     expect(screen.queryByText('Procurement')).not.toBeInTheDocument();
 
@@ -204,6 +224,7 @@ describe('PurchaseRequestDetail', () => {
         })}
         isOpen
         onClose={vi.fn()}
+        onEdit={vi.fn()}
       />
     );
     expect(screen.getByText('Procurement')).toBeInTheDocument();
@@ -211,5 +232,93 @@ describe('PurchaseRequestDetail', () => {
     // "Completed" appears twice by design: the status hero, and the
     // Procurement section's own status line.
     expect(screen.getAllByText('Completed').length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('PurchaseRequestDetail - line total calculation (regression)', () => {
+  // estimated_cost is a per-unit price; the line total is quantity x that
+  // unit cost. A prior bug displayed the raw unit cost as if it were
+  // already the line total (and the same bug existed server-side in
+  // total_estimated_cost), so qty=10 x $1.00 rendered as "$1.00" instead of
+  // "$10.00" everywhere this data was shown.
+  it('multiplies quantity by unit cost for the line total: qty 10 x $1.00 = $10.00', () => {
+    const request = baseRequest({
+      total_estimated_cost: '10.00',
+      items: [
+        {
+          id: 1,
+          description: 'Widget',
+          quantity: 10,
+          expected_delivery_period: '1 week',
+          estimated_cost: '1.00',
+          budget_code_id: 42,
+          category: null,
+        },
+      ],
+    });
+    render(<PurchaseRequestDetail request={request} isOpen onClose={vi.fn()} onEdit={vi.fn()} />);
+
+    expect(screen.getByText('Unit Cost: $1.00')).toBeInTheDocument();
+    expect(screen.getByText('Line Total: $10.00')).toBeInTheDocument();
+    expect(screen.queryByText('Line Total: $1.00')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Total Estimated Cost').closest('div')
+    ).toHaveTextContent('$10.00');
+  });
+
+  it('computes each line independently across multiple items with different quantities and costs', () => {
+    const request = baseRequest({
+      total_estimated_cost: '4750.00',
+      items: [
+        {
+          id: 1,
+          description: 'Laptop',
+          quantity: 2,
+          expected_delivery_period: '2 weeks',
+          estimated_cost: '2000.00',
+          budget_code_id: 42,
+          category: null,
+        },
+        {
+          id: 2,
+          description: 'Mouse',
+          quantity: 5,
+          expected_delivery_period: '1 week',
+          estimated_cost: '150.00',
+          budget_code_id: 42,
+          category: null,
+        },
+      ],
+    });
+    render(<PurchaseRequestDetail request={request} isOpen onClose={vi.fn()} onEdit={vi.fn()} />);
+
+    expect(screen.getByText('Unit Cost: $2,000.00')).toBeInTheDocument();
+    expect(screen.getByText('Line Total: $4,000.00')).toBeInTheDocument();
+    expect(screen.getByText('Unit Cost: $150.00')).toBeInTheDocument();
+    expect(screen.getByText('Line Total: $750.00')).toBeInTheDocument();
+    expect(
+      screen.getByText('Total Estimated Cost').closest('div')
+    ).toHaveTextContent('$4,750.00');
+  });
+
+  it('renders a $0.00 line total for a zero-cost item without crashing', () => {
+    const request = baseRequest({
+      total_estimated_cost: '0.00',
+      items: [
+        {
+          id: 1,
+          description: 'Free sample',
+          quantity: 3,
+          expected_delivery_period: '1 week',
+          estimated_cost: '0.00',
+          budget_code_id: 42,
+          category: null,
+        },
+      ],
+    });
+    render(<PurchaseRequestDetail request={request} isOpen onClose={vi.fn()} onEdit={vi.fn()} />);
+
+    expect(screen.getByText('Unit Cost: $0.00')).toBeInTheDocument();
+    expect(screen.getByText('Line Total: $0.00')).toBeInTheDocument();
   });
 });

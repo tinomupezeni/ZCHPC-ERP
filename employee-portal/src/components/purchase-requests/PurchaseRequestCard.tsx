@@ -1,14 +1,17 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { CalendarDays } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { CalendarDays, Pencil } from 'lucide-react';
 import { format, formatDistanceToNow, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import type { PurchaseRequestListItem } from '@/types/purchase-request.types';
 import { PurchaseRequestStatusBadge } from './PurchaseRequestStatusBadge';
-import { STATUS_MESSAGES, getWaitingHelperLine, statusTone } from './statusConfig';
+import { STATUS_MESSAGES, getEditCtaLabel, getWaitingHelperLine, statusTone } from './statusConfig';
 
 interface PurchaseRequestCardProps {
   request: PurchaseRequestListItem;
   onView: (id: number) => void;
+  /** Slice 2: opens the edit form for this request. Shown only for DRAFT/REJECTED. */
+  onEdit: (id: number) => void;
 }
 
 const ACCENT_CLASSES: Record<string, string> = {
@@ -46,9 +49,10 @@ function getDateLine(request: PurchaseRequestListItem): string {
   return `${prefix} ${formatDistanceToNow(parseISO(request.created_at), { addSuffix: true })}`;
 }
 
-export function PurchaseRequestCard({ request, onView }: PurchaseRequestCardProps) {
+export function PurchaseRequestCard({ request, onView, onEdit }: PurchaseRequestCardProps) {
   const tone = statusTone(request.status);
   const waitingHelperLine = getWaitingHelperLine(request.status);
+  const editCtaLabel = getEditCtaLabel(request.status);
 
   return (
     <Card
@@ -76,6 +80,21 @@ export function PurchaseRequestCard({ request, onView }: PurchaseRequestCardProp
             </p>
             {waitingHelperLine && (
               <p className="text-xs text-muted-foreground">{waitingHelperLine}</p>
+            )}
+            {editCtaLabel && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(request.id);
+                }}
+              >
+                <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                {editCtaLabel}
+              </Button>
             )}
 
             <div className="flex items-center gap-2 text-sm text-muted-foreground pt-1">

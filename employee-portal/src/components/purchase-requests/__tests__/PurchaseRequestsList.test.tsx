@@ -38,6 +38,7 @@ function baseProps() {
     error: null,
     onRetry: vi.fn(),
     onView: vi.fn(),
+    onEdit: vi.fn(),
     bucketFilter: 'all' as const,
     onBucketFilterChange: vi.fn(),
   };
@@ -97,9 +98,24 @@ describe('PurchaseRequestsList', () => {
     expect(screen.getByText(/no action needed from you/i)).toBeInTheDocument();
   });
 
-  it('does not render any editing/resubmission CTA for a rejected request', () => {
-    render(<PurchaseRequestsList {...baseProps()} />);
-    for (const name of [/continue/i, /edit/i, /\bcorrect\b/i, /resubmit/i]) {
+  it('shows a "Review & Correct" CTA on a rejected request card that opens the editor without opening the detail view', async () => {
+    const user = userEvent.setup();
+    const onEdit = vi.fn();
+    const onView = vi.fn();
+    render(<PurchaseRequestsList {...baseProps()} onEdit={onEdit} onView={onView} />);
+
+    // Exact-anchored: the card itself also has role="button" and its
+    // accessible name is derived from all of its text content (including
+    // this CTA's own label), so an unanchored match would be ambiguous.
+    await user.click(screen.getByRole('button', { name: /^review & correct$/i }));
+    expect(onEdit).toHaveBeenCalledWith(2);
+    expect(onView).not.toHaveBeenCalled();
+  });
+
+  it('does not render an editing CTA for a waiting (non-actionable) request', () => {
+    const waitingOnly: PurchaseRequestListItem[] = [requests[0]];
+    render(<PurchaseRequestsList {...baseProps()} requests={waitingOnly} />);
+    for (const name of [/continue/i, /review & correct/i]) {
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
     }
   });
@@ -137,6 +153,18 @@ describe('PurchaseRequestsList', () => {
     render(<PurchaseRequestsList {...baseProps()} bucketFilter="needs_action" />);
     expect(screen.getByText('PR-0002')).toBeInTheDocument();
     expect(screen.queryByText('PR-0001')).not.toBeInTheDocument();
+  });
+
+  it('renders the server-supplied total_estimated_cost verbatim (regression: no client-side qty math to get wrong)', () => {
+    // The list endpoint never sends item-level quantity/cost - only the
+    // pre-computed aggregate - so the card has no data to recompute a total
+    // from and must simply display what the server sent, e.g. a multi-unit
+    // line (qty 10 x $1.00 unit cost) whose correct total is $10.00.
+    const multiUnit: PurchaseRequestListItem[] = [
+      { ...requests[0], id: 3, requisition_number: 'PR-0003', total_estimated_cost: '10.00' },
+    ];
+    render(<PurchaseRequestsList {...baseProps()} requests={multiUnit} />);
+    expect(screen.getByText('$10.00')).toBeInTheDocument();
   });
 
   it('shows correct bucket counts on the filter buttons', () => {

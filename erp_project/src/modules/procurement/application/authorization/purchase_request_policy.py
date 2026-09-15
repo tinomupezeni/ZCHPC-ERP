@@ -208,6 +208,29 @@ class PurchaseRequestAuthorizationPolicy:
         self._require_permission(actor, PurchaseRequestPermissions.RESUBMIT)
         self._require_requester(actor, request, action="correct and resubmit")
 
+    def authorize_edit(self, actor: Actor | None, request: PurchaseRequest) -> None:
+        """
+        Editing a DRAFT or REJECTED request's items (Slice 2) is the
+        requester's own action. CREATE is reused rather than introducing a
+        new permission - every role that can raise a request already needs
+        to be able to manage it before submission, exactly as it already
+        needs to for create.
+
+        When the request is REJECTED, the use case also performs the
+        REJECTED -> DRAFT transition (by composing correct_and_resubmit()
+        with the item replacement into one atomic save - see
+        UpdatePurchaseRequestItems), so that exact transition's own
+        requirements are layered in here too: CORRECT and RESUBMIT, the same
+        two capabilities authorize_correction_and_resubmission requires for
+        performing it standalone. Editing a plain DRAFT needs neither.
+        """
+        self.require_authenticated(actor)
+        self._require_permission(actor, PurchaseRequestPermissions.CREATE)
+        self._require_requester(actor, request, action="edit")
+        if request.status == RequestStatus.REJECTED:
+            self._require_permission(actor, PurchaseRequestPermissions.CORRECT)
+            self._require_permission(actor, PurchaseRequestPermissions.RESUBMIT)
+
     # ------------------------------------------------------------------
     # Internal checks
     # ------------------------------------------------------------------

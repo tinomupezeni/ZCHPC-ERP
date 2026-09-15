@@ -205,6 +205,21 @@ class IPurchaseRequestCategoryRepository(ABC):
         """Get every category currently selectable by an employee."""
         ...
 
+    @abstractmethod
+    def get_by_account_chart_ids(self, account_chart_ids: set[int]) -> dict[int, PurchaseRequestCategory]:
+        """
+        Categories keyed by the AccountChart id they map to, for the given
+        ids (Slice 2).
+
+        Used to reverse-resolve which employee-facing category, if any, an
+        item's already-persisted budget_code_id corresponds to - so an edit
+        form can pre-select it. An id with no matching category (e.g. an
+        item created via the raw budget_code_id path) is simply absent from
+        the result, not an error. Returns both active and inactive
+        categories - callers decide what an inactive match means for them.
+        """
+        ...
+
 
 class IPurchaseOrderRepository(ABC):
     """Interface for purchase order repository."""

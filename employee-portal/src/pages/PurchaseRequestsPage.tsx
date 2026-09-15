@@ -29,6 +29,10 @@ export function PurchaseRequestsPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
 
+  // Slice 2: the DRAFT/REJECTED request currently open for editing, if any.
+  // null means the "New Requisition" tab is a fresh, blank create form.
+  const [editingRequest, setEditingRequest] = useState<PurchaseRequest | null>(null);
+
   const loadRequests = useCallback(async () => {
     setIsLoading(true);
     setListError(null);
@@ -48,7 +52,7 @@ export function PurchaseRequestsPage() {
     loadRequests();
   }, [loadRequests]);
 
-  const handleSubmitted = (request: PurchaseRequest) => {
+  const handleCreateSubmitted = (request: PurchaseRequest) => {
     setRequests((prev) => [
       {
         id: request.id,
@@ -68,6 +72,13 @@ export function PurchaseRequestsPage() {
     loadRequests();
   };
 
+  /** Slice 2: a save or a submit from the edit form - both return to "My Requests". */
+  const handleEditFinished = () => {
+    setEditingRequest(null);
+    setActiveTab('requests');
+    loadRequests();
+  };
+
   const handleView = async (id: number) => {
     setIsDetailOpen(true);
     setIsDetailLoading(true);
@@ -83,9 +94,35 @@ export function PurchaseRequestsPage() {
     }
   };
 
+  /** Slice 2: "Continue Editing" (DRAFT) / "Review & Correct" (REJECTED), from either the list or the detail dialog. */
+  const handleEdit = async (id: number) => {
+    setIsDetailOpen(false);
+    try {
+      const detail = await purchaseRequestService.getRequest(id);
+      setEditingRequest(detail);
+      setActiveTab('new');
+    } catch (error) {
+      toast.error(getPurchaseRequestErrorMessage(error, 'Failed to load purchase request'));
+    }
+  };
+
+  const handleTabChange = (tab: string) => {
+    if (tab === 'new') {
+      // Choosing "New Requisition" directly always starts a fresh request.
+      setEditingRequest(null);
+    }
+    setActiveTab(tab);
+  };
+
   if (!employee) {
     return null;
   }
+
+  const newTabLabel = editingRequest
+    ? editingRequest.status === 'REJECTED'
+      ? 'Review & Correct'
+      : 'Continue Editing'
+    : 'New Requisition';
 
   return (
     <div className="space-y-6">
@@ -94,14 +131,21 @@ export function PurchaseRequestsPage() {
         description="Raise and track your purchase requisitions"
       />
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="new">New Requisition</TabsTrigger>
+          <TabsTrigger value="new">{newTabLabel}</TabsTrigger>
           <TabsTrigger value="requests">My Requests</TabsTrigger>
         </TabsList>
 
         <TabsContent value="new" className="mt-4">
-          <PurchaseRequestForm employee={employee} onSubmitted={handleSubmitted} />
+          <PurchaseRequestForm
+            key={editingRequest?.id ?? 'new'}
+            employee={employee}
+            mode={editingRequest ? 'edit' : 'create'}
+            existingRequest={editingRequest ?? undefined}
+            onSubmitted={editingRequest ? handleEditFinished : handleCreateSubmitted}
+            onSaved={editingRequest ? handleEditFinished : handleCreateSubmitted}
+          />
         </TabsContent>
 
         <TabsContent value="requests" className="mt-4">
@@ -111,6 +155,7 @@ export function PurchaseRequestsPage() {
             error={listError}
             onRetry={loadRequests}
             onView={handleView}
+            onEdit={handleEdit}
             bucketFilter={bucketFilter}
             onBucketFilterChange={setBucketFilter}
           />
@@ -122,6 +167,7 @@ export function PurchaseRequestsPage() {
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
         isLoading={isDetailLoading}
+        onEdit={handleEdit}
       />
     </div>
   );

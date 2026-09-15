@@ -4,6 +4,7 @@ import type {
   PurchaseRequestCategory,
   PurchaseRequestListItem,
   CreatePurchaseRequestData,
+  UpdatePurchaseRequestData,
 } from '@/types/purchase-request.types';
 
 export const purchaseRequestService = {
@@ -43,6 +44,17 @@ export const purchaseRequestService = {
   /** Step 2: moves a DRAFT request into the approval workflow. */
   async submitRequest(id: number): Promise<PurchaseRequest> {
     const response = await api.post<PurchaseRequest>(`/procurement/requests/${id}/submit/`);
+    return response.data;
+  },
+
+  /**
+   * Slice 2: replace a DRAFT/REJECTED request's entire item collection. A
+   * REJECTED request is returned to DRAFT by the backend as part of this
+   * same call (see UpdatePurchaseRequestItems) - no separate
+   * correct-and-resubmit call is needed from here.
+   */
+  async updateItems(id: number, data: UpdatePurchaseRequestData): Promise<PurchaseRequest> {
+    const response = await api.patch<PurchaseRequest>(`/procurement/requests/${id}/`, data);
     return response.data;
   },
 };

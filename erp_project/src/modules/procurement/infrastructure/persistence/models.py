@@ -152,8 +152,8 @@ class PurchaseRequestItem(models.Model):
     """
     Line item on a purchase request (Section B of the paper form).
 
-    estimated_cost is the TOTAL estimated cost for this line, not a unit cost.
-    Do not multiply by quantity when computing the request total.
+    estimated_cost is a PER-UNIT price. The request's total_estimated_cost
+    is the sum, across items, of quantity x estimated_cost.
     """
 
     purchase_request = models.ForeignKey(

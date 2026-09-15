@@ -13,6 +13,7 @@ Follows existing project conventions:
 """
 
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
@@ -40,6 +41,8 @@ from modules.procurement.application.use_cases import (
     RecommendPurchaseRequestByGM,
     RejectPurchaseRequest,
     SubmitPurchaseRequest,
+    UpdatePurchaseRequestItemDTO,
+    UpdatePurchaseRequestItems,
     VerifyPurchaseRequestByAccounts,
     ViewPurchaseRequest,
 )
@@ -751,6 +754,217 @@ class TestCorrectAndResubmitAuthorization:
         assert exc.value.code == "NOT_REQUESTER"
         assert rejected.status == RequestStatus.REJECTED
         repository.save.assert_not_called()
+
+
+# =============================================================================
+# Edit (Slice 2 draft/rejected item editing)
+# =============================================================================
+
+
+class TestEditAuthorization:
+    """
+    CREATE is reused rather than a new permission (see authorize_edit's
+    docstring). Editing a REJECTED request additionally requires CORRECT and
+    RESUBMIT, the same two capabilities authorize_correction_and_resubmission
+    requires for that exact transition performed standalone - because
+    UpdatePurchaseRequestItems performs it too when the request is REJECTED.
+    """
+
+    @pytest.fixture
+    def active_category(self):
+        return SimpleNamespace(id=1, is_active=True, account_chart_id=5)
+
+    @pytest.fixture
+    def items(self):
+        return [
+            UpdatePurchaseRequestItemDTO(
+                description="Laptop",
+                quantity=1,
+                expected_delivery_period="2 weeks",
+                estimated_cost=Decimal("1500.00"),
+                category_id=1,
+            )
+        ]
+
+    def test_requester_can_edit_own_draft(
+        self, repository, policy, category_repository, active_category, items
+    ):
+        request = make_request(RequestStatus.DRAFT)
+        repository.get_by_id.return_value = request
+        category_repository.get_by_id.return_value = active_category
+        actor = make_actor(REQUESTER_ID, [P.CREATE], IT_DEPARTMENT_ID)
+
+        result = UpdatePurchaseRequestItems(
+            repository, policy, category_repository
+        ).execute(100, items, actor)
+
+        assert result.status == RequestStatus.DRAFT
+        repository.save.assert_called_once()
+
+    def test_editing_a_draft_does_not_require_correct_or_resubmit(
+        self, repository, policy, category_repository, active_category, items
+    ):
+        """CREATE alone is enough for a plain draft edit."""
+        request = make_request(RequestStatus.DRAFT)
+        repository.get_by_id.return_value = request
+        category_repository.get_by_id.return_value = active_category
+        actor = make_actor(REQUESTER_ID, [P.CREATE], IT_DEPARTMENT_ID)
+
+        result = UpdatePurchaseRequestItems(
+            repository, policy, category_repository
+        ).execute(100, items, actor)
+
+        assert result.status == RequestStatus.DRAFT
+
+    def test_actor_without_create_permission_cannot_edit_draft(
+        self, repository, policy, category_repository, items
+    ):
+        repository.get_by_id.return_value = make_request(RequestStatus.DRAFT)
+        actor = make_actor(REQUESTER_ID, [P.VIEW], IT_DEPARTMENT_ID)
+
+        with pytest.raises(AuthorizationError) as exc:
+            UpdatePurchaseRequestItems(
+                repository, policy, category_repository
+            ).execute(100, items, actor)
+
+        assert exc.value.code == "PERMISSION_DENIED"
+        repository.save.assert_not_called()
+
+    def test_another_employee_cannot_edit_someone_elses_draft(
+        self, repository, policy, category_repository, items
+    ):
+        request = make_request(RequestStatus.DRAFT)
+        repository.get_by_id.return_value = request
+        actor = make_actor(2, [P.CREATE], IT_DEPARTMENT_ID)
+
+        with pytest.raises(AuthorizationError) as exc:
+            UpdatePurchaseRequestItems(
+                repository, policy, category_repository
+            ).execute(100, items, actor)
+
+        assert exc.value.code == "NOT_REQUESTER"
+        assert request.status == RequestStatus.DRAFT
+        repository.save.assert_not_called()
+
+    def test_requester_with_correct_and_resubmit_can_edit_own_rejected_request(
+        self, repository, policy, category_repository, active_category, items
+    ):
+        request = make_request(RequestStatus.REJECTED)
+        repository.get_by_id.return_value = request
+        category_repository.get_by_id.return_value = active_category
+        actor = make_actor(
+            REQUESTER_ID, [P.CREATE, P.CORRECT, P.RESUBMIT], IT_DEPARTMENT_ID
+        )
+
+        result = UpdatePurchaseRequestItems(
+            repository, policy, category_repository
+        ).execute(100, items, actor)
+
+        assert result.status == RequestStatus.DRAFT
+        repository.save.assert_called_once()
+
+    def test_requester_without_correct_cannot_edit_rejected_request(
+        self, repository, policy, category_repository, active_category, items
+    ):
+        request = make_request(RequestStatus.REJECTED)
+        repository.get_by_id.return_value = request
+        category_repository.get_by_id.return_value = active_category
+        actor = make_actor(REQUESTER_ID, [P.CREATE, P.RESUBMIT], IT_DEPARTMENT_ID)
+
+        with pytest.raises(AuthorizationError) as exc:
+            UpdatePurchaseRequestItems(
+                repository, policy, category_repository
+            ).execute(100, items, actor)
+
+        assert exc.value.details["required_permission"] == P.CORRECT
+        assert request.status == RequestStatus.REJECTED
+        repository.save.assert_not_called()
+
+    def test_requester_without_resubmit_cannot_edit_rejected_request(
+        self, repository, policy, category_repository, active_category, items
+    ):
+        request = make_request(RequestStatus.REJECTED)
+        repository.get_by_id.return_value = request
+        category_repository.get_by_id.return_value = active_category
+        actor = make_actor(REQUESTER_ID, [P.CREATE, P.CORRECT], IT_DEPARTMENT_ID)
+
+        with pytest.raises(AuthorizationError) as exc:
+            UpdatePurchaseRequestItems(
+                repository, policy, category_repository
+            ).execute(100, items, actor)
+
+        assert exc.value.details["required_permission"] == P.RESUBMIT
+        assert request.status == RequestStatus.REJECTED
+        repository.save.assert_not_called()
+
+    def test_another_employee_cannot_edit_someone_elses_rejected_request(
+        self, repository, policy, category_repository, items
+    ):
+        request = make_request(RequestStatus.REJECTED)
+        repository.get_by_id.return_value = request
+        actor = make_actor(
+            2, [P.CREATE, P.CORRECT, P.RESUBMIT], IT_DEPARTMENT_ID
+        )
+
+        with pytest.raises(AuthorizationError) as exc:
+            UpdatePurchaseRequestItems(
+                repository, policy, category_repository
+            ).execute(100, items, actor)
+
+        assert exc.value.code == "NOT_REQUESTER"
+        assert request.status == RequestStatus.REJECTED
+        repository.save.assert_not_called()
+
+    def test_admin_bypasses_the_requester_check(
+        self, repository, policy, category_repository, active_category, items
+    ):
+        request = make_request(RequestStatus.DRAFT)
+        repository.get_by_id.return_value = request
+        category_repository.get_by_id.return_value = active_category
+        admin = Actor(
+            employee_id=9,
+            permissions=PermissionSet.empty(),
+            role_name="SYSTEM_ADMINISTRATOR",
+        )
+
+        result = UpdatePurchaseRequestItems(
+            repository, policy, category_repository
+        ).execute(100, items, admin)
+
+        assert result.status == RequestStatus.DRAFT
+        repository.save.assert_called_once()
+
+    def test_editing_a_pending_request_is_blocked_by_the_domain_not_authorization(
+        self, repository, policy, category_repository, active_category, items
+    ):
+        """
+        CREATE + requester passes authorization cleanly; the domain's
+        DRAFT-only replace_items guard is what actually blocks this.
+        """
+        request = make_request(RequestStatus.PENDING_ACCOUNTS)
+        repository.get_by_id.return_value = request
+        category_repository.get_by_id.return_value = active_category
+        actor = make_actor(REQUESTER_ID, [P.CREATE], IT_DEPARTMENT_ID)
+
+        with pytest.raises(ValidationError) as exc:
+            UpdatePurchaseRequestItems(
+                repository, policy, category_repository
+            ).execute(100, items, actor)
+
+        assert exc.value.code == "REQUEST_NOT_EDITABLE"
+        assert request.status == RequestStatus.PENDING_ACCOUNTS
+        repository.save.assert_not_called()
+
+    def test_anonymous_actor_cannot_edit(
+        self, repository, policy, category_repository, items
+    ):
+        with pytest.raises(AuthorizationError) as exc:
+            UpdatePurchaseRequestItems(
+                repository, policy, category_repository
+            ).execute(100, items, Actor.anonymous())
+
+        assert exc.value.code == "UNAUTHENTICATED"
+        repository.get_by_id.assert_not_called()
 
 
 # =============================================================================

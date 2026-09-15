@@ -45,3 +45,9 @@ class DjangoPurchaseRequestCategoryRepository(IPurchaseRequestCategoryRepository
     def get_all_active(self) -> list[PurchaseRequestCategory]:
         queryset = PurchaseRequestCategoryModel.objects.filter(is_active=True).order_by("name")
         return [self._to_domain(model) for model in queryset]
+
+    def get_by_account_chart_ids(self, account_chart_ids: set[int]) -> dict[int, PurchaseRequestCategory]:
+        if not account_chart_ids:
+            return {}
+        queryset = PurchaseRequestCategoryModel.objects.filter(account_chart_id__in=account_chart_ids)
+        return {model.account_chart_id: self._to_domain(model) for model in queryset}

@@ -76,6 +76,50 @@ class TestDjangoPurchaseRequestCategoryRepository(TestCase):
 
         assert [c.name for c in results] == sorted(c.name for c in results)
 
+    # -----------------------------------------------------------------
+    # get_by_account_chart_ids (Slice 2 - reverse category resolution)
+    # -----------------------------------------------------------------
+
+    def test_get_by_account_chart_ids_keys_the_result_by_account_chart_id(self):
+        result = self.repository.get_by_account_chart_ids(
+            {self.it_consumables_account.id}
+        )
+
+        assert set(result.keys()) == {self.it_consumables_account.id}
+        assert result[self.it_consumables_account.id].name == "IT Consumables"
+
+    def test_get_by_account_chart_ids_includes_inactive_categories(self):
+        """
+        Unlike get_all_active, this reverse lookup must find an inactive
+        category too - an edit form still needs to know what an old item's
+        category *was*, even if it can no longer be freshly selected.
+        """
+        result = self.repository.get_by_account_chart_ids(
+            {self.discontinued_account.id}
+        )
+
+        assert result[self.discontinued_account.id].name == "Discontinued Category"
+        assert result[self.discontinued_account.id].is_active is False
+
+    def test_get_by_account_chart_ids_omits_unmapped_ids(self):
+        """An id with no matching category is simply absent, not an error."""
+        result = self.repository.get_by_account_chart_ids({999999})
+
+        assert result == {}
+
+    def test_get_by_account_chart_ids_handles_an_empty_set_without_querying(self):
+        assert self.repository.get_by_account_chart_ids(set()) == {}
+
+    def test_get_by_account_chart_ids_batches_multiple_ids_in_one_call(self):
+        result = self.repository.get_by_account_chart_ids(
+            {self.it_consumables_account.id, self.discontinued_account.id, 999999}
+        )
+
+        assert set(result.keys()) == {
+            self.it_consumables_account.id,
+            self.discontinued_account.id,
+        }
+
 
 @pytest.mark.django_db
 class TestPurchaseRequestCategoryModelConstraints(TestCase):

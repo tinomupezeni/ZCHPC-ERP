@@ -34,6 +34,8 @@ from modules.procurement.application.use_cases.purchase_request_use_cases import
     RecommendPurchaseRequestByGM,
     RejectPurchaseRequest,
     SubmitPurchaseRequest,
+    UpdatePurchaseRequestItemDTO,
+    UpdatePurchaseRequestItems,
     VerifyPurchaseRequestByAccounts,
     ViewPurchaseRequest,
 )
@@ -532,3 +534,220 @@ class TestCorrectAndResubmitPurchaseRequest:
 
         assert result.status == RequestStatus.DRAFT
         repository.save.assert_called_once_with(draft_request_with_item)
+
+
+class TestUpdatePurchaseRequestItems:
+    """
+    Tests for the UpdatePurchaseRequestItems use case (Slice 2).
+
+    REJECTED is handled by composing correct_and_resubmit() with
+    replace_items() into one atomic save - see the use case's own docstring.
+    Domain-level guarantees (replace_items is DRAFT-only, correct_and_resubmit
+    is REJECTED-only) are covered in tests/test_entities.py and are only
+    exercised here at the orchestration boundary.
+    """
+
+    def _use_case(self, repository, policy, category_repository):
+        return UpdatePurchaseRequestItems(repository, policy, category_repository)
+
+    def _item(self, **overrides):
+        defaults = {
+            "description": "Keyboard",
+            "quantity": 1,
+            "expected_delivery_period": "2 weeks",
+            "estimated_cost": Decimal("50.00"),
+            "category_id": 1,
+        }
+        defaults.update(overrides)
+        return UpdatePurchaseRequestItemDTO(**defaults)
+
+    def test_updates_an_existing_items_fields(
+        self, repository, policy, category_repository, requester, draft_request_with_item
+    ):
+        repository.get_by_id.return_value = draft_request_with_item
+        # draft_request_with_item's item is never persisted through a real
+        # repository, so it has no id of its own yet - assign one explicitly
+        # so "matching by id" is actually exercised, not vacuously true.
+        draft_request_with_item.items[0]._id = 42
+        existing_id = 42
+
+        result = self._use_case(repository, policy, category_repository).execute(
+            100,
+            [self._item(id=existing_id, description="Updated Laptop", quantity=2)],
+            requester,
+        )
+
+        assert len(result.items) == 1
+        assert result.items[0].id == existing_id
+        assert result.items[0].description == "Updated Laptop"
+        assert result.items[0].quantity == 2
+        assert result.items[0].budget_code_id == 77  # category #1 -> account 77
+        repository.save.assert_called_once_with(draft_request_with_item)
+
+    def test_adds_a_new_item_alongside_the_existing_one(
+        self, repository, policy, category_repository, requester, draft_request_with_item
+    ):
+        repository.get_by_id.return_value = draft_request_with_item
+        draft_request_with_item.items[0]._id = 42
+        existing_id = 42
+
+        result = self._use_case(repository, policy, category_repository).execute(
+            100,
+            [
+                self._item(id=existing_id),
+                self._item(description="Mouse"),  # no id -> new item
+            ],
+            requester,
+        )
+
+        assert len(result.items) == 2
+        descriptions = {item.description for item in result.items}
+        assert descriptions == {"Keyboard", "Mouse"}
+
+    def test_omitting_an_existing_item_removes_it(
+        self, repository, policy, category_repository, requester, draft_request_with_item
+    ):
+        repository.get_by_id.return_value = draft_request_with_item
+
+        result = self._use_case(repository, policy, category_repository).execute(
+            100,
+            [self._item(description="Replacement item, no id")],
+            requester,
+        )
+
+        assert len(result.items) == 1
+        assert result.items[0].description == "Replacement item, no id"
+
+    def test_unknown_category_raises_and_saves_nothing(
+        self, repository, policy, category_repository, requester, draft_request_with_item
+    ):
+        repository.get_by_id.return_value = draft_request_with_item
+
+        with pytest.raises(ValidationError) as exc:
+            self._use_case(repository, policy, category_repository).execute(
+                100, [self._item(category_id=999)], requester
+            )
+
+        assert exc.value.code == "CATEGORY_NOT_FOUND"
+        repository.save.assert_not_called()
+
+    def test_inactive_category_raises_and_saves_nothing(
+        self, repository, policy, category_repository, requester, draft_request_with_item
+    ):
+        repository.get_by_id.return_value = draft_request_with_item
+
+        with pytest.raises(ValidationError) as exc:
+            self._use_case(repository, policy, category_repository).execute(
+                100, [self._item(category_id=2)], requester
+            )
+
+        assert exc.value.code == "CATEGORY_INACTIVE"
+        repository.save.assert_not_called()
+
+    def test_item_id_not_belonging_to_the_request_raises(
+        self, repository, policy, category_repository, requester, draft_request_with_item
+    ):
+        repository.get_by_id.return_value = draft_request_with_item
+
+        with pytest.raises(ValidationError) as exc:
+            self._use_case(repository, policy, category_repository).execute(
+                100, [self._item(id=999999)], requester
+            )
+
+        assert exc.value.code == "ITEM_NOT_FOUND"
+        repository.save.assert_not_called()
+
+    def test_duplicate_item_id_in_the_same_payload_raises(
+        self, repository, policy, category_repository, requester, draft_request_with_item
+    ):
+        repository.get_by_id.return_value = draft_request_with_item
+        draft_request_with_item.items[0]._id = 42
+        existing_id = 42
+
+        with pytest.raises(ValidationError) as exc:
+            self._use_case(repository, policy, category_repository).execute(
+                100,
+                [self._item(id=existing_id), self._item(id=existing_id, description="Other")],
+                requester,
+            )
+
+        assert exc.value.code == "DUPLICATE_ITEM_ID"
+        repository.save.assert_not_called()
+
+    def test_not_found_raises(self, repository, policy, category_repository, requester):
+        repository.get_by_id.return_value = None
+
+        with pytest.raises(NotFoundError):
+            self._use_case(repository, policy, category_repository).execute(
+                999, [self._item()], requester
+            )
+        repository.save.assert_not_called()
+
+    def test_editing_a_pending_request_is_blocked(
+        self, repository, policy, category_repository, requester, draft_request_with_item
+    ):
+        draft_request_with_item.submit()
+        repository.get_by_id.return_value = draft_request_with_item
+
+        with pytest.raises(ValidationError) as exc:
+            self._use_case(repository, policy, category_repository).execute(
+                100, [self._item()], requester
+            )
+
+        assert exc.value.code == "REQUEST_NOT_EDITABLE"
+        assert draft_request_with_item.status == RequestStatus.PENDING_DEPARTMENT_HEAD
+        repository.save.assert_not_called()
+
+    def test_editing_a_rejected_request_transitions_it_to_draft(
+        self, repository, policy, category_repository, requester, draft_request_with_item
+    ):
+        draft_request_with_item.submit()
+        draft_request_with_item.reject(actor_id=25, reason="Wrong budget code")
+        repository.get_by_id.return_value = draft_request_with_item
+
+        result = self._use_case(repository, policy, category_repository).execute(
+            100, [self._item(description="Corrected item")], requester
+        )
+
+        assert result.status == RequestStatus.DRAFT
+        assert result.items[0].description == "Corrected item"
+        # The rejection decision is preserved, not erased by the correction.
+        assert any(d.decision.value == "REJECTED" for d in result.decisions)
+        repository.save.assert_called_once_with(draft_request_with_item)
+
+    def test_a_failed_edit_leaves_a_rejected_request_exactly_as_rejected(
+        self, repository, policy, category_repository, requester, draft_request_with_item
+    ):
+        """
+        The atomicity guarantee: items are validated/resolved *before*
+        correct_and_resubmit() or replace_items() is ever called, so an
+        invalid edit never leaves a REJECTED request silently demoted to an
+        unflagged DRAFT with nothing actually corrected.
+        """
+        draft_request_with_item.submit()
+        draft_request_with_item.reject(actor_id=25, reason="Wrong budget code")
+        repository.get_by_id.return_value = draft_request_with_item
+        original_description = draft_request_with_item.items[0].description
+
+        with pytest.raises(ValidationError) as exc:
+            self._use_case(repository, policy, category_repository).execute(
+                100, [self._item(category_id=999)], requester
+            )
+
+        assert exc.value.code == "CATEGORY_NOT_FOUND"
+        assert draft_request_with_item.status == RequestStatus.REJECTED
+        assert draft_request_with_item.items[0].description == original_description
+        repository.save.assert_not_called()
+
+    def test_description_does_not_influence_category_resolution(
+        self, repository, policy, category_repository, requester, draft_request_with_item
+    ):
+        repository.get_by_id.return_value = draft_request_with_item
+
+        result = self._use_case(repository, policy, category_repository).execute(
+            100,
+            [self._item(category_id=1, description="Unrelated text about fuel and travel")],
+            requester,
+        )
+
+        assert result.items[0].budget_code_id == 77

@@ -85,6 +85,17 @@ export function isActionRequired(status: PurchaseRequestStatus): boolean {
   return status === 'DRAFT' || status === 'REJECTED';
 }
 
+/**
+ * The edit CTA's label for the two action-required statuses (Slice 2 - both
+ * now genuinely lead to an edit form, unlike Slice 1's placeholders). null
+ * for every other status: waiting/completed requests have no edit action.
+ */
+export function getEditCtaLabel(status: PurchaseRequestStatus): string | null {
+  if (status === 'DRAFT') return 'Continue Editing';
+  if (status === 'REJECTED') return 'Review & Correct';
+  return null;
+}
+
 export function getActionBucket(status: PurchaseRequestStatus): ActionBucket {
   if (isActionRequired(status)) return 'needs_action';
   if (status === 'PROCESSED') return 'completed';

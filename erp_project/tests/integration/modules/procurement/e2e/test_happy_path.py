@@ -76,7 +76,8 @@ class TestCompleteHappyPath:
         assert record.contact == "+263771000111"  # snapshot of contact
         assert record.requisition_number.startswith("PR-")
         assert record.status == "PROCESSED"
-        assert record.total_estimated_cost == Decimal("3450.50")
+        # payload: 2 x $3000.00 laptop + 2 x $450.50 docking station
+        assert record.total_estimated_cost == Decimal("6901.00")
         assert record.created_at is not None
         assert record.updated_at is not None
 

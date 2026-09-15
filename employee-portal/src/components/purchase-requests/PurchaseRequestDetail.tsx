@@ -6,7 +6,16 @@ import {
 } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { CheckCircle, Clock, FileEdit, FileText, MinusCircle, XCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  CheckCircle,
+  Clock,
+  FileEdit,
+  FileText,
+  MinusCircle,
+  Pencil,
+  XCircle,
+} from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import type {
@@ -21,6 +30,7 @@ import {
   STATUS_MESSAGES,
   decisionLabel,
   findRejection,
+  getEditCtaLabel,
   getProgressLabel,
   getStageInfo,
   getWaitingHelperLine,
@@ -33,13 +43,28 @@ interface PurchaseRequestDetailProps {
   isOpen: boolean;
   onClose: () => void;
   isLoading?: boolean;
+  /** Slice 2: opens the edit form for this request. Only called for DRAFT/REJECTED. */
+  onEdit: (id: number) => void;
 }
 
-function formatMoney(value: string): string {
-  return `$${Number.parseFloat(value).toLocaleString('en-US', {
+function formatMoney(value: number | string): string {
+  const amount = typeof value === 'number' ? value : Number.parseFloat(value);
+  return `$${amount.toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+}
+
+/**
+ * estimated_cost is a per-unit price (see PurchaseRequestItemsForm) - this
+ * request's own total_estimated_cost is server-computed as the sum of these
+ * per-line totals, so the per-item breakdown here must use the same
+ * quantity x unit cost math rather than showing the raw unit cost alone.
+ * Cents-based to avoid float rounding artifacts, matching draftItem.ts.
+ */
+function lineTotal(item: { quantity: number; estimated_cost: string }): number {
+  const unitCostCents = Math.round(Number.parseFloat(item.estimated_cost) * 100);
+  return (unitCostCents * item.quantity) / 100;
 }
 
 function formatDate(value: string | null): string {
@@ -67,26 +92,43 @@ const HERO_ICON: Record<StatusBadgeTone, React.ComponentType<{ className?: strin
  * sections below. Subsumes what used to be a REJECTED-only alert card -
  * every status now gets an equivalent, appropriately-toned block.
  *
- * No CTA is rendered here by design (F13 Slice 1: presentation only - draft
- * and rejected-request editing are separate, not-yet-implemented slices).
+ * The edit CTA (Slice 2) only ever appears for DRAFT/REJECTED - see
+ * getEditCtaLabel. Every other status stays exactly as presentation-only.
  */
-function StatusHero({ request }: { request: PurchaseRequest }) {
+function StatusHero({
+  request,
+  onEdit,
+}: {
+  request: PurchaseRequest;
+  onEdit: (id: number) => void;
+}) {
   const tone = statusTone(request.status);
   const Icon = HERO_ICON[tone];
   const rejection = findRejection(request);
   const progress = getProgressLabel(request.status);
   const waitingHelperLine = getWaitingHelperLine(request.status);
+  const editCtaLabel = getEditCtaLabel(request.status);
 
   return (
     <div className={cn('rounded-lg border p-4 flex items-start gap-3', HERO_CLASSES[tone])}>
       <Icon className="h-5 w-5 flex-shrink-0 mt-0.5" />
-      <div className="space-y-1">
-        <p className="font-semibold">{STATUS_LABELS[request.status]}</p>
-        <p className="text-sm">
-          {rejection ? rejection.reason || STATUS_MESSAGES.REJECTED : STATUS_MESSAGES[request.status]}
-        </p>
-        {waitingHelperLine && <p className="text-sm">{waitingHelperLine}</p>}
-        {progress && <p className="text-xs opacity-75">{progress}</p>}
+      <div className="space-y-2 flex-1">
+        <div className="space-y-1">
+          <p className="font-semibold">{STATUS_LABELS[request.status]}</p>
+          <p className="text-sm">
+            {rejection
+              ? rejection.reason || STATUS_MESSAGES.REJECTED
+              : STATUS_MESSAGES[request.status]}
+          </p>
+          {waitingHelperLine && <p className="text-sm">{waitingHelperLine}</p>}
+          {progress && <p className="text-xs opacity-75">{progress}</p>}
+        </div>
+        {editCtaLabel && (
+          <Button type="button" size="sm" onClick={() => onEdit(request.id)}>
+            <Pencil className="h-3.5 w-3.5 mr-1.5" />
+            {editCtaLabel}
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -145,6 +187,7 @@ export function PurchaseRequestDetail({
   isOpen,
   onClose,
   isLoading,
+  onEdit,
 }: PurchaseRequestDetailProps) {
   if (!request && !isLoading) return null;
 
@@ -174,7 +217,7 @@ export function PurchaseRequestDetail({
         ) : (
           <ScrollArea className="flex-1 min-h-0">
             <div className="space-y-4 pr-4">
-              <StatusHero request={request} />
+              <StatusHero request={request} onEdit={onEdit} />
 
               {/* Section A: Requester */}
               <div>
@@ -211,7 +254,9 @@ export function PurchaseRequestDetail({
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                         <span>Qty: {item.quantity}</span>
                         <span>Delivery: {item.expected_delivery_period}</span>
-                        <span>Cost: {formatMoney(item.estimated_cost)}</span>
+                        <span>Unit Cost: {formatMoney(item.estimated_cost)}</span>
+                        <span>Line Total: {formatMoney(lineTotal(item))}</span>
+                        {item.category && <span>Category: {item.category.name}</span>}
                       </div>
                     </div>
                   ))}

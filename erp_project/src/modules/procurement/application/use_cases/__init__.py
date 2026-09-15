@@ -16,6 +16,8 @@ from .purchase_request_use_cases import (
     RecommendPurchaseRequestByGM,
     RejectPurchaseRequest,
     SubmitPurchaseRequest,
+    UpdatePurchaseRequestItemDTO,
+    UpdatePurchaseRequestItems,
     VerifyPurchaseRequestByAccounts,
     ViewPurchaseRequest,
 )
@@ -35,5 +37,7 @@ __all__ = [
     "ProcessPurchaseRequestByProcurement",
     "RejectPurchaseRequest",
     "CorrectAndResubmitPurchaseRequest",
+    "UpdatePurchaseRequestItemDTO",
+    "UpdatePurchaseRequestItems",
     "ListActivePurchaseRequestCategories",
 ]

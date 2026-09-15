@@ -24,6 +24,7 @@ from modules.procurement.api.purchase_request_serializers import (
     PurchaseRequestListSerializer,
     PurchaseRequestSerializer,
     RejectPurchaseRequestInputSerializer,
+    UpdatePurchaseRequestInputSerializer,
 )
 from modules.procurement.application.authorization import (
     PurchaseRequestAuthorizationPolicy,
@@ -41,6 +42,8 @@ from modules.procurement.application.use_cases import (
     RecommendPurchaseRequestByGM,
     RejectPurchaseRequest,
     SubmitPurchaseRequest,
+    UpdatePurchaseRequestItemDTO,
+    UpdatePurchaseRequestItems,
     VerifyPurchaseRequestByAccounts,
     ViewPurchaseRequest,
 )
@@ -93,6 +96,31 @@ def _handle_domain_error(exc: DomainException) -> Response:
     return Response({"error": exc.message, "code": exc.code}, status=http_status)
 
 
+def _categories_by_account_chart_id(items) -> dict:
+    """One batched lookup per response instead of one query per item (Slice 2)."""
+    account_chart_ids = {item.budget_code_id for item in items}
+    return _category_repository.get_by_account_chart_ids(account_chart_ids)
+
+
+def _serialize_request(result) -> dict:
+    """
+    The single place a PurchaseRequest becomes a response body, so every
+    response - create, detail, submit, every approval stage, reject,
+    correct-and-resubmit, and now the Slice 2 edit endpoint - consistently
+    includes each item's reverse-resolved category (Slice 2).
+
+    Tolerates result=None: PurchaseRequestSerializer's fields are all
+    read_only (implicitly not required), so DRF already serializes a None
+    instance to a degenerate value rather than raising - existing
+    TestApplicationBoundary tests mock a use case's return value as None to
+    test call-argument wiring only, and rely on exactly that. Building the
+    category map must not be the thing that breaks that tolerance.
+    """
+    items = result.items if result is not None else []
+    context = {"categories_by_account_chart_id": _categories_by_account_chart_id(items)}
+    return PurchaseRequestSerializer(result, context=context).data
+
+
 def _workflow_action(request: Request, request_id: int, use_case_cls) -> Response:
     """Run a no-payload workflow transition and return the updated request."""
     use_case = use_case_cls(_repository, _policy)
@@ -101,7 +129,7 @@ def _workflow_action(request: Request, request_id: int, use_case_cls) -> Respons
     except DomainException as exc:
         return _handle_domain_error(exc)
 
-    return Response(PurchaseRequestSerializer(result).data)
+    return Response(_serialize_request(result))
 
 
 @api_view(["GET", "POST"])
@@ -162,9 +190,7 @@ def purchase_request_list(request: Request) -> Response:
     except DomainException as exc:
         return _handle_domain_error(exc)
 
-    return Response(
-        PurchaseRequestSerializer(result).data, status=status.HTTP_201_CREATED
-    )
+    return Response(_serialize_request(result), status=status.HTTP_201_CREATED)
 
 
 @api_view(["GET"])
@@ -188,16 +214,49 @@ def purchase_request_categories_list(request: Request) -> Response:
     return Response(PurchaseRequestCategorySerializer(results, many=True).data)
 
 
-@api_view(["GET"])
+@api_view(["GET", "PATCH"])
 def purchase_request_detail(request: Request, request_id: int) -> Response:
-    """Retrieve a single purchase request."""
+    """
+    Retrieve a single purchase request, or (PATCH) replace a DRAFT/REJECTED
+    request's entire item collection (Slice 2 - see UpdatePurchaseRequestItems
+    for how REJECTED is handled).
+    """
+    if request.method == "PATCH":
+        serializer = UpdatePurchaseRequestInputSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        dto_items = [
+            UpdatePurchaseRequestItemDTO(
+                id=item.get("id"),
+                description=item["description"],
+                quantity=item["quantity"],
+                expected_delivery_period=item["expected_delivery_period"],
+                estimated_cost=Decimal(item["estimated_cost"]),
+                category_id=item["category_id"],
+            )
+            for item in serializer.validated_data["items"]
+        ]
+
+        update_use_case = UpdatePurchaseRequestItems(
+            _repository, _policy, _category_repository
+        )
+        try:
+            result = update_use_case.execute(
+                request_id, dto_items, actor_from_request(request)
+            )
+        except DomainException as exc:
+            return _handle_domain_error(exc)
+
+        return Response(_serialize_request(result))
+
     use_case = ViewPurchaseRequest(_repository, _policy)
     try:
         result = use_case.execute(request_id, actor_from_request(request))
     except DomainException as exc:
         return _handle_domain_error(exc)
 
-    return Response(PurchaseRequestSerializer(result).data)
+    return Response(_serialize_request(result))
 
 
 @api_view(["POST"])
@@ -275,4 +334,4 @@ def purchase_request_reject(request: Request, request_id: int) -> Response:
     except DomainException as exc:
         return _handle_domain_error(exc)
 
-    return Response(PurchaseRequestSerializer(result).data)
+    return Response(_serialize_request(result))

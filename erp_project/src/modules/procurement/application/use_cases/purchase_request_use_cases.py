@@ -28,7 +28,55 @@ from modules.procurement.application.interfaces import (
     IPurchaseRequestRepository,
 )
 from modules.procurement.domain.entities import PurchaseRequest, PurchaseRequestItem
+from modules.procurement.domain.value_objects import RequestStatus
 from shared.domain.exceptions import NotFoundError, ValidationError
+
+
+def resolve_budget_code_id(
+    category_repository: IPurchaseRequestCategoryRepository,
+    category_id: int | None,
+    budget_code_id: int | None,
+) -> int:
+    """
+    Resolve one item's budget_code_id from either an employee-facing
+    category_id or a direct budget_code_id.
+
+    category_id always wins when present, even if budget_code_id was also
+    somehow supplied: the employee-facing category path must be the one
+    actually in control of the resulting GL account. This is the enforcement
+    point for "an ordinary employee must not be able to choose an arbitrary
+    AccountChart ID" - not the serializer, which is just the first line of
+    defence.
+
+    Shared by CreatePurchaseRequest and UpdatePurchaseRequestItems (Slice 2)
+    so this security-critical rule lives in exactly one place rather than two
+    copies that could silently drift apart. No keyword matching, no
+    description-based inference, no AccountChart code-prefix or account_type
+    logic - PurchaseRequestCategory is the sole, Finance-curated source of
+    truth (see the F11 investigation for why those alternatives were
+    rejected).
+    """
+    if category_id is not None:
+        category = category_repository.get_by_id(category_id)
+        if category is None:
+            raise ValidationError(
+                f"Purchase request category {category_id} does not exist",
+                code="CATEGORY_NOT_FOUND",
+            )
+        if not category.is_active:
+            raise ValidationError(
+                f"Purchase request category {category_id} is not active",
+                code="CATEGORY_INACTIVE",
+            )
+        return category.account_chart_id
+
+    if budget_code_id is not None:
+        return budget_code_id
+
+    raise ValidationError(
+        "Each item requires either category_id or budget_code_id",
+        code="MISSING_BUDGET_CLASSIFICATION",
+    )
 
 
 @dataclass
@@ -143,42 +191,9 @@ class CreatePurchaseRequest(BasePurchaseRequestUseCase):
         return self.repository.save(request)
 
     def _resolve_budget_code_id(self, item_dto: "PurchaseRequestItemDTO") -> int:
-        """
-        Resolve one item's budget_code_id.
-
-        category_id always wins when present, even if budget_code_id was
-        also somehow supplied on the same item: the employee-facing category
-        path must be the one actually in control of the resulting GL
-        account, not whatever the client additionally sent. This is the
-        enforcement point for "an ordinary employee must not be able to
-        choose an arbitrary AccountChart ID" - not the serializer, which is
-        just the first line of defence.
-
-        No keyword matching, no description-based inference, no AccountChart
-        code-prefix or account_type logic - the category->account mapping in
-        PurchaseRequestCategory is the sole, Finance-curated source of truth
-        (see the F11 investigation for why those alternatives were rejected).
-        """
-        if item_dto.category_id is not None:
-            category = self.category_repository.get_by_id(item_dto.category_id)
-            if category is None:
-                raise ValidationError(
-                    f"Purchase request category {item_dto.category_id} does not exist",
-                    code="CATEGORY_NOT_FOUND",
-                )
-            if not category.is_active:
-                raise ValidationError(
-                    f"Purchase request category {item_dto.category_id} is not active",
-                    code="CATEGORY_INACTIVE",
-                )
-            return category.account_chart_id
-
-        if item_dto.budget_code_id is not None:
-            return item_dto.budget_code_id
-
-        raise ValidationError(
-            "Each item requires either category_id or budget_code_id",
-            code="MISSING_BUDGET_CLASSIFICATION",
+        """See resolve_budget_code_id - this is a thin instance-method wrapper."""
+        return resolve_budget_code_id(
+            self.category_repository, item_dto.category_id, item_dto.budget_code_id
         )
 
 
@@ -323,4 +338,97 @@ class CorrectAndResubmitPurchaseRequest(BasePurchaseRequestUseCase):
         self.policy.authorize_correction_and_resubmission(actor, request)
 
         request.correct_and_resubmit()
+        return self.repository.save(request)
+
+
+@dataclass
+class UpdatePurchaseRequestItemDTO:
+    """
+    DTO for one item in a Slice 2 item-collection replacement.
+
+    Unlike PurchaseRequestItemDTO, there is no budget_code_id field at all -
+    this use case is exclusively the employee-facing edit path, so the
+    direct-GL escape hatch CreatePurchaseRequest keeps for back-office
+    callers has no reason to exist here. `id` identifies an existing item on
+    the request to update; leave it None for a new item.
+    """
+
+    description: str
+    quantity: int
+    expected_delivery_period: str
+    estimated_cost: Decimal
+    category_id: int
+    id: int | None = None
+
+
+class UpdatePurchaseRequestItems(BasePurchaseRequestUseCase):
+    """
+    Replace a DRAFT or REJECTED request's entire item collection (Slice 2).
+
+    REJECTED is handled by composing two existing, unmodified, single-purpose
+    domain operations into one atomic save - never by teaching replace_items
+    a second responsibility:
+
+        correct_and_resubmit()  # REJECTED -> DRAFT, only reached here
+        replace_items(...)       # DRAFT-only; now legal either way
+
+    This means the REJECTED -> DRAFT transition only ever happens together
+    with an actual saved correction: if anything below raises (unknown item
+    id, invalid category, ...), it does so before either domain method is
+    called, so a failed edit leaves a REJECTED request exactly as REJECTED as
+    it was, not silently demoted to an unflagged draft.
+    """
+
+    def __init__(
+        self,
+        repository: IPurchaseRequestRepository,
+        policy: PurchaseRequestAuthorizationPolicy,
+        category_repository: IPurchaseRequestCategoryRepository,
+    ) -> None:
+        super().__init__(repository, policy)
+        self.category_repository = category_repository
+
+    def execute(
+        self,
+        request_id: int,
+        items: list[UpdatePurchaseRequestItemDTO],
+        actor: Actor,
+    ) -> PurchaseRequest:
+        request = self._load(request_id, actor)
+        self.policy.authorize_edit(actor, request)
+
+        existing_ids = {item.id for item in request.items}
+        seen_ids: set[int] = set()
+        new_items: list[PurchaseRequestItem] = []
+
+        for item_dto in items:
+            if item_dto.id is not None:
+                if item_dto.id in seen_ids:
+                    raise ValidationError(
+                        f"Duplicate item id {item_dto.id}", code="DUPLICATE_ITEM_ID"
+                    )
+                if item_dto.id not in existing_ids:
+                    raise ValidationError(
+                        f"Item {item_dto.id} does not belong to this request",
+                        code="ITEM_NOT_FOUND",
+                    )
+                seen_ids.add(item_dto.id)
+
+            item = PurchaseRequestItem(
+                description=item_dto.description,
+                quantity=item_dto.quantity,
+                expected_delivery_period=item_dto.expected_delivery_period,
+                estimated_cost=item_dto.estimated_cost,
+                budget_code_id=resolve_budget_code_id(
+                    self.category_repository, item_dto.category_id, None
+                ),
+            )
+            if item_dto.id is not None:
+                item._id = item_dto.id
+            new_items.append(item)
+
+        if request.status == RequestStatus.REJECTED:
+            request.correct_and_resubmit()
+
+        request.replace_items(new_items)
         return self.repository.save(request)

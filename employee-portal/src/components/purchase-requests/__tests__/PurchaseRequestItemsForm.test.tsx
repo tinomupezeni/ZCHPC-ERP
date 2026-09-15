@@ -33,8 +33,16 @@ describe('PurchaseRequestItemsForm', () => {
     expect(screen.getByLabelText('Item Description')).toBeInTheDocument();
     expect(screen.getByLabelText('Quantity')).toBeInTheDocument();
     expect(screen.getByLabelText('Expected Delivery Period')).toBeInTheDocument();
-    expect(screen.getByLabelText('Estimated Cost (USD)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Estimated Unit Cost (USD)')).toBeInTheDocument();
     expect(screen.getByLabelText('Category')).toBeInTheDocument();
+  });
+
+  it('makes the per-unit meaning of the cost field explicit, distinct from the line total', () => {
+    render(<PurchaseRequestItemsForm {...baseProps([createEmptyItem()])} />);
+
+    expect(screen.getByText(/cost per unit/i)).toBeInTheDocument();
+    expect(screen.getByText('Line total:')).toBeInTheDocument();
+    expect(screen.queryByText('Estimated Cost (USD)')).not.toBeInTheDocument();
   });
 
   it('displays the selected category by name only - never a raw AccountChart id or GL code', () => {

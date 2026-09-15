@@ -21,6 +21,8 @@ interface PurchaseRequestsListProps {
   error: string | null;
   onRetry: () => void;
   onView: (id: number) => void;
+  /** Slice 2: opens the edit form for a DRAFT/REJECTED request. */
+  onEdit: (id: number) => void;
   bucketFilter: PurchaseRequestBucketFilter;
   onBucketFilterChange: (bucket: PurchaseRequestBucketFilter) => void;
 }
@@ -38,6 +40,7 @@ export function PurchaseRequestsList({
   error,
   onRetry,
   onView,
+  onEdit,
   bucketFilter,
   onBucketFilterChange,
 }: PurchaseRequestsListProps) {
@@ -150,7 +153,12 @@ export function PurchaseRequestsList({
           ) : (
             <div className="space-y-3">
               {filtered.map((request) => (
-                <PurchaseRequestCard key={request.id} request={request} onView={onView} />
+                <PurchaseRequestCard
+                  key={request.id}
+                  request={request}
+                  onView={onView}
+                  onEdit={onEdit}
+                />
               ))}
             </div>
           )}

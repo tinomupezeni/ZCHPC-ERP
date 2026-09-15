@@ -11,11 +11,18 @@ repeated here.
 
 from unittest.mock import patch
 
-import pytest
 from rest_framework import status
 
+import pytest
+
+from modules.procurement.application.authorization import (
+    PurchaseRequestPermissions as P,
+)
 from modules.procurement.infrastructure.persistence.models import (
     PurchaseRequest as PurchaseRequestModel,
+)
+from modules.procurement.infrastructure.persistence.models import (
+    PurchaseRequestItem as PurchaseRequestItemModel,
 )
 
 pytestmark = pytest.mark.django_db
@@ -301,6 +308,379 @@ class TestWorkflow:
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data["status"] == "DRAFT"
+
+
+# =============================================================================
+# Edit (Slice 2) - PATCH .../requests/{id}/
+# =============================================================================
+
+
+class TestUpdatePurchaseRequestItems:
+    def _payload(self, category_id, **overrides):
+        item = {
+            "description": "Updated item",
+            "quantity": 2,
+            "expected_delivery_period": "3 weeks",
+            "estimated_cost": "75.00",
+            "category_id": category_id,
+        }
+        item.update(overrides)
+        return {"items": [item]}
+
+    def test_requester_can_edit_own_draft(
+        self, client_for, api_url, requester, category, make_request_record
+    ):
+        record = make_request_record(requester, status="DRAFT")
+
+        response = client_for(requester).patch(
+            f"{api_url}{record.id}/", self._payload(category.id), format="json"
+        )
+
+        assert response.status_code == status.HTTP_200_OK, response.data
+        assert response.data["status"] == "DRAFT"
+        assert len(response.data["items"]) == 1
+        assert response.data["items"][0]["description"] == "Updated item"
+        assert response.data["items"][0]["budget_code_id"] == category.account_chart_id
+
+    def test_response_includes_the_resolved_category(
+        self, client_for, api_url, requester, category, make_request_record
+    ):
+        record = make_request_record(requester, status="DRAFT")
+
+        response = client_for(requester).patch(
+            f"{api_url}{record.id}/", self._payload(category.id), format="json"
+        )
+
+        assert response.data["items"][0]["category"] == {
+            "id": category.id,
+            "name": category.name,
+            "is_active": True,
+        }
+
+    def test_item_with_no_matching_category_reports_category_as_none(
+        self, client_for, api_url, requester, make_request_record
+    ):
+        """make_request_record's item uses the raw budget_code fixture, which
+        has no PurchaseRequestCategory mapped to it at all."""
+        record = make_request_record(requester, status="DRAFT")
+
+        response = client_for(requester).get(f"{api_url}{record.id}/")
+
+        assert response.data["items"][0]["category"] is None
+
+    def test_editing_a_rejected_request_returns_it_to_draft(
+        self, client_for, api_url, requester, category, make_request_record
+    ):
+        record = make_request_record(requester, status="REJECTED")
+
+        response = client_for(requester).patch(
+            f"{api_url}{record.id}/", self._payload(category.id), format="json"
+        )
+
+        assert response.status_code == status.HTTP_200_OK, response.data
+        assert response.data["status"] == "DRAFT"
+
+    def test_editing_a_rejected_request_preserves_the_rejection_history(
+        self,
+        client_for,
+        api_url,
+        requester,
+        department_head,
+        category,
+        make_request_record,
+    ):
+        record = make_request_record(requester, status="PENDING_DEPARTMENT_HEAD")
+        client_for(department_head).post(
+            f"{api_url}{record.id}/reject/",
+            {"reason": "Wrong budget"},
+            format="json",
+        )
+
+        response = client_for(requester).patch(
+            f"{api_url}{record.id}/", self._payload(category.id), format="json"
+        )
+
+        assert response.status_code == status.HTTP_200_OK, response.data
+        assert response.data["status"] == "DRAFT"
+        reasons = [d["reason"] for d in response.data["decisions"]]
+        assert "Wrong budget" in reasons
+
+    def test_updating_an_existing_item_by_id(
+        self, client_for, api_url, requester, category, make_request_record
+    ):
+        record = make_request_record(requester, status="DRAFT")
+        existing_item_id = record.items.first().id
+
+        response = client_for(requester).patch(
+            f"{api_url}{record.id}/",
+            self._payload(category.id, id=existing_item_id, description="Renamed"),
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK, response.data
+        assert len(response.data["items"]) == 1
+        assert response.data["items"][0]["id"] == existing_item_id
+        assert response.data["items"][0]["description"] == "Renamed"
+
+    def test_omitting_an_existing_item_removes_it(
+        self, client_for, api_url, requester, category, make_request_record
+    ):
+        record = make_request_record(requester, status="DRAFT")
+
+        response = client_for(requester).patch(
+            f"{api_url}{record.id}/",
+            self._payload(category.id, description="Replacement"),
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK, response.data
+        assert len(response.data["items"]) == 1
+        assert response.data["items"][0]["description"] == "Replacement"
+        assert (
+            PurchaseRequestItemModel.objects.filter(purchase_request_id=record.id).count()
+            == 1
+        )
+
+    def test_adding_a_new_item_alongside_an_existing_one(
+        self, client_for, api_url, requester, category, make_request_record
+    ):
+        record = make_request_record(requester, status="DRAFT")
+        existing_item_id = record.items.first().id
+
+        payload = {
+            "items": [
+                {
+                    "id": existing_item_id,
+                    "description": "Laptop",
+                    "quantity": 1,
+                    "expected_delivery_period": "2 weeks",
+                    "estimated_cost": "1500.00",
+                    "category_id": category.id,
+                },
+                {
+                    "description": "Mouse",
+                    "quantity": 2,
+                    "expected_delivery_period": "1 week",
+                    "estimated_cost": "20.00",
+                    "category_id": category.id,
+                },
+            ]
+        }
+
+        response = client_for(requester).patch(
+            f"{api_url}{record.id}/", payload, format="json"
+        )
+
+        assert response.status_code == status.HTTP_200_OK, response.data
+        assert len(response.data["items"]) == 2
+
+    def test_unknown_category_is_400(
+        self, client_for, api_url, requester, make_request_record
+    ):
+        record = make_request_record(requester, status="DRAFT")
+
+        response = client_for(requester).patch(
+            f"{api_url}{record.id}/", self._payload(999999), format="json"
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data.get("code") == "CATEGORY_NOT_FOUND"
+
+    def test_inactive_category_is_400(
+        self, client_for, api_url, requester, inactive_category, make_request_record
+    ):
+        record = make_request_record(requester, status="DRAFT")
+
+        response = client_for(requester).patch(
+            f"{api_url}{record.id}/",
+            self._payload(inactive_category.id),
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data.get("code") == "CATEGORY_INACTIVE"
+
+    def test_item_id_belonging_to_another_request_is_400(
+        self, client_for, api_url, requester, category, make_request_record
+    ):
+        record = make_request_record(requester, status="DRAFT")
+        other_record = make_request_record(requester, status="DRAFT")
+        other_item_id = other_record.items.first().id
+
+        response = client_for(requester).patch(
+            f"{api_url}{record.id}/",
+            self._payload(category.id, id=other_item_id),
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data.get("code") == "ITEM_NOT_FOUND"
+
+    def test_duplicate_item_id_is_400(
+        self, client_for, api_url, requester, category, make_request_record
+    ):
+        record = make_request_record(requester, status="DRAFT")
+        existing_item_id = record.items.first().id
+        item = {
+            "id": existing_item_id,
+            "description": "X",
+            "quantity": 1,
+            "expected_delivery_period": "1 week",
+            "estimated_cost": "10.00",
+            "category_id": category.id,
+        }
+
+        response = client_for(requester).patch(
+            f"{api_url}{record.id}/",
+            {"items": [item, {**item, "description": "Y"}]},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data.get("code") == "DUPLICATE_ITEM_ID"
+
+    def test_editing_a_pending_request_is_400_and_leaves_it_unchanged(
+        self, client_for, api_url, requester, category, make_request_record
+    ):
+        record = make_request_record(requester, status="PENDING_ACCOUNTS")
+        original_description = record.items.first().description
+
+        response = client_for(requester).patch(
+            f"{api_url}{record.id}/", self._payload(category.id), format="json"
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data.get("code") == "REQUEST_NOT_EDITABLE"
+        record.refresh_from_db()
+        assert record.status == "PENDING_ACCOUNTS"
+        assert record.items.first().description == original_description
+
+    def test_another_employee_cannot_edit_someone_elses_draft(
+        self, client_for, api_url, requester, outsider, category, make_request_record
+    ):
+        record = make_request_record(requester, status="DRAFT")
+
+        response = client_for(outsider).patch(
+            f"{api_url}{record.id}/", self._payload(category.id), format="json"
+        )
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        record.refresh_from_db()
+        assert record.status == "DRAFT"
+
+    def test_editing_a_rejected_request_requires_correct_and_resubmit_permissions(
+        self, client_for, api_url, make_employee, category, make_request_record
+    ):
+        """CREATE alone (no CORRECT/RESUBMIT) is enough for a DRAFT edit, but
+        not for a REJECTED one - see authorize_edit."""
+        limited = make_employee("Larry Limited", [P.CREATE, P.VIEW, P.SUBMIT])
+        record = make_request_record(limited, status="REJECTED")
+
+        response = client_for(limited).patch(
+            f"{api_url}{record.id}/", self._payload(category.id), format="json"
+        )
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        record.refresh_from_db()
+        assert record.status == "REJECTED"
+
+    def test_the_same_limited_actor_can_still_edit_their_own_draft(
+        self, client_for, api_url, make_employee, category, make_request_record
+    ):
+        """Confirms the previous test's denial is REJECTED-specific, not a
+        blanket lack of edit capability."""
+        limited = make_employee("Larry Limited", [P.CREATE, P.VIEW, P.SUBMIT])
+        record = make_request_record(limited, status="DRAFT")
+
+        response = client_for(limited).patch(
+            f"{api_url}{record.id}/", self._payload(category.id), format="json"
+        )
+
+        assert response.status_code == status.HTTP_200_OK, response.data
+
+    def test_budget_code_id_is_not_an_accepted_field_on_this_endpoint(
+        self, client_for, api_url, requester, budget_code, make_request_record
+    ):
+        """
+        The edit endpoint has no budget_code_id field at all - category_id is
+        the only path. Supplying budget_code_id instead of category_id must
+        not succeed via a back-door direct-GL path; it's simply not a
+        declared field, so this fails as a missing category_id.
+        """
+        record = make_request_record(requester, status="DRAFT")
+        payload = {
+            "items": [
+                {
+                    "description": "X",
+                    "quantity": 1,
+                    "expected_delivery_period": "1 week",
+                    "estimated_cost": "10.00",
+                    "budget_code_id": budget_code.id,
+                }
+            ]
+        }
+
+        response = client_for(requester).patch(
+            f"{api_url}{record.id}/", payload, format="json"
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        record.refresh_from_db()
+        assert record.items.first().budget_code_id == budget_code.id
+
+    def test_invalid_item_leaves_the_original_items_completely_unchanged(
+        self, client_for, api_url, requester, category, make_request_record
+    ):
+        """The atomicity guarantee at the HTTP boundary: nothing is written
+        when any item in the batch fails validation."""
+        record = make_request_record(requester, status="DRAFT")
+        existing_item_id = record.items.first().id
+        original_description = record.items.first().description
+
+        payload = {
+            "items": [
+                {
+                    "id": existing_item_id,
+                    "description": "Should not persist",
+                    "quantity": 1,
+                    "expected_delivery_period": "1 week",
+                    "estimated_cost": "10.00",
+                    "category_id": category.id,
+                },
+                {
+                    "description": "Bad item",
+                    "quantity": 1,
+                    "expected_delivery_period": "1 week",
+                    "estimated_cost": "10.00",
+                    "category_id": 999999,
+                },
+            ]
+        }
+
+        response = client_for(requester).patch(
+            f"{api_url}{record.id}/", payload, format="json"
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        record.refresh_from_db()
+        assert record.items.count() == 1
+        assert record.items.first().description == original_description
+
+    def test_anonymous_edit_is_rejected(
+        self, anonymous_client, api_url, requester, category, make_request_record
+    ):
+        record = make_request_record(requester, status="DRAFT")
+
+        response = anonymous_client.patch(
+            f"{api_url}{record.id}/", self._payload(category.id), format="json"
+        )
+
+        assert response.status_code in (
+            status.HTTP_401_UNAUTHORIZED,
+            status.HTTP_403_FORBIDDEN,
+        )
+        record.refresh_from_db()
+        assert record.status == "DRAFT"
 
 
 # =============================================================================

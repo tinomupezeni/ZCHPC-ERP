@@ -2,11 +2,13 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 const getMock = vi.fn();
 const postMock = vi.fn();
+const patchMock = vi.fn();
 
 vi.mock('../api', () => ({
   default: {
     get: (...args: unknown[]) => getMock(...args),
     post: (...args: unknown[]) => postMock(...args),
+    patch: (...args: unknown[]) => patchMock(...args),
   },
 }));
 
@@ -18,6 +20,7 @@ const { purchaseRequestService, getPurchaseRequestErrorMessage } = await import(
 beforeEach(() => {
   getMock.mockReset();
   postMock.mockReset();
+  patchMock.mockReset();
 });
 
 describe('purchaseRequestService', () => {
@@ -103,6 +106,57 @@ describe('purchaseRequestService', () => {
     await purchaseRequestService.submitRequest(7);
 
     expect(postMock).toHaveBeenCalledWith('/procurement/requests/7/submit/');
+  });
+
+  it('replaces item collection via PATCH requests/{id}/ (Slice 2 edit)', async () => {
+    patchMock.mockResolvedValue({ data: { id: 7, status: 'DRAFT' } });
+
+    await purchaseRequestService.updateItems(7, {
+      items: [
+        {
+          id: 1,
+          description: 'Laptop',
+          quantity: 1,
+          expected_delivery_period: '2 weeks',
+          estimated_cost: '800.00',
+          category_id: 3,
+        },
+      ],
+    });
+
+    expect(patchMock).toHaveBeenCalledWith('/procurement/requests/7/', {
+      items: [
+        {
+          id: 1,
+          description: 'Laptop',
+          quantity: 1,
+          expected_delivery_period: '2 weeks',
+          estimated_cost: '800.00',
+          category_id: 3,
+        },
+      ],
+    });
+  });
+
+  it('never sends budget_code_id in the update payload shape', async () => {
+    patchMock.mockResolvedValue({ data: { id: 7, status: 'DRAFT' } });
+
+    await purchaseRequestService.updateItems(7, {
+      items: [
+        {
+          description: 'Laptop',
+          quantity: 1,
+          expected_delivery_period: '2 weeks',
+          estimated_cost: '800.00',
+          category_id: 3,
+        },
+      ],
+    });
+
+    const [, body] = patchMock.mock.calls[0] as [string, { items: object[] }];
+    for (const item of body.items) {
+      expect(item).not.toHaveProperty('budget_code_id');
+    }
   });
 });
 
