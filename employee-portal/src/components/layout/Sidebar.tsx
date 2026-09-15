@@ -19,6 +19,7 @@ import {
   ClipboardCheck,
   Scale,
   ShoppingBag,
+  FileCheck,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -27,6 +28,11 @@ import { useRole, type RoleGroup } from '@/hooks/useRole';
 import { usePurchaseRequestActionCount } from '@/hooks/usePurchaseRequestActionCount';
 
 const PURCHASE_REQUESTS_PATH = '/portal/purchase-requests';
+
+// Exact-match these so /portal/purchase-requests/review (F17) doesn't also
+// highlight the plain "Purchase Requests" link as active - the only two
+// paths in NAV_ITEMS today where one is a prefix of another.
+const EXACT_MATCH_PATHS = new Set(['/portal', PURCHASE_REQUESTS_PATH]);
 
 interface NavItem {
   path: string;
@@ -59,6 +65,7 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
     { path: '/portal', label: 'Dashboard', icon: Home, description: 'Team overview' },
     { path: '/portal/leave', label: 'Leave Approvals', icon: ClipboardList, description: 'Review team leave' },
     { path: '/portal/purchase-requests', label: 'Purchase Requests', icon: ShoppingBag, description: 'Raise a requisition' },
+    { path: '/portal/purchase-requests/review', label: 'Review Purchase Requests', icon: FileCheck, description: 'Approve or reject as department head' },
     { path: '/portal/fuel-requisitions', label: 'Fuel Requisitions', icon: Fuel, description: 'Approve fuel requests' },
     { path: '/portal/stores-requisitions', label: 'Stores Requisitions', icon: ClipboardCheck, description: 'Approve stores requests' },
     { path: '/portal/comparative-schedules', label: 'Comparative Schedules', icon: Scale, description: 'Approve schedules' },
@@ -165,7 +172,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             <NavLink
               key={item.path + item.label}
               to={item.path}
-              end={item.path === '/portal'}
+              end={EXACT_MATCH_PATHS.has(item.path)}
               onClick={onClose}
               className={({ isActive }) =>
                 cn(

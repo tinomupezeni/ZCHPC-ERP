@@ -1,15 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import {
+  APPROVAL_STAGES,
   STATUS_LABELS,
   STATUS_MESSAGES,
+  findRejection,
   getActionBucket,
   getEditCtaLabel,
   getProgressLabel,
+  getStageInfo,
   getWaitingHelperLine,
   isActionRequired,
   statusTone,
 } from '../statusConfig';
-import type { PurchaseRequestStatus } from '@/types/purchase-request.types';
+import type {
+  PurchaseRequest,
+  PurchaseRequestDecision,
+  PurchaseRequestDecisionStage,
+  PurchaseRequestStatus,
+} from '@/types/purchase-request.types';
 
 const ALL_STATUSES: PurchaseRequestStatus[] = [
   'DRAFT',
@@ -160,5 +168,209 @@ describe('getWaitingHelperLine', () => {
     expect(getWaitingHelperLine('PENDING_GM')).toBe('No action needed from you.');
     expect(getWaitingHelperLine('PENDING_DIRECTOR')).toBe('No action needed from you.');
     expect(getWaitingHelperLine('PENDING_PROCUREMENT')).toBe('No action needed from you.');
+  });
+});
+
+/**
+ * Regression coverage for the "stale decision" bug: a stage decided more
+ * than once (rejected, corrected/resubmitted, then decided again) must
+ * report its LATEST decision, not the first one recorded. The backend
+ * guarantees `decisions` arrives oldest-first, so these fixtures list
+ * decisions in that same chronological order.
+ */
+function decision(
+  stage: PurchaseRequestDecisionStage,
+  type: PurchaseRequestDecision['decision'],
+  created_at: string,
+  reason = ''
+): PurchaseRequestDecision {
+  return { id: 0, stage, decision: type, actor_id: 1, reason, created_at };
+}
+
+function requestWithDecisions(
+  status: PurchaseRequestStatus,
+  decisions: PurchaseRequestDecision[]
+): PurchaseRequest {
+  return {
+    id: 1,
+    requisition_number: 'PR-0001',
+    requester_id: 1,
+    requester_name: 'Test Requester',
+    department_id: 1,
+    department_name: 'IT Department',
+    designation: 'Officer',
+    contact: '+263771234567',
+    status,
+    total_estimated_cost: '100.00',
+    items: [],
+    decisions,
+    processed_by: null,
+    processed_at: null,
+    created_at: '2025-01-01T00:00:00Z',
+    updated_at: '2025-01-01T00:00:00Z',
+  };
+}
+
+const PIPELINE_STAGES: PurchaseRequestDecisionStage[] = [
+  'DEPARTMENT_HEAD',
+  'ACCOUNTS',
+  'GM',
+  'DIRECTOR',
+];
+
+describe('getStageInfo', () => {
+  it('reports a first-time approval as decided', () => {
+    const request = requestWithDecisions('PENDING_ACCOUNTS', [
+      decision('DEPARTMENT_HEAD', 'APPROVED', '2025-01-01T10:00:00Z'),
+    ]);
+
+    const info = getStageInfo('DEPARTMENT_HEAD', request);
+
+    expect(info.kind).toBe('decided');
+    expect(info.kind === 'decided' && info.decision.decision).toBe('APPROVED');
+  });
+
+  it('reports a first-time rejection as decided', () => {
+    const request = requestWithDecisions('REJECTED', [
+      decision('DEPARTMENT_HEAD', 'REJECTED', '2025-01-01T10:00:00Z', 'Missing quote'),
+    ]);
+
+    const info = getStageInfo('DEPARTMENT_HEAD', request);
+
+    expect(info.kind).toBe('decided');
+    expect(info.kind === 'decided' && info.decision.decision).toBe('REJECTED');
+  });
+
+  it.each(PIPELINE_STAGES)(
+    '%s: a later approval wins over an earlier rejection at the same stage',
+    (stage) => {
+      const request = requestWithDecisions('PENDING_ACCOUNTS', [
+        decision(stage, 'REJECTED', '2025-01-01T10:00:00Z', 'Needs correction'),
+        decision(stage, 'APPROVED', '2025-01-01T11:00:00Z'),
+      ]);
+
+      const info = getStageInfo(stage, request);
+
+      expect(info.kind).toBe('decided');
+      expect(info.kind === 'decided' && info.decision.decision).not.toBe('REJECTED');
+      expect(info.kind === 'decided' && info.decision.created_at).toBe('2025-01-01T11:00:00Z');
+    }
+  );
+
+  it('wins with the latest of three or more decisions at the same stage', () => {
+    const request = requestWithDecisions('PENDING_ACCOUNTS', [
+      decision('DEPARTMENT_HEAD', 'REJECTED', '2025-01-01T10:00:00Z', 'First pass'),
+      decision('DEPARTMENT_HEAD', 'REJECTED', '2025-01-01T11:00:00Z', 'Second pass'),
+      decision('DEPARTMENT_HEAD', 'APPROVED', '2025-01-01T12:00:00Z'),
+    ]);
+
+    const info = getStageInfo('DEPARTMENT_HEAD', request);
+
+    expect(info.kind).toBe('decided');
+    expect(info.kind === 'decided' && info.decision.created_at).toBe('2025-01-01T12:00:00Z');
+  });
+
+  it('does not mutate or reorder request.decisions while resolving the latest one', () => {
+    const decisions = [
+      decision('DEPARTMENT_HEAD', 'REJECTED', '2025-01-01T10:00:00Z'),
+      decision('DEPARTMENT_HEAD', 'APPROVED', '2025-01-01T11:00:00Z'),
+    ];
+    const request = requestWithDecisions('PENDING_ACCOUNTS', decisions);
+    const before = [...request.decisions];
+
+    getStageInfo('DEPARTMENT_HEAD', request);
+
+    expect(request.decisions).toEqual(before);
+    expect(request.decisions).toHaveLength(2);
+  });
+
+  it('a Department Head reject/re-approve cycle does not affect other stages (single-decision behavior unchanged)', () => {
+    const request = requestWithDecisions('PENDING_ACCOUNTS', [
+      decision('DEPARTMENT_HEAD', 'REJECTED', '2025-01-01T10:00:00Z'),
+      decision('DEPARTMENT_HEAD', 'APPROVED', '2025-01-01T11:00:00Z'),
+    ]);
+
+    expect(getStageInfo('ACCOUNTS', request)).toEqual({ kind: 'pending' });
+    expect(getStageInfo('GM', request)).toEqual({ kind: 'not_reached' });
+    expect(getStageInfo('DIRECTOR', request)).toEqual({ kind: 'not_reached' });
+  });
+
+  it('leaves Procurement out of the decision-based timeline entirely (processed_by/processed_at are read separately)', () => {
+    // Full happy-path history through all four pipeline stages, now
+    // PROCESSED - APPROVAL_STAGES has no PROCUREMENT entry, and every
+    // pipeline stage must still resolve to its own single decision.
+    const request = requestWithDecisions('PROCESSED', [
+      decision('DEPARTMENT_HEAD', 'APPROVED', '2025-01-01T10:00:00Z'),
+      decision('ACCOUNTS', 'VERIFIED', '2025-01-01T11:00:00Z'),
+      decision('GM', 'RECOMMENDED', '2025-01-01T12:00:00Z'),
+      decision('DIRECTOR', 'APPROVED', '2025-01-01T13:00:00Z'),
+    ]);
+    request.processed_by = 42;
+    request.processed_at = '2025-01-01T14:00:00Z';
+
+    expect(APPROVAL_STAGES.some((s) => (s.stage as string) === 'PROCUREMENT')).toBe(false);
+    for (const stage of PIPELINE_STAGES) {
+      expect(getStageInfo(stage, request).kind).toBe('decided');
+    }
+  });
+});
+
+describe('findRejection', () => {
+  it('returns undefined when the request is not currently REJECTED', () => {
+    const request = requestWithDecisions('PENDING_ACCOUNTS', [
+      decision('DEPARTMENT_HEAD', 'APPROVED', '2025-01-01T10:00:00Z'),
+    ]);
+
+    expect(findRejection(request)).toBeUndefined();
+  });
+
+  it('returns the rejection reason on a first-time rejection', () => {
+    const rejection = decision('DEPARTMENT_HEAD', 'REJECTED', '2025-01-01T10:00:00Z', 'Missing quote');
+    const request = requestWithDecisions('REJECTED', [rejection]);
+
+    expect(findRejection(request)).toBe(rejection);
+  });
+
+  it('returns the most recent rejection across stages, not the first one ever recorded', () => {
+    const staleRejection = decision(
+      'DEPARTMENT_HEAD',
+      'REJECTED',
+      '2025-01-01T10:00:00Z',
+      'Old reason - already corrected'
+    );
+    const currentRejection = decision(
+      'ACCOUNTS',
+      'REJECTED',
+      '2025-01-01T12:00:00Z',
+      'Budget code no longer active'
+    );
+    const request = requestWithDecisions('REJECTED', [
+      staleRejection,
+      decision('DEPARTMENT_HEAD', 'APPROVED', '2025-01-01T11:00:00Z'),
+      currentRejection,
+    ]);
+
+    const result = findRejection(request);
+
+    expect(result).toBe(currentRejection);
+    expect(result?.stage).toBe('ACCOUNTS');
+    expect(result?.reason).toBe('Budget code no longer active');
+  });
+
+  it('preserves the older, superseded rejection in request.decisions rather than dropping it', () => {
+    const request = requestWithDecisions('REJECTED', [
+      decision('DEPARTMENT_HEAD', 'REJECTED', '2025-01-01T10:00:00Z', 'Old reason'),
+      decision('DEPARTMENT_HEAD', 'APPROVED', '2025-01-01T11:00:00Z'),
+      decision('ACCOUNTS', 'REJECTED', '2025-01-01T12:00:00Z', 'Current reason'),
+    ]);
+
+    findRejection(request);
+
+    expect(request.decisions).toHaveLength(3);
+    expect(
+      request.decisions.some(
+        (d) => d.stage === 'DEPARTMENT_HEAD' && d.decision === 'REJECTED' && d.reason === 'Old reason'
+      )
+    ).toBe(true);
   });
 });

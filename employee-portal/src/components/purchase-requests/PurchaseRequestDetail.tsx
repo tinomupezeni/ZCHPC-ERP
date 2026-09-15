@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -45,6 +46,14 @@ interface PurchaseRequestDetailProps {
   isLoading?: boolean;
   /** Slice 2: opens the edit form for this request. Only called for DRAFT/REJECTED. */
   onEdit: (id: number) => void;
+  /**
+   * F17: an optional footer area for caller-owned controls (e.g. the
+   * Department Head review page's Approve/Reject buttons). This component
+   * stays role-agnostic - it has no idea what the slot contains or when it
+   * should be shown; that decision belongs entirely to whichever page passes
+   * it in.
+   */
+  actions?: ReactNode;
 }
 
 function formatMoney(value: number | string): string {
@@ -188,6 +197,7 @@ export function PurchaseRequestDetail({
   onClose,
   isLoading,
   onEdit,
+  actions,
 }: PurchaseRequestDetailProps) {
   if (!request && !isLoading) return null;
 
@@ -309,6 +319,10 @@ export function PurchaseRequestDetail({
               </p>
             </div>
           </ScrollArea>
+        )}
+
+        {!isLoading && request && actions && (
+          <div className="flex-shrink-0 pt-3 border-t">{actions}</div>
         )}
       </DialogContent>
     </Dialog>

@@ -156,6 +156,41 @@ describe('purchaseRequestService', () => {
     });
   });
 
+  it('lists the department-head review queue via scope=pending-department-head (F17)', async () => {
+    getMock.mockResolvedValue({ data: [] });
+
+    await purchaseRequestService.getPendingDepartmentHeadRequests();
+
+    expect(getMock).toHaveBeenCalledWith('/procurement/requests/', {
+      params: { scope: 'pending-department-head' },
+    });
+  });
+
+  it('propagates a failed queue load (e.g. a 403) rather than swallowing it (F17)', async () => {
+    const error = { response: { status: 403, data: { code: 'PERMISSION_DENIED' } } };
+    getMock.mockRejectedValue(error);
+
+    await expect(purchaseRequestService.getPendingDepartmentHeadRequests()).rejects.toBe(error);
+  });
+
+  it('approves a request as department head via POST .../department-head/approve/ (F17)', async () => {
+    postMock.mockResolvedValue({ data: { id: 7, status: 'PENDING_ACCOUNTS' } });
+
+    await purchaseRequestService.approveByDepartmentHead(7);
+
+    expect(postMock).toHaveBeenCalledWith('/procurement/requests/7/department-head/approve/');
+  });
+
+  it('rejects a request with a reason via POST .../reject/ (F17)', async () => {
+    postMock.mockResolvedValue({ data: { id: 7, status: 'REJECTED' } });
+
+    await purchaseRequestService.rejectRequest(7, 'Budget code no longer active');
+
+    expect(postMock).toHaveBeenCalledWith('/procurement/requests/7/reject/', {
+      reason: 'Budget code no longer active',
+    });
+  });
+
   it('never sends budget_code_id in the update payload shape', async () => {
     patchMock.mockResolvedValue({ data: { id: 7, status: 'DRAFT' } });
 

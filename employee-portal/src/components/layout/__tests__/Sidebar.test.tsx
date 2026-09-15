@@ -3,8 +3,9 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { Sidebar } from '../Sidebar';
 
+let mockRoleGroup = 'staff';
 vi.mock('@/hooks/useRole', () => ({
-  useRole: () => ({ roleGroup: 'staff' }),
+  useRole: () => ({ roleGroup: mockRoleGroup }),
 }));
 
 const mockUseActionCount = vi.fn();
@@ -20,8 +21,38 @@ function renderSidebar() {
   );
 }
 
+describe('Sidebar - F17 Department Head review navigation', () => {
+  it('shows a "Review Purchase Requests" link for the manager role group', () => {
+    mockRoleGroup = 'manager';
+    mockUseActionCount.mockReturnValue(0);
+    renderSidebar();
+
+    expect(
+      screen.getByRole('link', { name: /review purchase requests/i })
+    ).toHaveAttribute('href', '/portal/purchase-requests/review');
+  });
+
+  it('does not show the review link for the staff role group, and leaves the existing requester navigation intact', () => {
+    mockRoleGroup = 'staff';
+    mockUseActionCount.mockReturnValue(0);
+    renderSidebar();
+
+    expect(
+      screen.queryByRole('link', { name: /review purchase requests/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /^purchase requests raise a requisition$/i })
+    ).toHaveAttribute('href', '/portal/purchase-requests');
+    expect(screen.getByRole('link', { name: /leave/i })).toHaveAttribute(
+      'href',
+      '/portal/leave'
+    );
+  });
+});
+
 describe('Sidebar - Purchase Requests action badge', () => {
   it('shows no badge when there is nothing needing action', () => {
+    mockRoleGroup = 'staff';
     mockUseActionCount.mockReturnValue(0);
     renderSidebar();
 

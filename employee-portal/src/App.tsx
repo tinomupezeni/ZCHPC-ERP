@@ -6,6 +6,7 @@ import { DashboardPage } from '@/pages/DashboardPage';
 import { AttendancePage } from '@/pages/AttendancePage';
 import { LeavePage } from '@/pages/LeavePage';
 import { PurchaseRequestsPage } from '@/pages/PurchaseRequestsPage';
+import { PurchaseRequestReviewPage } from '@/pages/PurchaseRequestReviewPage';
 import { FuelRequisitionsPage } from '@/pages/FuelRequisitionsPage';
 import { StoresRequisitionsPage } from '@/pages/StoresRequisitionsPage';
 import { ComparativeSchedulesPage } from '@/pages/ComparativeSchedulesPage';
@@ -49,6 +50,10 @@ function App() {
             <Route path="/portal/attendance" element={<AttendancePage />} />
             <Route path="/portal/leave" element={<LeavePage />} />
             <Route path="/portal/purchase-requests" element={<PurchaseRequestsPage />} />
+            <Route
+              path="/portal/purchase-requests/review"
+              element={<PurchaseRequestReviewPage />}
+            />
             <Route path="/portal/fuel-requisitions" element={<FuelRequisitionsPage />} />
             <Route path="/portal/stores-requisitions" element={<StoresRequisitionsPage />} />
             <Route path="/portal/comparative-schedules" element={<ComparativeSchedulesPage />} />

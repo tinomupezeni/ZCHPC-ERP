@@ -139,6 +139,27 @@ export type StageInfo =
   | { kind: 'not_submitted' };
 
 /**
+ * The last element of `items` satisfying `predicate`, or undefined.
+ *
+ * The backend guarantees `decisions` arrives in chronological ascending
+ * order (oldest first - see DjangoPurchaseRequestRepository._to_domain's
+ * `.order_by("created_at")`), so "last match" is exactly "most recent
+ * match" here - no re-sorting needed. A request corrected and resubmitted
+ * after a rejection can carry more than one decision for the same stage
+ * (e.g. DEPARTMENT_HEAD REJECTED then later DEPARTMENT_HEAD APPROVED); a
+ * plain `.find()` would silently return the oldest one instead of the
+ * current one. Deliberately a manual scan rather than `.findLast()`
+ * (ES2023) - this project's TS target is ES2022 - and rather than
+ * `.filter().at(-1)`, which would allocate an intermediate array.
+ */
+function lastMatch<T>(items: readonly T[], predicate: (item: T) => boolean): T | undefined {
+  for (let i = items.length - 1; i >= 0; i--) {
+    if (predicate(items[i])) return items[i];
+  }
+  return undefined;
+}
+
+/**
  * Read-only presentation of one approval stage, derived entirely from the
  * request's own status and decision history - no approval logic lives here.
  */
@@ -146,7 +167,7 @@ export function getStageInfo(
   stage: PurchaseRequestDecisionStage,
   request: PurchaseRequest
 ): StageInfo {
-  const decision = request.decisions.find((d) => d.stage === stage);
+  const decision = lastMatch(request.decisions, (d) => d.stage === stage);
   if (decision) {
     return { kind: 'decided', decision };
   }
@@ -176,8 +197,16 @@ export function decisionLabel(decision: PurchaseRequestDecision): string {
   return DECISION_LABELS[decision.decision] ?? decision.decision;
 }
 
-/** The rejection decision, if this request was rejected. */
+/**
+ * The rejection decision explaining why this request is currently REJECTED.
+ *
+ * Must be the most recent rejection, not just the first one ever recorded:
+ * a request can be rejected, corrected, resubmitted, and rejected again
+ * (at the same stage or a later one) before landing back on REJECTED, and
+ * every prior decision - approved or rejected - stays in `decisions`. Only
+ * the latest rejection describes what's currently blocking the request.
+ */
 export function findRejection(request: PurchaseRequest): PurchaseRequestDecision | undefined {
   if (request.status !== 'REJECTED') return undefined;
-  return request.decisions.find((d) => d.decision === 'REJECTED');
+  return lastMatch(request.decisions, (d) => d.decision === 'REJECTED');
 }

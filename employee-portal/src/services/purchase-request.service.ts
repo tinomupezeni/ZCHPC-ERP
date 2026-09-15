@@ -19,13 +19,24 @@ export const purchaseRequestService = {
     return response.data;
   },
 
-  /**
-   * The caller's own purchase requests. Only the "mine" scope is used here -
-   * approval queues belong to other portals, not the Employee Portal.
-   */
+  /** The caller's own purchase requests. */
   async getMyRequests(): Promise<PurchaseRequestListItem[]> {
     const response = await api.get<PurchaseRequestListItem[]>('/procurement/requests/', {
       params: { scope: 'mine' },
+    });
+    return response.data;
+  },
+
+  /**
+   * F17: requests awaiting the caller's department-head review. The backend
+   * pre-filters this to departments the caller is actually recorded as
+   * heading - a 403 here means the caller holds no department-head
+   * authority at all, which callers must surface distinctly from a
+   * genuinely empty queue rather than treating both the same way.
+   */
+  async getPendingDepartmentHeadRequests(): Promise<PurchaseRequestListItem[]> {
+    const response = await api.get<PurchaseRequestListItem[]>('/procurement/requests/', {
+      params: { scope: 'pending-department-head' },
     });
     return response.data;
   },
@@ -66,6 +77,28 @@ export const purchaseRequestService = {
    */
   async deleteRequest(id: number): Promise<void> {
     await api.delete(`/procurement/requests/${id}/`);
+  },
+
+  /** F17: approve a request currently awaiting the caller's department-head review. */
+  async approveByDepartmentHead(id: number): Promise<PurchaseRequest> {
+    const response = await api.post<PurchaseRequest>(
+      `/procurement/requests/${id}/department-head/approve/`
+    );
+    return response.data;
+  },
+
+  /**
+   * F17: reject a request. The backend endpoint is stage-aware - it rejects
+   * at whatever stage the request currently sits at, rather than needing a
+   * separate route per approving office - so this one method is already
+   * correct for Accounts/GM/Director's own reject action, not just the
+   * department-head stage.
+   */
+  async rejectRequest(id: number, reason: string): Promise<PurchaseRequest> {
+    const response = await api.post<PurchaseRequest>(`/procurement/requests/${id}/reject/`, {
+      reason,
+    });
+    return response.data;
   },
 };
 
