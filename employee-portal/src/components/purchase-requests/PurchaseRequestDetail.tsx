@@ -4,14 +4,29 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { AlertTriangle, CheckCircle, Clock, FileText, MinusCircle, XCircle } from 'lucide-react';
+import { CheckCircle, Clock, FileEdit, FileText, MinusCircle, XCircle } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import type { PurchaseRequest, PurchaseRequestDecisionStage } from '@/types/purchase-request.types';
+import { cn } from '@/lib/utils';
+import type {
+  PurchaseRequest,
+  PurchaseRequestDecisionStage,
+  PurchaseRequestStatus,
+} from '@/types/purchase-request.types';
 import { PurchaseRequestStatusBadge } from './PurchaseRequestStatusBadge';
-import { APPROVAL_STAGES, decisionLabel, findRejection, getStageInfo } from './statusConfig';
+import {
+  APPROVAL_STAGES,
+  STATUS_LABELS,
+  STATUS_MESSAGES,
+  decisionLabel,
+  findRejection,
+  getProgressLabel,
+  getStageInfo,
+  getWaitingHelperLine,
+  statusTone,
+  type StatusBadgeTone,
+} from './statusConfig';
 
 interface PurchaseRequestDetailProps {
   request: PurchaseRequest | null;
@@ -30,6 +45,51 @@ function formatMoney(value: string): string {
 function formatDate(value: string | null): string {
   if (!value) return '—';
   return format(parseISO(value), 'MMM d, yyyy h:mm a');
+}
+
+const HERO_CLASSES: Record<StatusBadgeTone, string> = {
+  amber: 'border-amber-200 bg-amber-50 text-amber-900',
+  red: 'border-red-200 bg-red-50 text-red-900',
+  slate: 'border-slate-200 bg-slate-50 text-slate-700',
+  green: 'border-green-200 bg-green-50 text-green-900',
+};
+
+const HERO_ICON: Record<StatusBadgeTone, React.ComponentType<{ className?: string }>> = {
+  amber: FileEdit,
+  red: XCircle,
+  slate: Clock,
+  green: CheckCircle,
+};
+
+/**
+ * The employee-facing status "hero": what this request's state means and
+ * whether anything is expected of the employee, ahead of the detailed
+ * sections below. Subsumes what used to be a REJECTED-only alert card -
+ * every status now gets an equivalent, appropriately-toned block.
+ *
+ * No CTA is rendered here by design (F13 Slice 1: presentation only - draft
+ * and rejected-request editing are separate, not-yet-implemented slices).
+ */
+function StatusHero({ request }: { request: PurchaseRequest }) {
+  const tone = statusTone(request.status);
+  const Icon = HERO_ICON[tone];
+  const rejection = findRejection(request);
+  const progress = getProgressLabel(request.status);
+  const waitingHelperLine = getWaitingHelperLine(request.status);
+
+  return (
+    <div className={cn('rounded-lg border p-4 flex items-start gap-3', HERO_CLASSES[tone])}>
+      <Icon className="h-5 w-5 flex-shrink-0 mt-0.5" />
+      <div className="space-y-1">
+        <p className="font-semibold">{STATUS_LABELS[request.status]}</p>
+        <p className="text-sm">
+          {rejection ? rejection.reason || STATUS_MESSAGES.REJECTED : STATUS_MESSAGES[request.status]}
+        </p>
+        {waitingHelperLine && <p className="text-sm">{waitingHelperLine}</p>}
+        {progress && <p className="text-xs opacity-75">{progress}</p>}
+      </div>
+    </div>
+  );
 }
 
 function StageRow({
@@ -76,6 +136,10 @@ function StageRow({
   );
 }
 
+function procurementStatusLabel(status: PurchaseRequestStatus): string {
+  return status === 'PROCESSED' ? 'Completed' : 'Being Processed';
+}
+
 export function PurchaseRequestDetail({
   request,
   isOpen,
@@ -84,7 +148,6 @@ export function PurchaseRequestDetail({
 }: PurchaseRequestDetailProps) {
   if (!request && !isLoading) return null;
 
-  const rejection = request ? findRejection(request) : undefined;
   const showProcurement =
     request && (request.status === 'PENDING_PROCUREMENT' || request.status === 'PROCESSED');
 
@@ -111,19 +174,7 @@ export function PurchaseRequestDetail({
         ) : (
           <ScrollArea className="flex-1 min-h-0">
             <div className="space-y-4 pr-4">
-              {rejection && (
-                <Card className="border-red-200 bg-red-50">
-                  <CardContent className="p-4 flex items-start gap-3">
-                    <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-                    <div className="text-sm">
-                      <p className="font-medium text-red-800">This request was rejected</p>
-                      <p className="text-red-700">
-                        {rejection.reason || 'No reason was provided.'}
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+              <StatusHero request={request} />
 
               {/* Section A: Requester */}
               <div>
@@ -193,9 +244,7 @@ export function PurchaseRequestDetail({
                     <h4 className="text-sm font-semibold mb-1">Procurement</h4>
                     <div className="flex items-center justify-between py-1 text-sm">
                       <span className="text-muted-foreground">Status</span>
-                      <span className="font-medium">
-                        {request.status === 'PROCESSED' ? 'Processed' : 'Pending Procurement'}
-                      </span>
+                      <span className="font-medium">{procurementStatusLabel(request.status)}</span>
                     </div>
                     {request.processed_at && (
                       <div className="flex items-center justify-between py-1 text-sm">

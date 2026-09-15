@@ -8,15 +8,12 @@ import {
   PurchaseRequestsList,
   PurchaseRequestDetail,
 } from '@/components/purchase-requests';
+import type { PurchaseRequestBucketFilter } from '@/components/purchase-requests/PurchaseRequestsList';
 import {
   purchaseRequestService,
   getPurchaseRequestErrorMessage,
 } from '@/services/purchase-request.service';
-import type {
-  PurchaseRequest,
-  PurchaseRequestListItem,
-  PurchaseRequestStatus,
-} from '@/types/purchase-request.types';
+import type { PurchaseRequest, PurchaseRequestListItem } from '@/types/purchase-request.types';
 
 export function PurchaseRequestsPage() {
   const { employee } = useAuth();
@@ -26,7 +23,7 @@ export function PurchaseRequestsPage() {
   const [requests, setRequests] = useState<PurchaseRequestListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<PurchaseRequestStatus | 'all'>('all');
+  const [bucketFilter, setBucketFilter] = useState<PurchaseRequestBucketFilter>('all');
 
   const [selectedRequest, setSelectedRequest] = useState<PurchaseRequest | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -114,8 +111,8 @@ export function PurchaseRequestsPage() {
             error={listError}
             onRetry={loadRequests}
             onView={handleView}
-            statusFilter={statusFilter}
-            onStatusFilterChange={setStatusFilter}
+            bucketFilter={bucketFilter}
+            onBucketFilterChange={setBucketFilter}
           />
         </TabsContent>
       </Tabs>

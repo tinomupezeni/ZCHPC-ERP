@@ -24,6 +24,9 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useRole, type RoleGroup } from '@/hooks/useRole';
+import { usePurchaseRequestActionCount } from '@/hooks/usePurchaseRequestActionCount';
+
+const PURCHASE_REQUESTS_PATH = '/portal/purchase-requests';
 
 interface NavItem {
   path: string;
@@ -114,6 +117,7 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { roleGroup } = useRole();
   const navItems = NAV_ITEMS[roleGroup] ?? NAV_ITEMS.staff;
+  const purchaseRequestActionCount = usePurchaseRequestActionCount();
 
   return (
     <>
@@ -185,7 +189,20 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                     />
                   </div>
                   <div className="min-w-0">
-                    <span className="block truncate">{item.label}</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate">{item.label}</span>
+                      {item.path === PURCHASE_REQUESTS_PATH && purchaseRequestActionCount > 0 && (
+                        <span
+                          className={cn(
+                            'inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full text-[10px] font-semibold flex-shrink-0',
+                            isActive ? 'bg-white text-blue-700' : 'bg-amber-500 text-white'
+                          )}
+                          aria-label={`${purchaseRequestActionCount} request${purchaseRequestActionCount === 1 ? '' : 's'} need${purchaseRequestActionCount === 1 ? 's' : ''} your attention`}
+                        >
+                          {purchaseRequestActionCount}
+                        </span>
+                      )}
+                    </span>
                     {item.description && (
                       <span
                         className={cn(

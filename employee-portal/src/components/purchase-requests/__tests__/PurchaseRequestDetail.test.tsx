@@ -64,12 +64,38 @@ describe('PurchaseRequestDetail', () => {
     expect(screen.getByText('Cost: $800.00')).toBeInTheDocument();
   });
 
-  it('shows the total estimated cost and the current status', () => {
+  it('shows the total estimated cost and a human-friendly current status', () => {
     render(
       <PurchaseRequestDetail request={baseRequest()} isOpen onClose={vi.fn()} />
     );
     expect(screen.getByText('$800.00')).toBeInTheDocument();
-    expect(screen.getByText('Pending Accounts')).toBeInTheDocument();
+    expect(screen.getAllByText('Awaiting Accounts Verification').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Pending Accounts')).not.toBeInTheDocument();
+  });
+
+  it('shows a status hero explaining what the state means, with no action-implying CTA', () => {
+    render(
+      <PurchaseRequestDetail request={baseRequest()} isOpen onClose={vi.fn()} />
+    );
+    expect(
+      screen.getByText('Approved by your department head — Accounts is now verifying the budget.')
+    ).toBeInTheDocument();
+    for (const name of [/continue/i, /edit/i, /\bcorrect\b/i, /resubmit/i]) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    }
+  });
+
+  it('shows a "Not Submitted" hero for a draft, with no editing CTA', () => {
+    render(
+      <PurchaseRequestDetail request={baseRequest({ status: 'DRAFT', decisions: [] })} isOpen onClose={vi.fn()} />
+    );
+    expect(screen.getAllByText('Not Submitted').length).toBeGreaterThan(0);
+    expect(
+      screen.getByText("This request is saved but hasn't been sent for approval yet.")
+    ).toBeInTheDocument();
+    for (const name of [/continue/i, /edit/i]) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    }
   });
 
   it('never renders the raw budget/GL code anywhere', () => {
@@ -124,13 +150,37 @@ describe('PurchaseRequestDetail', () => {
     });
     render(<PurchaseRequestDetail request={rejected} isOpen onClose={vi.fn()} />);
 
-    expect(screen.getByText('This request was rejected')).toBeInTheDocument();
+    // "Correction Required" is the employee-facing status (badge + hero);
+    // "Rejected" is retained only to describe the historical decision event
+    // on the Accounts stage row - both must be present, for different reasons.
+    expect(screen.getAllByText('Correction Required').length).toBeGreaterThan(0);
     expect(screen.getByText('Budget code no longer active')).toBeInTheDocument();
-    // "Rejected" legitimately appears twice: the status badge, and the
-    // Accounts stage row that recorded the rejection.
-    expect(screen.getAllByText('Rejected').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('Rejected')).toBeInTheDocument();
     expect(screen.queryByText('Pending Accounts')).not.toBeInTheDocument();
+    expect(screen.queryByText('Awaiting Accounts Verification')).not.toBeInTheDocument();
     expect(screen.queryByText('Processed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Completed')).not.toBeInTheDocument();
+  });
+
+  it('does not render any editing/correction/resubmission CTA for a rejected request', () => {
+    const rejected = baseRequest({
+      status: 'REJECTED',
+      decisions: [
+        {
+          id: 2,
+          stage: 'ACCOUNTS',
+          decision: 'REJECTED',
+          actor_id: 5,
+          reason: 'Budget code no longer active',
+          created_at: '2025-01-03T00:00:00Z',
+        },
+      ],
+    });
+    render(<PurchaseRequestDetail request={rejected} isOpen onClose={vi.fn()} />);
+
+    for (const name of [/continue/i, /edit/i, /\bcorrect\b/i, /resubmit/i]) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    }
   });
 
   it('shows procurement info only once actually returned by the API', () => {
@@ -158,5 +208,8 @@ describe('PurchaseRequestDetail', () => {
     );
     expect(screen.getByText('Procurement')).toBeInTheDocument();
     expect(screen.getByText('Date Processed')).toBeInTheDocument();
+    // "Completed" appears twice by design: the status hero, and the
+    // Procurement section's own status line.
+    expect(screen.getAllByText('Completed').length).toBeGreaterThanOrEqual(2);
   });
 });
