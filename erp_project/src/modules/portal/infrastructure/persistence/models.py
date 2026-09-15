@@ -239,6 +239,8 @@ class Notification(models.Model):
         ('payslip_available', 'Payslip Available'),
         ('announcement', 'Announcement'),
         ('system', 'System Notification'),
+        ('purchase_request_rejected', 'Purchase Request Rejected'),
+        ('purchase_request_processed', 'Purchase Request Processed'),
     ]
 
     employee = models.ForeignKey(

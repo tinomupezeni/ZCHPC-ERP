@@ -9,6 +9,10 @@ from typing import List, Optional
 
 from shared.domain.base import AggregateRoot, Entity
 from shared.domain.exceptions import ValidationError
+from modules.procurement.domain.events import (
+    PurchaseRequestProcessed,
+    PurchaseRequestRejected,
+)
 from modules.procurement.domain.value_objects import (
     RequestStatus,
     DecisionStage,
@@ -187,6 +191,14 @@ class PurchaseRequest(AggregateRoot[int]):
         self.processed_by = actor_id
         self.processed_at = _utc_now()
         self.updated_at = _utc_now()
+        self.add_domain_event(
+            PurchaseRequestProcessed(
+                request_id=self.id,
+                requisition_number=self.requisition_number,
+                requester_id=self.requester_id,
+                processed_by=actor_id,
+            )
+        )
 
     def reject(self, actor_id: int, reason: str) -> None:
         if not reason or not reason.strip():
@@ -207,6 +219,15 @@ class PurchaseRequest(AggregateRoot[int]):
         self.status = RequestStatus.REJECTED
         self._append_decision(stage, DecisionType.REJECTED, actor_id, reason)
         self.updated_at = _utc_now()
+        self.add_domain_event(
+            PurchaseRequestRejected(
+                request_id=self.id,
+                requisition_number=self.requisition_number,
+                requester_id=self.requester_id,
+                rejector_id=actor_id,
+                reason=reason,
+            )
+        )
 
     def correct_and_resubmit(self) -> None:
         if self.status != RequestStatus.REJECTED:

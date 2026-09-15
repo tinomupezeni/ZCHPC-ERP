@@ -30,6 +30,7 @@ from modules.procurement.application.interfaces import (
 from modules.procurement.domain.entities import PurchaseRequest, PurchaseRequestItem
 from modules.procurement.domain.value_objects import RequestStatus
 from shared.domain.exceptions import NotFoundError, ValidationError
+from shared.infrastructure import EventBus, get_event_bus
 
 
 def resolve_budget_code_id(
@@ -315,21 +316,80 @@ class ApprovePurchaseRequestByDirector(BasePurchaseRequestUseCase):
 
 
 class ProcessPurchaseRequestByProcurement(BasePurchaseRequestUseCase):
+    """
+    Slice 3: publishes PurchaseRequestProcessed after a successful save, so
+    modules.portal can react by notifying the requester - see
+    modules/portal/event_handlers.py. event_bus defaults to the process-wide
+    singleton (matching modules/hr/application/services/employee_service.py's
+    injection pattern) so existing 2-arg call sites keep working unchanged.
+
+    Domain events must be read from `request` (the object process_by_procurement
+    was called on), not from this method's return value: the repository's
+    save() reconstructs and returns a brand new PurchaseRequest from the
+    database, whose own _domain_events starts empty.
+
+    Known limitation - dual write, no outbox (accepted for Slice 3):
+    repository.save() and event_bus.publish_all() are two separate,
+    non-atomic operations, not one transaction. The status transition is
+    durably committed by save(); the notification is a best-effort side
+    effect published immediately afterwards. If the process crashes or is
+    killed in the narrow window between those two calls, the request is
+    left correctly PROCESSED/REJECTED but the requester's notification is
+    never created - there is no persisted record that an event was "owed",
+    so nothing retries or backfills it. Separately, the event bus's default
+    non-strict mode (see shared/infrastructure/event_bus.py) catches and
+    only logs exceptions raised inside a handler, so if
+    modules.portal.event_handlers itself fails to write the Notification
+    row (e.g. a DB error), that failure is silent from this use case's
+    point of view too - execute() still returns success, because the
+    workflow transition itself did succeed and must not be rolled back or
+    reported as failed on account of a missed notification.
+    A transactional outbox (writing the event in the same DB transaction as
+    the status change, then dispatching it separately with retries) would
+    close this gap, but is intentionally out of scope here: this slice's
+    brief was to make notifications functional on top of the existing
+    event bus, not to redesign how the event system guarantees delivery.
+    """
+
+    def __init__(
+        self,
+        repository: IPurchaseRequestRepository,
+        policy: PurchaseRequestAuthorizationPolicy,
+        event_bus: EventBus | None = None,
+    ) -> None:
+        super().__init__(repository, policy)
+        self._event_bus = event_bus or get_event_bus()
+
     def execute(self, request_id: int, actor: Actor) -> PurchaseRequest:
         request = self._load(request_id, actor)
         self.policy.authorize_processing(actor, request)
 
         request.process_by_procurement(actor.employee_id)
-        return self.repository.save(request)
+        saved = self.repository.save(request)
+        self._event_bus.publish_all(request.clear_domain_events())
+        return saved
 
 
 class RejectPurchaseRequest(BasePurchaseRequestUseCase):
+    """Slice 3: publishes PurchaseRequestRejected after a successful save - see ProcessPurchaseRequestByProcurement's docstring for why."""
+
+    def __init__(
+        self,
+        repository: IPurchaseRequestRepository,
+        policy: PurchaseRequestAuthorizationPolicy,
+        event_bus: EventBus | None = None,
+    ) -> None:
+        super().__init__(repository, policy)
+        self._event_bus = event_bus or get_event_bus()
+
     def execute(self, request_id: int, actor: Actor, reason: str) -> PurchaseRequest:
         request = self._load(request_id, actor)
         self.policy.authorize_rejection(actor, request)
 
         request.reject(actor.employee_id, reason)
-        return self.repository.save(request)
+        saved = self.repository.save(request)
+        self._event_bus.publish_all(request.clear_domain_events())
+        return saved
 
 
 class CorrectAndResubmitPurchaseRequest(BasePurchaseRequestUseCase):

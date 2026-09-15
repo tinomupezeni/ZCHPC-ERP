@@ -389,6 +389,33 @@ class TestPurchaseRequest:
         assert request.processed_by == 6
         assert request.processed_at is not None
 
+    def test_process_by_procurement_appends_a_purchase_request_processed_domain_event(self):
+        """Slice 3 notifications: mirrors test_reject_appends_a_purchase_request_rejected_domain_event for the processed path."""
+        from modules.procurement.domain.events import PurchaseRequestProcessed
+
+        request = self._make_request()
+        request._id = 77
+        request.requisition_number = "PR-00077"
+        request.add_item(self._make_item())
+        request.submit()
+        request.approve_by_department_head(2)
+        request.verify_by_accounts(3)
+        request.recommend_by_gm(4)
+        request.approve_by_director(5)
+
+        assert request.domain_events == []
+
+        request.process_by_procurement(6)
+
+        events = request.domain_events
+        assert len(events) == 1
+        event = events[0]
+        assert isinstance(event, PurchaseRequestProcessed)
+        assert event.request_id == 77
+        assert event.requisition_number == "PR-00077"
+        assert event.requester_id == request.requester_id
+        assert event.processed_by == 6
+
     def test_processed_at_is_timezone_aware(self):
         """
         processed_at is persisted to a timezone-aware column, so it must carry
@@ -496,6 +523,36 @@ class TestPurchaseRequest:
         assert request.decisions[0].decision == DecisionType.REJECTED
         assert request.decisions[0].stage == DecisionStage.DEPARTMENT_HEAD
         assert request.decisions[0].reason == "Budget constraints"
+
+    def test_reject_appends_a_purchase_request_rejected_domain_event(self):
+        """
+        Slice 3 notifications: reject() must record a PurchaseRequestRejected
+        event carrying everything the notification needs (requester,
+        requisition number, reason) - the application layer publishes
+        whatever ends up in domain_events, so anything missing here can never
+        reach the requester's notification.
+        """
+        from modules.procurement.domain.events import PurchaseRequestRejected
+
+        request = self._make_request()
+        request._id = 42
+        request.requisition_number = "PR-00042"
+        request.add_item(self._make_item())
+        request.submit()
+
+        assert request.domain_events == []
+
+        request.reject(9, "Budget constraints")
+
+        events = request.domain_events
+        assert len(events) == 1
+        event = events[0]
+        assert isinstance(event, PurchaseRequestRejected)
+        assert event.request_id == 42
+        assert event.requisition_number == "PR-00042"
+        assert event.requester_id == request.requester_id
+        assert event.rejector_id == 9
+        assert event.reason == "Budget constraints"
 
     def test_rejection_requires_reason(self):
         """Rejection reason is required."""

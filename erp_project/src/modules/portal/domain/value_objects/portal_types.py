@@ -121,6 +121,8 @@ class NotificationType(str, Enum):
     PAYSLIP_AVAILABLE = "payslip_available"
     ANNOUNCEMENT = "announcement"
     SYSTEM = "system"
+    PURCHASE_REQUEST_REJECTED = "purchase_request_rejected"
+    PURCHASE_REQUEST_PROCESSED = "purchase_request_processed"
 
 
 class DocumentVisibility(str, Enum):

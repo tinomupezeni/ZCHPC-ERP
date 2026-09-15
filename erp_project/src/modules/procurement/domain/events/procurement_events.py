@@ -88,11 +88,30 @@ class PurchaseRequestLevel2Approved(DomainEvent):
 
 @dataclass(frozen=True)
 class PurchaseRequestRejected(DomainEvent):
-    """Event raised when a purchase request is rejected."""
+    """
+    Event raised when a purchase request is rejected (Slice 3 notifications).
+
+    Fields were realigned to the current multi-stage-approval PurchaseRequest
+    aggregate (requisition_number, requester_id) - this event was previously
+    defined but never instantiated anywhere, so there was no live usage to
+    preserve compatibility with.
+    """
 
     request_id: int
+    requisition_number: str
+    requester_id: int
     rejector_id: int
-    reason: Optional[str]
+    reason: str
+
+
+@dataclass(frozen=True)
+class PurchaseRequestProcessed(DomainEvent):
+    """Event raised when procurement completes processing a purchase request (Slice 3 notifications)."""
+
+    request_id: int
+    requisition_number: str
+    requester_id: int
+    processed_by: int
 
 
 @dataclass(frozen=True)

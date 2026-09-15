@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/layout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -17,6 +18,7 @@ import type { PurchaseRequest, PurchaseRequestListItem } from '@/types/purchase-
 
 export function PurchaseRequestsPage() {
   const { employee } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [activeTab, setActiveTab] = useState('requests');
 
@@ -105,6 +107,25 @@ export function PurchaseRequestsPage() {
       toast.error(getPurchaseRequestErrorMessage(error, 'Failed to load purchase request'));
     }
   };
+
+  /**
+   * Slice 3: a notification (rejected -> edit, processed -> view) links here
+   * as /portal/purchase-requests?requestId=<id>&action=<edit|view>. Handled
+   * once, then the params are cleared so refreshing or navigating back to
+   * this page doesn't re-trigger the same deep link.
+   */
+  useEffect(() => {
+    const requestId = Number(searchParams.get('requestId'));
+    if (!requestId) return;
+
+    if (searchParams.get('action') === 'edit') {
+      handleEdit(requestId);
+    } else {
+      handleView(requestId);
+    }
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const handleTabChange = (tab: string) => {
     if (tab === 'new') {

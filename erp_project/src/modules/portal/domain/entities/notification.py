@@ -29,6 +29,15 @@ class Notification(Entity[int]):
     related_object_id: Optional[int] = None
     created_at: Optional[datetime] = None
 
+    def __post_init__(self) -> None:
+        # Entity[int].__init__ (which sets self._id) is entirely replaced by
+        # this dataclass's generated __init__, since Entity itself isn't a
+        # dataclass - without this, self.id would raise AttributeError for
+        # every notification built via create() below. Matches the same
+        # defensive pattern used by modules.procurement's dataclass entities.
+        if not hasattr(self, "_id"):
+            self._id = None
+
     @classmethod
     def create(
         cls,
@@ -46,7 +55,6 @@ class Notification(Entity[int]):
             raise ValueError("Message cannot be empty")
 
         return cls(
-            id=None,
             employee_id=employee_id,
             notification_type=notification_type,
             title=title.strip(),
@@ -174,6 +182,53 @@ class Notification(Entity[int]):
             message=f"Ticket {ticket_number} has been updated.",
             related_object_type="support_ticket",
             related_object_id=ticket_id,
+        )
+
+    @classmethod
+    def purchase_request_rejected(
+        cls,
+        employee_id: int,
+        request_id: int,
+        requisition_number: str,
+        reason: str,
+    ) -> "Notification":
+        """
+        Create a purchase request rejected notification (Slice 3).
+
+        Never carries GL/budget code data - only the requisition number and
+        the rejection reason, both already employee-facing everywhere else in
+        the Purchase Request workflow.
+        """
+        return cls.create(
+            employee_id=employee_id,
+            notification_type=NotificationType.PURCHASE_REQUEST_REJECTED,
+            title="Purchase Request Rejected",
+            message=(
+                f"Your purchase requisition {requisition_number} was rejected. "
+                f"Reason: {reason}"
+            ),
+            related_object_type="purchase_request",
+            related_object_id=request_id,
+        )
+
+    @classmethod
+    def purchase_request_processed(
+        cls,
+        employee_id: int,
+        request_id: int,
+        requisition_number: str,
+    ) -> "Notification":
+        """Create a purchase request processed notification (Slice 3) - a positive completion notice."""
+        return cls.create(
+            employee_id=employee_id,
+            notification_type=NotificationType.PURCHASE_REQUEST_PROCESSED,
+            title="Purchase Request Processed",
+            message=(
+                f"Your purchase requisition {requisition_number} has been "
+                f"processed by Procurement."
+            ),
+            related_object_type="purchase_request",
+            related_object_id=request_id,
         )
 
     @classmethod

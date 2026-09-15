@@ -475,6 +475,52 @@ class TestProcessPurchaseRequestByProcurement:
             use_case.execute(999, authorized_actor(24))
         repository.save.assert_not_called()
 
+    def test_publishes_purchase_request_processed_after_save(
+        self, repository, policy, draft_request_with_item
+    ):
+        """
+        Slice 3 notifications: the event bus must be given whatever domain
+        events process_by_procurement() recorded on `request` - not events
+        read off the use case's return value, since the real repository's
+        save() reconstructs and returns a different PurchaseRequest instance
+        (see ProcessPurchaseRequestByProcurement's docstring).
+        """
+        from modules.procurement.domain.events import PurchaseRequestProcessed
+
+        draft_request_with_item.submit()
+        draft_request_with_item.approve_by_department_head(20)
+        draft_request_with_item.verify_by_accounts(21)
+        draft_request_with_item.recommend_by_gm(22)
+        draft_request_with_item.approve_by_director(23)
+        repository.get_by_id.return_value = draft_request_with_item
+        event_bus = Mock()
+        use_case = ProcessPurchaseRequestByProcurement(repository, policy, event_bus=event_bus)
+
+        use_case.execute(100, authorized_actor(24))
+
+        event_bus.publish_all.assert_called_once()
+        (published,), _ = event_bus.publish_all.call_args
+        assert len(published) == 1
+        assert isinstance(published[0], PurchaseRequestProcessed)
+        assert published[0].request_id == draft_request_with_item.id
+        assert published[0].processed_by == 24
+        # Events must not still be sitting on the aggregate after publishing.
+        assert draft_request_with_item.domain_events == []
+
+    def test_does_not_publish_when_processing_fails(
+        self, repository, policy, draft_request_with_item
+    ):
+        """A DRAFT request can't be processed - no save, no event, no notification."""
+        repository.get_by_id.return_value = draft_request_with_item
+        event_bus = Mock()
+        use_case = ProcessPurchaseRequestByProcurement(repository, policy, event_bus=event_bus)
+
+        with pytest.raises(ValidationError):
+            use_case.execute(100, authorized_actor(24))
+
+        repository.save.assert_not_called()
+        event_bus.publish_all.assert_not_called()
+
 
 class TestRejectPurchaseRequest:
     """Tests for the RejectPurchaseRequest use case."""
@@ -517,6 +563,49 @@ class TestRejectPurchaseRequest:
         with pytest.raises(ValidationError):
             use_case.execute(100, authorized_actor(DEPARTMENT_HEAD_ID), reason="Not needed")
         repository.save.assert_not_called()
+
+    def test_publishes_purchase_request_rejected_after_save(
+        self, repository, policy, draft_request_with_item
+    ):
+        """Slice 3 notifications - see the equivalent Process test for why events are read from `request`, not the use case's return value."""
+        from modules.procurement.domain.events import PurchaseRequestRejected
+
+        draft_request_with_item.submit()
+        repository.get_by_id.return_value = draft_request_with_item
+        event_bus = Mock()
+        use_case = RejectPurchaseRequest(repository, policy, event_bus=event_bus)
+
+        use_case.execute(100, authorized_actor(DEPARTMENT_HEAD_ID), reason="Too expensive")
+
+        event_bus.publish_all.assert_called_once()
+        (published,), _ = event_bus.publish_all.call_args
+        assert len(published) == 1
+        assert isinstance(published[0], PurchaseRequestRejected)
+        assert published[0].request_id == draft_request_with_item.id
+        assert published[0].rejector_id == DEPARTMENT_HEAD_ID
+        assert published[0].reason == "Too expensive"
+        assert draft_request_with_item.domain_events == []
+
+    def test_does_not_publish_on_retry_after_already_rejected(
+        self, repository, policy, draft_request_with_item
+    ):
+        """
+        Idempotency (Slice 3): rejecting an already-REJECTED request (e.g. a
+        retried call) fails the domain guard before any save or publish, so a
+        retry can never create a second notification for the same rejection.
+        """
+        draft_request_with_item.submit()
+        draft_request_with_item.reject(DEPARTMENT_HEAD_ID, "Too expensive")
+        repository.get_by_id.return_value = draft_request_with_item
+        draft_request_with_item.clear_domain_events()  # as the first, successful call would have
+        event_bus = Mock()
+        use_case = RejectPurchaseRequest(repository, policy, event_bus=event_bus)
+
+        with pytest.raises(ValidationError):
+            use_case.execute(100, authorized_actor(DEPARTMENT_HEAD_ID), reason="Too expensive")
+
+        repository.save.assert_not_called()
+        event_bus.publish_all.assert_not_called()
 
 
 class TestCorrectAndResubmitPurchaseRequest:

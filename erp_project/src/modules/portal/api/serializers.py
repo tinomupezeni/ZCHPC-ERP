@@ -308,7 +308,14 @@ class ApplicationStatusSerializer(serializers.Serializer):
 # ============================
 
 class NotificationSerializer(serializers.Serializer):
-    """Serializer for notification."""
+    """
+    Serializer for notification.
+
+    related_object_type/related_object_id are what let the frontend deep-link
+    a notification to the thing it's about (e.g. a purchase request) - they
+    were previously defined on the domain entity but never actually
+    serialized, so no notification could ever be navigated to (Slice 3).
+    """
 
     id = serializers.IntegerField()
     notification_type = serializers.CharField()
@@ -317,3 +324,5 @@ class NotificationSerializer(serializers.Serializer):
     is_read = serializers.BooleanField()
     read_at = serializers.DateTimeField(allow_null=True)
     created_at = serializers.DateTimeField()
+    related_object_type = serializers.CharField(allow_null=True)
+    related_object_id = serializers.IntegerField(allow_null=True)

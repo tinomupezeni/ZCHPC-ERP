@@ -40,15 +40,3 @@ export interface DashboardSummary {
   upcoming_events: UpcomingEvent[];
   unread_notifications: number;
 }
-
-export interface Notification {
-  id: number;
-  notification_type: string;
-  title: string;
-  message: string;
-  is_read: boolean;
-  created_at: string;
-  read_at: string | null;
-  related_object_type: string | null;
-  related_object_id: number | null;
-}

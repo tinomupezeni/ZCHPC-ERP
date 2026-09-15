@@ -133,8 +133,12 @@ class DjangoNotificationRepository(INotificationRepository):
     """Django repository for notifications."""
 
     def _to_domain(self, model) -> Notification:
-        return Notification(
-            id=model.id,
+        # Notification is a plain @dataclass over Entity[int], which does not
+        # accept `id` as a constructor keyword (Entity's own __init__, with
+        # its `id` parameter, is entirely replaced by the dataclass-generated
+        # one) - identity is set afterwards instead, the same pattern
+        # modules.procurement's own _to_domain() methods already use.
+        notification = Notification(
             employee_id=model.employee_id,
             notification_type=NotificationType(model.notification_type),
             title=model.title,
@@ -145,9 +149,11 @@ class DjangoNotificationRepository(INotificationRepository):
             related_object_id=model.related_object_id,
             created_at=model.created_at,
         )
+        notification._id = model.id
+        return notification
 
     def save(self, notification: Notification) -> Notification:
-        from employee_portal.models import Notification as NotificationModel
+        from modules.portal.models import Notification as NotificationModel
 
         if notification.id:
             model = NotificationModel.objects.get(pk=notification.id)
@@ -167,7 +173,7 @@ class DjangoNotificationRepository(INotificationRepository):
         return self._to_domain(model)
 
     def get_by_id(self, notification_id: int) -> Optional[Notification]:
-        from employee_portal.models import Notification as NotificationModel
+        from modules.portal.models import Notification as NotificationModel
         try:
             model = NotificationModel.objects.get(pk=notification_id)
             return self._to_domain(model)
@@ -180,7 +186,7 @@ class DjangoNotificationRepository(INotificationRepository):
         is_read: Optional[bool] = None,
         notification_type: Optional[NotificationType] = None,
     ) -> List[Notification]:
-        from employee_portal.models import Notification as NotificationModel
+        from modules.portal.models import Notification as NotificationModel
 
         queryset = NotificationModel.objects.filter(
             employee_id=employee_id,
@@ -195,14 +201,14 @@ class DjangoNotificationRepository(INotificationRepository):
         return [self._to_domain(m) for m in queryset]
 
     def get_unread_count(self, employee_id: int) -> int:
-        from employee_portal.models import Notification as NotificationModel
+        from modules.portal.models import Notification as NotificationModel
         return NotificationModel.objects.filter(
             employee_id=employee_id,
             is_read=False,
         ).count()
 
     def mark_all_read(self, employee_id: int) -> int:
-        from employee_portal.models import Notification as NotificationModel
+        from modules.portal.models import Notification as NotificationModel
         return NotificationModel.objects.filter(
             employee_id=employee_id,
             is_read=False,
