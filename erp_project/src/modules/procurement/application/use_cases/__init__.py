@@ -10,6 +10,7 @@ from .purchase_request_use_cases import (
     CorrectAndResubmitPurchaseRequest,
     CreatePurchaseRequest,
     CreatePurchaseRequestDTO,
+    DeletePurchaseRequest,
     ListPurchaseRequests,
     ProcessPurchaseRequestByProcurement,
     PurchaseRequestItemDTO,
@@ -39,5 +40,6 @@ __all__ = [
     "CorrectAndResubmitPurchaseRequest",
     "UpdatePurchaseRequestItemDTO",
     "UpdatePurchaseRequestItems",
+    "DeletePurchaseRequest",
     "ListActivePurchaseRequestCategories",
 ]

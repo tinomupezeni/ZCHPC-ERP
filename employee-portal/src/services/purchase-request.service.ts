@@ -57,6 +57,16 @@ export const purchaseRequestService = {
     const response = await api.patch<PurchaseRequest>(`/procurement/requests/${id}/`, data);
     return response.data;
   },
+
+  /**
+   * Slice 4: permanently delete a DRAFT request the caller owns. The
+   * backend is authoritative on what's deletable (DRAFT, no decision
+   * history) - this call can fail with a 400/403/404, which the caller
+   * must surface rather than assume success.
+   */
+  async deleteRequest(id: number): Promise<void> {
+    await api.delete(`/procurement/requests/${id}/`);
+  },
 };
 
 /**

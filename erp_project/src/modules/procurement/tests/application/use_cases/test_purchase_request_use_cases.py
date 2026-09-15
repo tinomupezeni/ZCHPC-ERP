@@ -29,6 +29,7 @@ from modules.procurement.application.use_cases.purchase_request_use_cases import
     CorrectAndResubmitPurchaseRequest,
     CreatePurchaseRequest,
     CreatePurchaseRequestDTO,
+    DeletePurchaseRequest,
     ProcessPurchaseRequestByProcurement,
     PurchaseRequestItemDTO,
     RecommendPurchaseRequestByGM,
@@ -840,3 +841,77 @@ class TestUpdatePurchaseRequestItems:
         )
 
         assert result.items[0].budget_code_id == 77
+
+
+class TestDeletePurchaseRequest:
+    """
+    Tests for the DeletePurchaseRequest use case (Slice 4).
+
+    Who is allowed to delete is covered in tests/application/authorization/
+    (see TestDeleteAuthorization); these cover the use case's own business
+    rules - which requests are actually deletable once authorization passes.
+    """
+
+    def test_deletes_a_clean_draft(self, repository, policy, draft_request_with_item):
+        repository.get_by_id.return_value = draft_request_with_item
+        repository.delete.return_value = True
+        use_case = DeletePurchaseRequest(repository, policy)
+
+        result = use_case.execute(100, authorized_actor(REQUESTER_ID))
+
+        assert result is None
+        repository.delete.assert_called_once_with(100)
+
+    def test_not_found_raises(self, repository, policy):
+        repository.get_by_id.return_value = None
+        use_case = DeletePurchaseRequest(repository, policy)
+
+        with pytest.raises(NotFoundError):
+            use_case.execute(999, authorized_actor(REQUESTER_ID))
+        repository.delete.assert_not_called()
+
+    def test_non_draft_request_raises(self, repository, policy, draft_request_with_item):
+        """A submitted (PENDING_*) or PROCESSED request can never be deleted."""
+        draft_request_with_item.submit()
+        repository.get_by_id.return_value = draft_request_with_item
+        use_case = DeletePurchaseRequest(repository, policy)
+
+        with pytest.raises(ValidationError) as exc:
+            use_case.execute(100, authorized_actor(REQUESTER_ID))
+
+        assert exc.value.code == "NOT_DELETABLE"
+        repository.delete.assert_not_called()
+
+    def test_draft_with_decision_history_raises(
+        self, repository, policy, draft_request_with_item
+    ):
+        """
+        A rejected-then-corrected request is DRAFT again but must not be
+        deletable: correct_and_resubmit() never clears request.decisions, and
+        the persistence layer cascade-deletes them along with the request,
+        which would silently destroy the approval/rejection audit trail.
+        """
+        draft_request_with_item.submit()
+        draft_request_with_item.reject(DEPARTMENT_HEAD_ID, "Budget constraints")
+        draft_request_with_item.correct_and_resubmit()
+        assert draft_request_with_item.status == RequestStatus.DRAFT
+        assert len(draft_request_with_item.decisions) == 1
+        repository.get_by_id.return_value = draft_request_with_item
+        use_case = DeletePurchaseRequest(repository, policy)
+
+        with pytest.raises(ValidationError) as exc:
+            use_case.execute(100, authorized_actor(REQUESTER_ID))
+
+        assert exc.value.code == "HAS_DECISION_HISTORY"
+        repository.delete.assert_not_called()
+
+    def test_repository_returning_false_raises_not_found(
+        self, repository, policy, draft_request_with_item
+    ):
+        """Guards a race between load and delete (e.g. the request stopped being a draft in between)."""
+        repository.get_by_id.return_value = draft_request_with_item
+        repository.delete.return_value = False
+        use_case = DeletePurchaseRequest(repository, policy)
+
+        with pytest.raises(NotFoundError):
+            use_case.execute(100, authorized_actor(REQUESTER_ID))

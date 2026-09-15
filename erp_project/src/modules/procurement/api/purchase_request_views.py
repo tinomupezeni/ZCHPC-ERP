@@ -35,6 +35,7 @@ from modules.procurement.application.use_cases import (
     CorrectAndResubmitPurchaseRequest,
     CreatePurchaseRequest,
     CreatePurchaseRequestDTO,
+    DeletePurchaseRequest,
     ListActivePurchaseRequestCategories,
     ListPurchaseRequests,
     ProcessPurchaseRequestByProcurement,
@@ -214,13 +215,23 @@ def purchase_request_categories_list(request: Request) -> Response:
     return Response(PurchaseRequestCategorySerializer(results, many=True).data)
 
 
-@api_view(["GET", "PATCH"])
+@api_view(["GET", "PATCH", "DELETE"])
 def purchase_request_detail(request: Request, request_id: int) -> Response:
     """
-    Retrieve a single purchase request, or (PATCH) replace a DRAFT/REJECTED
+    Retrieve a single purchase request, (PATCH) replace a DRAFT/REJECTED
     request's entire item collection (Slice 2 - see UpdatePurchaseRequestItems
-    for how REJECTED is handled).
+    for how REJECTED is handled), or (DELETE) permanently remove a clean
+    draft (Slice 4 - see DeletePurchaseRequest for what "clean" means).
     """
+    if request.method == "DELETE":
+        delete_use_case = DeletePurchaseRequest(_repository, _policy)
+        try:
+            delete_use_case.execute(request_id, actor_from_request(request))
+        except DomainException as exc:
+            return _handle_domain_error(exc)
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     if request.method == "PATCH":
         serializer = UpdatePurchaseRequestInputSerializer(data=request.data)
         if not serializer.is_valid():

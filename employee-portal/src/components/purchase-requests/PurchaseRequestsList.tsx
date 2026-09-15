@@ -23,6 +23,8 @@ interface PurchaseRequestsListProps {
   onView: (id: number) => void;
   /** Slice 2: opens the edit form for a DRAFT/REJECTED request. */
   onEdit: (id: number) => void;
+  /** Slice 4: asks to delete a DRAFT request. */
+  onDelete: (id: number) => void;
   bucketFilter: PurchaseRequestBucketFilter;
   onBucketFilterChange: (bucket: PurchaseRequestBucketFilter) => void;
 }
@@ -41,6 +43,7 @@ export function PurchaseRequestsList({
   onRetry,
   onView,
   onEdit,
+  onDelete,
   bucketFilter,
   onBucketFilterChange,
 }: PurchaseRequestsListProps) {
@@ -158,6 +161,7 @@ export function PurchaseRequestsList({
                   request={request}
                   onView={onView}
                   onEdit={onEdit}
+                  onDelete={onDelete}
                 />
               ))}
             </div>

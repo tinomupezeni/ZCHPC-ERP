@@ -39,6 +39,7 @@ function baseProps() {
     onRetry: vi.fn(),
     onView: vi.fn(),
     onEdit: vi.fn(),
+    onDelete: vi.fn(),
     bucketFilter: 'all' as const,
     onBucketFilterChange: vi.fn(),
   };
@@ -118,6 +119,49 @@ describe('PurchaseRequestsList', () => {
     for (const name of [/continue/i, /review & correct/i]) {
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
     }
+  });
+
+  describe('Delete Draft (Slice 4)', () => {
+    const draftItem: PurchaseRequestListItem = {
+      ...requests[0],
+      id: 3,
+      requisition_number: 'PR-0003',
+      status: 'DRAFT',
+    };
+
+    it('shows a Delete Draft CTA only for a DRAFT request', () => {
+      render(<PurchaseRequestsList {...baseProps()} requests={[draftItem]} />);
+      expect(screen.getByRole('button', { name: /^delete draft$/i })).toBeInTheDocument();
+    });
+
+    it('does not show Delete Draft for REJECTED, PENDING_*, or PROCESSED requests', () => {
+      const nonDraft: PurchaseRequestListItem[] = [
+        requests[0], // PENDING_DEPARTMENT_HEAD
+        requests[1], // REJECTED
+        { ...requests[0], id: 4, requisition_number: 'PR-0004', status: 'PROCESSED' },
+      ];
+      render(<PurchaseRequestsList {...baseProps()} requests={nonDraft} />);
+      expect(screen.queryByRole('button', { name: /delete draft/i })).not.toBeInTheDocument();
+    });
+
+    it('calls onDelete with the request id without opening the detail view', async () => {
+      const user = userEvent.setup();
+      const onDelete = vi.fn();
+      const onView = vi.fn();
+      render(
+        <PurchaseRequestsList
+          {...baseProps()}
+          requests={[draftItem]}
+          onDelete={onDelete}
+          onView={onView}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /^delete draft$/i }));
+
+      expect(onDelete).toHaveBeenCalledWith(3);
+      expect(onView).not.toHaveBeenCalled();
+    });
   });
 
   it('opens the request detail when a card is clicked', async () => {

@@ -8,6 +8,7 @@ import {
   PurchaseRequestForm,
   PurchaseRequestsList,
   PurchaseRequestDetail,
+  PurchaseRequestDeleteDialog,
 } from '@/components/purchase-requests';
 import type { PurchaseRequestBucketFilter } from '@/components/purchase-requests/PurchaseRequestsList';
 import {
@@ -34,6 +35,10 @@ export function PurchaseRequestsPage() {
   // Slice 2: the DRAFT/REJECTED request currently open for editing, if any.
   // null means the "New Requisition" tab is a fresh, blank create form.
   const [editingRequest, setEditingRequest] = useState<PurchaseRequest | null>(null);
+
+  // Slice 4: the DRAFT request awaiting delete confirmation, if any.
+  const [pendingDelete, setPendingDelete] = useState<PurchaseRequestListItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadRequests = useCallback(async () => {
     setIsLoading(true);
@@ -108,6 +113,40 @@ export function PurchaseRequestsPage() {
     }
   };
 
+  /** Slice 4: opens the confirmation dialog for a DRAFT request's card. */
+  const handleDeleteRequest = (id: number) => {
+    const target = requests.find((r) => r.id === id);
+    if (target) setPendingDelete(target);
+  };
+
+  const handleCancelDelete = () => {
+    if (isDeleting) return;
+    setPendingDelete(null);
+  };
+
+  /**
+   * Backend remains authoritative: only on a successful 204 is the request
+   * actually removed from the list. A failure leaves it exactly as it was,
+   * with an error toast explaining why - never an optimistic removal.
+   */
+  const handleConfirmDelete = async () => {
+    if (!pendingDelete) return;
+    setIsDeleting(true);
+    try {
+      await purchaseRequestService.deleteRequest(pendingDelete.id);
+      setRequests((prev) => prev.filter((r) => r.id !== pendingDelete.id));
+      toast.success(`${pendingDelete.requisition_number} deleted`);
+      setPendingDelete(null);
+    } catch (error) {
+      toast.error(
+        getPurchaseRequestErrorMessage(error, 'Failed to delete purchase request')
+      );
+      setPendingDelete(null);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   /**
    * Slice 3: a notification (rejected -> edit, processed -> view) links here
    * as /portal/purchase-requests?requestId=<id>&action=<edit|view>. Handled
@@ -177,6 +216,7 @@ export function PurchaseRequestsPage() {
             onRetry={loadRequests}
             onView={handleView}
             onEdit={handleEdit}
+            onDelete={handleDeleteRequest}
             bucketFilter={bucketFilter}
             onBucketFilterChange={setBucketFilter}
           />
@@ -189,6 +229,13 @@ export function PurchaseRequestsPage() {
         onClose={() => setIsDetailOpen(false)}
         isLoading={isDetailLoading}
         onEdit={handleEdit}
+      />
+
+      <PurchaseRequestDeleteDialog
+        requisitionNumber={pendingDelete?.requisition_number ?? null}
+        isDeleting={isDeleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
       />
     </div>
   );

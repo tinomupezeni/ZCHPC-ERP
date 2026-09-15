@@ -231,6 +231,23 @@ class PurchaseRequestAuthorizationPolicy:
             self._require_permission(actor, PurchaseRequestPermissions.CORRECT)
             self._require_permission(actor, PurchaseRequestPermissions.RESUBMIT)
 
+    def authorize_delete(self, actor: Actor | None, request: PurchaseRequest) -> None:
+        """
+        Deleting a draft (Slice 4) is the requester's own action, same
+        rationale as authorize_edit for reusing CREATE rather than a new
+        permission: anyone who can raise a request already needs to be able
+        to manage it before submission.
+
+        Only permission + ownership are decided here, per this class's own
+        contract (authorize_* never decides whether an operation is legal
+        for this record's current state). Whether the request is actually a
+        deletable DRAFT - and whether it carries decision history that must
+        be preserved - is DeletePurchaseRequest's job once this passes.
+        """
+        self.require_authenticated(actor)
+        self._require_permission(actor, PurchaseRequestPermissions.CREATE)
+        self._require_requester(actor, request, action="delete")
+
     # ------------------------------------------------------------------
     # Internal checks
     # ------------------------------------------------------------------

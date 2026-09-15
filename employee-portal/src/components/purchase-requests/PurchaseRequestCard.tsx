@@ -1,6 +1,6 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, Pencil } from 'lucide-react';
+import { CalendarDays, Pencil, Trash2 } from 'lucide-react';
 import { format, formatDistanceToNow, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import type { PurchaseRequestListItem } from '@/types/purchase-request.types';
@@ -12,6 +12,8 @@ interface PurchaseRequestCardProps {
   onView: (id: number) => void;
   /** Slice 2: opens the edit form for this request. Shown only for DRAFT/REJECTED. */
   onEdit: (id: number) => void;
+  /** Slice 4: asks to delete this request. Shown only for DRAFT - the backend is authoritative either way. */
+  onDelete: (id: number) => void;
 }
 
 const ACCENT_CLASSES: Record<string, string> = {
@@ -49,10 +51,16 @@ function getDateLine(request: PurchaseRequestListItem): string {
   return `${prefix} ${formatDistanceToNow(parseISO(request.created_at), { addSuffix: true })}`;
 }
 
-export function PurchaseRequestCard({ request, onView, onEdit }: PurchaseRequestCardProps) {
+export function PurchaseRequestCard({
+  request,
+  onView,
+  onEdit,
+  onDelete,
+}: PurchaseRequestCardProps) {
   const tone = statusTone(request.status);
   const waitingHelperLine = getWaitingHelperLine(request.status);
   const editCtaLabel = getEditCtaLabel(request.status);
+  const canDelete = request.status === 'DRAFT';
 
   return (
     <Card
@@ -81,20 +89,39 @@ export function PurchaseRequestCard({ request, onView, onEdit }: PurchaseRequest
             {waitingHelperLine && (
               <p className="text-xs text-muted-foreground">{waitingHelperLine}</p>
             )}
-            {editCtaLabel && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-7"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit(request.id);
-                }}
-              >
-                <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                {editCtaLabel}
-              </Button>
+            {(editCtaLabel || canDelete) && (
+              <div className="flex items-center gap-2 flex-wrap">
+                {editCtaLabel && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit(request.id);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                    {editCtaLabel}
+                  </Button>
+                )}
+                {canDelete && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(request.id);
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                    Delete Draft
+                  </Button>
+                )}
+              </div>
             )}
 
             <div className="flex items-center gap-2 text-sm text-muted-foreground pt-1">

@@ -492,3 +492,44 @@ class UpdatePurchaseRequestItems(BasePurchaseRequestUseCase):
 
         request.replace_items(new_items)
         return self.repository.save(request)
+
+
+class DeletePurchaseRequest(BasePurchaseRequestUseCase):
+    """
+    Permanently delete a draft (Slice 4).
+
+    Deletion is not a state transition, so there is no domain method to
+    invoke - the legality checks below live here rather than on
+    PurchaseRequest, mirroring how ViewPurchaseRequest/ListPurchaseRequests
+    (also non-mutating) don't call the domain either. authorize_delete only
+    decides permission + ownership; DRAFT-only and no-decision-history are
+    business rules about *this* operation, not about who the actor is, so
+    they stay in the use case rather than the policy.
+
+    A DRAFT that already carries decision history (rejected, then corrected
+    back to DRAFT via correct_and_resubmit - which never clears
+    request.decisions) is deliberately excluded: the persistence layer
+    cascade-deletes PurchaseRequestDecision rows along with the request,
+    which would silently destroy the approval/rejection audit trail the
+    data model's own docstring says must never be overwritten. Such a
+    request must be corrected and resubmitted, not deleted.
+    """
+
+    def execute(self, request_id: int, actor: Actor) -> None:
+        request = self._load(request_id, actor)
+        self.policy.authorize_delete(actor, request)
+
+        if request.status != RequestStatus.DRAFT:
+            raise ValidationError(
+                f"Cannot delete a request in status {request.status.value}",
+                code="NOT_DELETABLE",
+            )
+        if request.decisions:
+            raise ValidationError(
+                "Cannot delete a request with decision history - correct and "
+                "resubmit it instead",
+                code="HAS_DECISION_HISTORY",
+            )
+
+        if not self.repository.delete(request_id):
+            raise NotFoundError(f"Purchase request {request_id} not found")

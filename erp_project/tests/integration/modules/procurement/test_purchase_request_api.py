@@ -684,6 +684,100 @@ class TestUpdatePurchaseRequestItems:
 
 
 # =============================================================================
+# Delete Draft (Slice 4)
+# =============================================================================
+
+
+class TestDeletePurchaseRequest:
+    def test_requester_can_delete_own_clean_draft(
+        self, client_for, api_url, requester, make_request_record
+    ):
+        record = make_request_record(requester, status="DRAFT")
+
+        response = client_for(requester).delete(f"{api_url}{record.id}/")
+
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        assert not PurchaseRequestModel.objects.filter(pk=record.id).exists()
+
+    def test_non_requester_cannot_delete_someone_elses_draft(
+        self, client_for, api_url, requester, department_head, make_request_record
+    ):
+        record = make_request_record(requester, status="DRAFT")
+
+        response = client_for(department_head).delete(f"{api_url}{record.id}/")
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert PurchaseRequestModel.objects.filter(pk=record.id).exists()
+
+    def test_non_draft_request_cannot_be_deleted(
+        self, client_for, api_url, requester, make_request_record
+    ):
+        record = make_request_record(requester, status="PENDING_DEPARTMENT_HEAD")
+
+        response = client_for(requester).delete(f"{api_url}{record.id}/")
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["code"] == "NOT_DELETABLE"
+        assert PurchaseRequestModel.objects.filter(pk=record.id).exists()
+
+    def test_draft_with_decision_history_cannot_be_deleted(
+        self,
+        client_for,
+        api_url,
+        requester,
+        department_head,
+        category,
+        make_request_record,
+    ):
+        record = make_request_record(requester, status="PENDING_DEPARTMENT_HEAD")
+        client_for(department_head).post(
+            f"{api_url}{record.id}/reject/",
+            {"reason": "Wrong budget"},
+            format="json",
+        )
+        corrected = client_for(requester).patch(
+            f"{api_url}{record.id}/",
+            {
+                "items": [
+                    {
+                        "description": "Corrected item",
+                        "quantity": 1,
+                        "expected_delivery_period": "2 weeks",
+                        "estimated_cost": "100.00",
+                        "category_id": category.id,
+                    }
+                ]
+            },
+            format="json",
+        )
+        assert corrected.data["status"] == "DRAFT", corrected.data
+
+        response = client_for(requester).delete(f"{api_url}{record.id}/")
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["code"] == "HAS_DECISION_HISTORY"
+        assert PurchaseRequestModel.objects.filter(pk=record.id).exists()
+
+    def test_missing_request_returns_404(self, client_for, api_url, requester):
+        response = client_for(requester).delete(f"{api_url}999999/")
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_anonymous_delete_is_rejected(
+        self, anonymous_client, api_url, requester, make_request_record
+    ):
+        record = make_request_record(requester, status="DRAFT")
+
+        response = anonymous_client.delete(f"{api_url}{record.id}/")
+
+        assert response.status_code in (
+            status.HTTP_401_UNAUTHORIZED,
+            status.HTTP_403_FORBIDDEN,
+        )
+        assert PurchaseRequestModel.objects.filter(pk=record.id).exists()
+
+
+# =============================================================================
 # Authorization is enforced by Slice 4, surfaced as 403
 # =============================================================================
 

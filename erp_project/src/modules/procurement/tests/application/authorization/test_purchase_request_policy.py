@@ -35,6 +35,7 @@ from modules.procurement.application.use_cases import (
     CorrectAndResubmitPurchaseRequest,
     CreatePurchaseRequest,
     CreatePurchaseRequestDTO,
+    DeletePurchaseRequest,
     ListPurchaseRequests,
     ProcessPurchaseRequestByProcurement,
     PurchaseRequestItemDTO,
@@ -962,6 +963,70 @@ class TestEditAuthorization:
             UpdatePurchaseRequestItems(
                 repository, policy, category_repository
             ).execute(100, items, Actor.anonymous())
+
+        assert exc.value.code == "UNAUTHENTICATED"
+        repository.get_by_id.assert_not_called()
+
+
+class TestDeleteAuthorization:
+    """
+    CREATE is reused rather than a new permission (see authorize_delete's
+    docstring) - the same rationale as authorize_edit. Whether the request is
+    actually a deletable DRAFT is DeletePurchaseRequest's own business rule,
+    not authorization's - see TestDeletePurchaseRequest in
+    tests/application/use_cases/ for that half.
+    """
+
+    def test_requester_can_delete_own_draft(self, repository, policy):
+        request = make_request(RequestStatus.DRAFT)
+        repository.get_by_id.return_value = request
+        repository.delete.return_value = True
+        actor = make_actor(REQUESTER_ID, [P.CREATE], IT_DEPARTMENT_ID)
+
+        result = DeletePurchaseRequest(repository, policy).execute(100, actor)
+
+        assert result is None
+        repository.delete.assert_called_once_with(100)
+
+    def test_actor_without_create_permission_cannot_delete(self, repository, policy):
+        repository.get_by_id.return_value = make_request(RequestStatus.DRAFT)
+        actor = make_actor(REQUESTER_ID, [P.VIEW], IT_DEPARTMENT_ID)
+
+        with pytest.raises(AuthorizationError) as exc:
+            DeletePurchaseRequest(repository, policy).execute(100, actor)
+
+        assert exc.value.code == "PERMISSION_DENIED"
+        repository.delete.assert_not_called()
+
+    def test_another_employee_cannot_delete_someone_elses_draft(self, repository, policy):
+        request = make_request(RequestStatus.DRAFT)
+        repository.get_by_id.return_value = request
+        actor = make_actor(2, [P.CREATE], IT_DEPARTMENT_ID)
+
+        with pytest.raises(AuthorizationError) as exc:
+            DeletePurchaseRequest(repository, policy).execute(100, actor)
+
+        assert exc.value.code == "NOT_REQUESTER"
+        repository.delete.assert_not_called()
+
+    def test_admin_bypasses_the_requester_check(self, repository, policy):
+        request = make_request(RequestStatus.DRAFT)
+        repository.get_by_id.return_value = request
+        repository.delete.return_value = True
+        admin = Actor(
+            employee_id=9,
+            permissions=PermissionSet.empty(),
+            role_name="SYSTEM_ADMINISTRATOR",
+        )
+
+        result = DeletePurchaseRequest(repository, policy).execute(100, admin)
+
+        assert result is None
+        repository.delete.assert_called_once_with(100)
+
+    def test_anonymous_actor_cannot_delete(self, repository, policy):
+        with pytest.raises(AuthorizationError) as exc:
+            DeletePurchaseRequest(repository, policy).execute(100, Actor.anonymous())
 
         assert exc.value.code == "UNAUTHENTICATED"
         repository.get_by_id.assert_not_called()

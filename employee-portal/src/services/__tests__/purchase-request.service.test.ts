@@ -3,12 +3,14 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 const getMock = vi.fn();
 const postMock = vi.fn();
 const patchMock = vi.fn();
+const deleteMock = vi.fn();
 
 vi.mock('../api', () => ({
   default: {
     get: (...args: unknown[]) => getMock(...args),
     post: (...args: unknown[]) => postMock(...args),
     patch: (...args: unknown[]) => patchMock(...args),
+    delete: (...args: unknown[]) => deleteMock(...args),
   },
 }));
 
@@ -21,6 +23,7 @@ beforeEach(() => {
   getMock.mockReset();
   postMock.mockReset();
   patchMock.mockReset();
+  deleteMock.mockReset();
 });
 
 describe('purchaseRequestService', () => {
@@ -106,6 +109,21 @@ describe('purchaseRequestService', () => {
     await purchaseRequestService.submitRequest(7);
 
     expect(postMock).toHaveBeenCalledWith('/procurement/requests/7/submit/');
+  });
+
+  it('deletes a draft via DELETE requests/{id}/ (Slice 4)', async () => {
+    deleteMock.mockResolvedValue({ data: undefined });
+
+    await purchaseRequestService.deleteRequest(7);
+
+    expect(deleteMock).toHaveBeenCalledWith('/procurement/requests/7/');
+  });
+
+  it('propagates a failed delete rather than swallowing it', async () => {
+    const error = { response: { data: { error: 'Cannot delete', code: 'NOT_DELETABLE' } } };
+    deleteMock.mockRejectedValue(error);
+
+    await expect(purchaseRequestService.deleteRequest(7)).rejects.toBe(error);
   });
 
   it('replaces item collection via PATCH requests/{id}/ (Slice 2 edit)', async () => {
