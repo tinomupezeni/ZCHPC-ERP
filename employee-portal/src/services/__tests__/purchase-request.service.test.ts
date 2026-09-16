@@ -191,6 +191,31 @@ describe('purchaseRequestService', () => {
     });
   });
 
+  it('lists the accounts review queue via scope=pending-accounts (F18)', async () => {
+    getMock.mockResolvedValue({ data: [] });
+
+    await purchaseRequestService.getPendingAccountsRequests();
+
+    expect(getMock).toHaveBeenCalledWith('/procurement/requests/', {
+      params: { scope: 'pending-accounts' },
+    });
+  });
+
+  it('propagates a failed accounts queue load (e.g. a 403) rather than swallowing it (F18)', async () => {
+    const error = { response: { status: 403, data: { code: 'PERMISSION_DENIED' } } };
+    getMock.mockRejectedValue(error);
+
+    await expect(purchaseRequestService.getPendingAccountsRequests()).rejects.toBe(error);
+  });
+
+  it('verifies a request as accounts via POST .../accounts/verify/ with no body (F18)', async () => {
+    postMock.mockResolvedValue({ data: { id: 7, status: 'PENDING_GM' } });
+
+    await purchaseRequestService.verifyByAccounts(7);
+
+    expect(postMock).toHaveBeenCalledWith('/procurement/requests/7/accounts/verify/');
+  });
+
   it('never sends budget_code_id in the update payload shape', async () => {
     patchMock.mockResolvedValue({ data: { id: 7, status: 'DRAFT' } });
 

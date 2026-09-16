@@ -41,6 +41,21 @@ export const purchaseRequestService = {
     return response.data;
   },
 
+  /**
+   * F18: requests awaiting Accounts verification. Unlike the department-head
+   * queue, this scope is organization-wide, not pre-filtered by the backend
+   * to anything about the caller - any authenticated actor holding
+   * accounts_verify sees every request currently at this stage. A 403 here
+   * means the caller holds no Accounts capability at all, which callers
+   * must surface distinctly from a genuinely empty queue.
+   */
+  async getPendingAccountsRequests(): Promise<PurchaseRequestListItem[]> {
+    const response = await api.get<PurchaseRequestListItem[]>('/procurement/requests/', {
+      params: { scope: 'pending-accounts' },
+    });
+    return response.data;
+  },
+
   async getRequest(id: number): Promise<PurchaseRequest> {
     const response = await api.get<PurchaseRequest>(`/procurement/requests/${id}/`);
     return response.data;
@@ -83,6 +98,14 @@ export const purchaseRequestService = {
   async approveByDepartmentHead(id: number): Promise<PurchaseRequest> {
     const response = await api.post<PurchaseRequest>(
       `/procurement/requests/${id}/department-head/approve/`
+    );
+    return response.data;
+  },
+
+  /** F18: verify a request currently awaiting Accounts verification. */
+  async verifyByAccounts(id: number): Promise<PurchaseRequest> {
+    const response = await api.post<PurchaseRequest>(
+      `/procurement/requests/${id}/accounts/verify/`
     );
     return response.data;
   },

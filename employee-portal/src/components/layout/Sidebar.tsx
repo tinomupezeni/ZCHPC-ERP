@@ -83,6 +83,7 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
     { path: '/portal/comparative-schedules', label: 'Comparative Schedules', icon: Scale, description: 'Approve schedules' },
     { path: '/portal/leave', label: 'Leave', icon: CalendarDays, description: 'Request time off' },
     { path: '/portal/purchase-requests', label: 'Purchase Requests', icon: ShoppingBag, description: 'Raise a requisition' },
+    { path: '/portal/purchase-requests/accounts', label: 'Accounts Verification', icon: FileCheck, description: 'Verify or reject purchase requests' },
     { path: '/portal/payslips', label: 'My Payslips', icon: FileText, description: 'Your earnings' },
     { path: '/portal/attendance', label: 'Attendance', icon: Clock, description: 'Clock in/out' },
   ],

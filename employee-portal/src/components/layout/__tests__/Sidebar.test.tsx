@@ -50,6 +50,45 @@ describe('Sidebar - F17 Department Head review navigation', () => {
   });
 });
 
+describe('Sidebar - F18 Accounts verification navigation', () => {
+  it('shows an "Accounts Verification" link for the accountant role group', () => {
+    mockRoleGroup = 'accountant';
+    mockUseActionCount.mockReturnValue(0);
+    renderSidebar();
+
+    expect(
+      screen.getByRole('link', { name: /accounts verification/i })
+    ).toHaveAttribute('href', '/portal/purchase-requests/accounts');
+  });
+
+  it('does not show the accounts verification link for the staff role group, and leaves the existing requester navigation intact', () => {
+    mockRoleGroup = 'staff';
+    mockUseActionCount.mockReturnValue(0);
+    renderSidebar();
+
+    expect(
+      screen.queryByRole('link', { name: /accounts verification/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /^purchase requests raise a requisition$/i })
+    ).toHaveAttribute('href', '/portal/purchase-requests');
+  });
+
+  it('does not confuse the existing "Accounts" ledger link with the new "Accounts Verification" link', () => {
+    mockRoleGroup = 'accountant';
+    mockUseActionCount.mockReturnValue(0);
+    renderSidebar();
+
+    expect(screen.getByRole('link', { name: /^accounts ledgers & accounts$/i })).toHaveAttribute(
+      'href',
+      '/portal/accounts'
+    );
+    expect(
+      screen.getByRole('link', { name: /accounts verification/i })
+    ).toHaveAttribute('href', '/portal/purchase-requests/accounts');
+  });
+});
+
 describe('Sidebar - Purchase Requests action badge', () => {
   it('shows no badge when there is nothing needing action', () => {
     mockRoleGroup = 'staff';

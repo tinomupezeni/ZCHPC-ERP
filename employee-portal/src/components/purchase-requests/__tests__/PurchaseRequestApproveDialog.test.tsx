@@ -100,3 +100,69 @@ describe('PurchaseRequestApproveDialog', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * F18: the dialog is reused for Accounts' "Verify" action via title/
+ * description/confirmLabel props. These tests use custom copy exclusively -
+ * every test above this point passes no such props, proving the Department
+ * Head defaults are unchanged (F18 dialog-regression requirement).
+ */
+describe('PurchaseRequestApproveDialog - stage-specific copy (F18)', () => {
+  it('renders custom title, description and confirm label when provided (Accounts "Verify" copy)', () => {
+    render(
+      <PurchaseRequestApproveDialog
+        requisitionNumber="PR-0042"
+        isApproving={false}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+        title="Verify PR-0042?"
+        description="This will send the request to the General Manager for review."
+        confirmLabel="Verify"
+      />
+    );
+
+    expect(screen.getByText('Verify PR-0042?')).toBeInTheDocument();
+    expect(
+      screen.getByText('This will send the request to the General Manager for review.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/approve/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^verify$/i })).toBeInTheDocument();
+  });
+
+  it('calls onConfirm when the custom confirm button is clicked', async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+    render(
+      <PurchaseRequestApproveDialog
+        requisitionNumber="PR-0042"
+        isApproving={false}
+        onConfirm={onConfirm}
+        onCancel={vi.fn()}
+        title="Verify PR-0042?"
+        description="This will send the request to the General Manager for review."
+        confirmLabel="Verify"
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: /^verify$/i }));
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a "Verifying..." in-flight label (not "Approving...") for the Verify confirm label', () => {
+    render(
+      <PurchaseRequestApproveDialog
+        requisitionNumber="PR-0042"
+        isApproving={true}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+        title="Verify PR-0042?"
+        description="This will send the request to the General Manager for review."
+        confirmLabel="Verify"
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /verifying/i })).toBeDisabled();
+    expect(screen.queryByText(/approving/i)).not.toBeInTheDocument();
+  });
+});
