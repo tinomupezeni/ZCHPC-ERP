@@ -99,14 +99,14 @@ export default function EmployeeList({ employees, loading, onView }) {
 
                 {/* Position Column */}
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{employee.position || "-"}</div>
+                  <div className="text-sm text-gray-900">{employee.position_title || employee.position || "-"}</div>
                   <div className="text-xs text-gray-500">{employee.employee_type}</div>
                 </td>
 
                 {/* Department Column */}
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
-                    {employee.department || "Unassigned"}
+                    {employee.department_name || employee.department || "Unassigned"}
                   </span>
                 </td>
 

@@ -40,6 +40,8 @@ class EmployeeResponseSerializer(serializers.Serializer):
     department = serializers.CharField(source="department_name", read_only=True, allow_null=True)
     position_id = serializers.IntegerField(read_only=True, allow_null=True)
     position_title = serializers.CharField(read_only=True, allow_null=True)
+    department = serializers.CharField(source="department_name", read_only=True, allow_null=True)
+    position = serializers.CharField(source="position_title", read_only=True, allow_null=True)
     position = serializers.CharField(source="position_title", read_only=True, allow_null=True)
     employee_type = serializers.CharField(read_only=True)
     date_joined = serializers.DateField(read_only=True)
@@ -170,6 +172,8 @@ class EmployeeListItemSerializer(serializers.Serializer):
     email = serializers.EmailField(read_only=True, allow_null=True)
     department_name = serializers.CharField(read_only=True, allow_null=True)
     position_title = serializers.CharField(read_only=True, allow_null=True)
+    department = serializers.CharField(source="department_name", read_only=True, allow_null=True)
+    position = serializers.CharField(source="position_title", read_only=True, allow_null=True)
     is_active = serializers.BooleanField(read_only=True)
 
 
