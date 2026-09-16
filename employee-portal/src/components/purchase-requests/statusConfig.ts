@@ -47,11 +47,148 @@ export const STATUS_MESSAGES: Record<PurchaseRequestStatus, string> = {
 const NO_ACTION_NEEDED_LINE = 'No action needed from you.';
 
 /**
+ * Who is looking at this request's status right now (F19, generalized in
+ * F20's "role-aware workflow status" follow-up).
+ *
+ * STATUS_LABELS/STATUS_MESSAGES stay requester-oriented and unchanged - they
+ * back PurchaseRequestsPage, by far the more common caller, and every
+ * existing test already pins that copy. Each reviewer role gets its own
+ * override for the one status it actually reviews (see REVIEWER_STATUS and
+ * REVIEWER_COPY below). This is deliberately not a general "which role is
+ * this" enum resolved from the logged-in user (that's exactly the kind of
+ * role detection useRole() already gets wrong for the seeded test accounts -
+ * see F18's investigation) - it's simply which page asked, decided once by
+ * that page itself, the same way the `actions` slot already works. GM/
+ * Director/Procurement have no review page yet (out of scope - see F17/F18),
+ * but are included here so the model doesn't need reshaping when they do.
+ */
+export type PurchaseRequestViewerRole =
+  | 'requester'
+  | 'department_head'
+  | 'accounts'
+  | 'gm'
+  | 'director'
+  | 'procurement';
+
+type ReviewerRole = Exclude<PurchaseRequestViewerRole, 'requester'>;
+
+/** The one status each reviewer role actually has standing to review. */
+const REVIEWER_STATUS: Record<ReviewerRole, PurchaseRequestStatus> = {
+  department_head: 'PENDING_DEPARTMENT_HEAD',
+  accounts: 'PENDING_ACCOUNTS',
+  gm: 'PENDING_GM',
+  director: 'PENDING_DIRECTOR',
+  procurement: 'PENDING_PROCUREMENT',
+};
+
+const DEPARTMENT_HEAD_REVIEW_LABEL = 'Awaiting Your Review';
+const DEPARTMENT_HEAD_REVIEW_MESSAGE = 'This request requires your review and approval.';
+const DEPARTMENT_HEAD_CORRECTED_LABEL = 'Correction Requires Your Review';
+const DEPARTMENT_HEAD_CORRECTED_MESSAGE =
+  'This request was corrected and resubmitted after the previous rejection. ' +
+  'Please review the updated request before approving or rejecting it.';
+
+/**
+ * Reviewer-perspective copy for the roles that don't (yet) have a
+ * corrected-resubmission variant of their own - only department_head does,
+ * handled separately below, since it's the only stage every resubmission
+ * always returns through (see PurchaseRequest.submit() on the backend).
+ */
+const REVIEWER_COPY: Record<Exclude<ReviewerRole, 'department_head'>, { label: string; message: string }> = {
+  accounts: {
+    label: 'Awaiting Your Verification',
+    message:
+      'This request has been approved by the Department Head and requires your budget verification.',
+  },
+  gm: {
+    label: 'Awaiting Your Recommendation',
+    message: 'This request requires your recommendation.',
+  },
+  director: {
+    label: 'Awaiting Your Approval',
+    message: 'This request requires your approval.',
+  },
+  procurement: {
+    label: 'Awaiting Processing',
+    message: 'This request is ready for procurement processing.',
+  },
+};
+
+/**
+ * True only for a request currently at PENDING_DEPARTMENT_HEAD that already
+ * carries decision history - the same signal
+ * PurchaseRequest.submit() uses on the backend to decide whether to raise
+ * PurchaseRequestCorrectedAndResubmitted (F19): decisions only ever
+ * accumulate during PENDING_* stages, never while DRAFT, and DRAFT is the
+ * only way back to PENDING_DEPARTMENT_HEAD other than a first submission -
+ * so non-empty decisions here can only mean a correction, regardless of
+ * which stage rejected it or how many times. No new backend field needed;
+ * the existing decisions[] the detail response already returns is enough.
+ */
+export function isCorrectedResubmission(request: PurchaseRequest): boolean {
+  return request.status === 'PENDING_DEPARTMENT_HEAD' && request.decisions.length > 0;
+}
+
+/** True when this viewer is currently the one with standing to review this request. */
+function isReviewingNow(
+  status: PurchaseRequestStatus,
+  viewerRole: PurchaseRequestViewerRole
+): viewerRole is ReviewerRole {
+  return viewerRole !== 'requester' && status === REVIEWER_STATUS[viewerRole as ReviewerRole];
+}
+
+/**
+ * The status hero's title, from the given viewer's perspective. Only a
+ * reviewer looking at the one status they themselves review differs from
+ * STATUS_LABELS - every other (status, viewer) pair is unaffected, and the
+ * requester's own view never changes.
+ */
+export function getStatusHeroLabel(
+  request: PurchaseRequest,
+  viewerRole: PurchaseRequestViewerRole = 'requester'
+): string {
+  if (isReviewingNow(request.status, viewerRole)) {
+    if (viewerRole === 'department_head') {
+      return isCorrectedResubmission(request)
+        ? DEPARTMENT_HEAD_CORRECTED_LABEL
+        : DEPARTMENT_HEAD_REVIEW_LABEL;
+    }
+    return REVIEWER_COPY[viewerRole].label;
+  }
+  return STATUS_LABELS[request.status];
+}
+
+/** The status hero's message, from the given viewer's perspective - see getStatusHeroLabel. */
+export function getStatusHeroMessage(
+  request: PurchaseRequest,
+  viewerRole: PurchaseRequestViewerRole = 'requester'
+): string {
+  if (isReviewingNow(request.status, viewerRole)) {
+    if (viewerRole === 'department_head') {
+      return isCorrectedResubmission(request)
+        ? DEPARTMENT_HEAD_CORRECTED_MESSAGE
+        : DEPARTMENT_HEAD_REVIEW_MESSAGE;
+    }
+    return REVIEWER_COPY[viewerRole].message;
+  }
+  return STATUS_MESSAGES[request.status];
+}
+
+/**
  * A short reassurance line for "waiting" cards/heroes, distinct from
  * STATUS_MESSAGES so the two aren't duplicated when a status message already
- * ends with it (PENDING_DEPARTMENT_HEAD's approved copy already does).
+ * ends with it (PENDING_DEPARTMENT_HEAD's requester-facing copy already
+ * does). Never shown to a reviewer looking at the status they themselves
+ * review: they have Approve/Reject/Verify/etc. controls right there, so "no
+ * action needed" would be actively wrong, not just redundant.
  */
-export function getWaitingHelperLine(status: PurchaseRequestStatus): string | null {
+export function getWaitingHelperLine(
+  status: PurchaseRequestStatus,
+  viewerRole: PurchaseRequestViewerRole = 'requester'
+): string | null {
+  if (isReviewingNow(status, viewerRole)) {
+    return null;
+  }
   if (getActionBucket(status) !== 'waiting') return null;
   return STATUS_MESSAGES[status].endsWith(NO_ACTION_NEEDED_LINE) ? null : NO_ACTION_NEEDED_LINE;
 }
@@ -209,4 +346,38 @@ export function decisionLabel(decision: PurchaseRequestDecision): string {
 export function findRejection(request: PurchaseRequest): PurchaseRequestDecision | undefined {
   if (request.status !== 'REJECTED') return undefined;
   return lastMatch(request.decisions, (d) => d.decision === 'REJECTED');
+}
+
+/** The stage label shown in Section E (Approval Workflow), e.g. for a superseded rejection. */
+export function stageLabel(stage: PurchaseRequestDecisionStage): string {
+  return APPROVAL_STAGES.find((s) => s.stage === stage)?.label ?? stage;
+}
+
+/**
+ * A REJECTED decision from this request's history that is no longer the
+ * active blocker (F20) - either because the request has since moved past
+ * REJECTED entirely (corrected, resubmitted, and now further along or even
+ * PROCESSED), or because it's an earlier, different rejection than the one
+ * currently blocking a REJECTED request.
+ *
+ * This exists because the stage-by-stage Approval Workflow section
+ * (getStageInfo) only ever shows the LATEST decision per stage - a prior
+ * rejection at a stage that has since been re-approved becomes invisible
+ * there. Surfacing it separately is what makes "this request was previously
+ * rejected and has been corrected" understandable at a later point in the
+ * lifecycle, not just at the exact moment a reviewer is re-reviewing it.
+ *
+ * Returns undefined for a request that has never been rejected.
+ */
+export function getSupersededRejection(
+  request: PurchaseRequest
+): PurchaseRequestDecision | undefined {
+  const candidates =
+    request.status === 'REJECTED' ? request.decisions.slice(0, -1) : request.decisions;
+  return lastMatch(candidates, (d) => d.decision === 'REJECTED');
+}
+
+/** Whether the "Rejection / Correction Context" section has anything to show. */
+export function hasCorrectionHistory(request: PurchaseRequest): boolean {
+  return getSupersededRejection(request) !== undefined;
 }

@@ -13,6 +13,23 @@ vi.mock('@/hooks/usePurchaseRequestActionCount', () => ({
   usePurchaseRequestActionCount: () => mockUseActionCount(),
 }));
 
+/**
+ * F20 follow-up: Department Head Review / Accounts Verification visibility
+ * is driven entirely by usePurchaseRequestReviewerAccess (the real backend
+ * queue-endpoint outcome), independent of roleGroup - not by roleGroup, and
+ * not by useRole() at all. See the hook's own docstring for why: the seeded
+ * PR_TEST_* accounts all resolve to the 'staff' roleGroup regardless of
+ * which one actually holds reviewer authority.
+ */
+let mockCanReviewAsDepartmentHead: boolean | null = false;
+let mockCanVerifyAsAccounts: boolean | null = false;
+vi.mock('@/hooks/usePurchaseRequestReviewerAccess', () => ({
+  usePurchaseRequestReviewerAccess: () => ({
+    canReviewAsDepartmentHead: mockCanReviewAsDepartmentHead,
+    canVerifyAsAccounts: mockCanVerifyAsAccounts,
+  }),
+}));
+
 function renderSidebar() {
   return render(
     <MemoryRouter>
@@ -21,24 +38,31 @@ function renderSidebar() {
   );
 }
 
-describe('Sidebar - F17 Department Head review navigation', () => {
-  it('shows a "Review Purchase Requests" link for the manager role group', () => {
-    mockRoleGroup = 'manager';
+describe('Sidebar - F20 follow-up: permission-aware Purchase Request review navigation', () => {
+  it('shows "Department Head Review" only when the reviewer-access check says so, regardless of role group', () => {
+    mockRoleGroup = 'staff';
     mockUseActionCount.mockReturnValue(0);
+    mockCanReviewAsDepartmentHead = true;
+    mockCanVerifyAsAccounts = false;
     renderSidebar();
 
     expect(
-      screen.getByRole('link', { name: /review purchase requests/i })
+      screen.getByRole('link', { name: /department head review/i })
     ).toHaveAttribute('href', '/portal/purchase-requests/review');
   });
 
-  it('does not show the review link for the staff role group, and leaves the existing requester navigation intact', () => {
+  it('does not show "Department Head Review" for an ordinary requester (no reviewer access), and leaves requester navigation intact', () => {
     mockRoleGroup = 'staff';
     mockUseActionCount.mockReturnValue(0);
+    mockCanReviewAsDepartmentHead = false;
+    mockCanVerifyAsAccounts = false;
     renderSidebar();
 
     expect(
-      screen.queryByRole('link', { name: /review purchase requests/i })
+      screen.queryByRole('link', { name: /department head review/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: /accounts verification/i })
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: /^purchase requests raise a requisition$/i })
@@ -48,12 +72,27 @@ describe('Sidebar - F17 Department Head review navigation', () => {
       '/portal/leave'
     );
   });
-});
 
-describe('Sidebar - F18 Accounts verification navigation', () => {
-  it('shows an "Accounts Verification" link for the accountant role group', () => {
-    mockRoleGroup = 'accountant';
+  it('does not show either reviewer link while the access check is still in flight (null)', () => {
+    mockRoleGroup = 'staff';
     mockUseActionCount.mockReturnValue(0);
+    mockCanReviewAsDepartmentHead = null;
+    mockCanVerifyAsAccounts = null;
+    renderSidebar();
+
+    expect(
+      screen.queryByRole('link', { name: /department head review/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: /accounts verification/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows "Accounts Verification" only when the reviewer-access check says so, regardless of role group', () => {
+    mockRoleGroup = 'staff';
+    mockUseActionCount.mockReturnValue(0);
+    mockCanReviewAsDepartmentHead = false;
+    mockCanVerifyAsAccounts = true;
     renderSidebar();
 
     expect(
@@ -61,22 +100,26 @@ describe('Sidebar - F18 Accounts verification navigation', () => {
     ).toHaveAttribute('href', '/portal/purchase-requests/accounts');
   });
 
-  it('does not show the accounts verification link for the staff role group, and leaves the existing requester navigation intact', () => {
+  it('shows both reviewer links together when both checks pass', () => {
     mockRoleGroup = 'staff';
     mockUseActionCount.mockReturnValue(0);
+    mockCanReviewAsDepartmentHead = true;
+    mockCanVerifyAsAccounts = true;
     renderSidebar();
 
     expect(
-      screen.queryByRole('link', { name: /accounts verification/i })
-    ).not.toBeInTheDocument();
+      screen.getByRole('link', { name: /department head review/i })
+    ).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: /^purchase requests raise a requisition$/i })
-    ).toHaveAttribute('href', '/portal/purchase-requests');
+      screen.getByRole('link', { name: /accounts verification/i })
+    ).toBeInTheDocument();
   });
 
   it('does not confuse the existing "Accounts" ledger link with the new "Accounts Verification" link', () => {
     mockRoleGroup = 'accountant';
     mockUseActionCount.mockReturnValue(0);
+    mockCanReviewAsDepartmentHead = false;
+    mockCanVerifyAsAccounts = true;
     renderSidebar();
 
     expect(screen.getByRole('link', { name: /^accounts ledgers & accounts$/i })).toHaveAttribute(
@@ -87,11 +130,29 @@ describe('Sidebar - F18 Accounts verification navigation', () => {
       screen.getByRole('link', { name: /accounts verification/i })
     ).toHaveAttribute('href', '/portal/purchase-requests/accounts');
   });
+
+  it('leaves the accountant role group navigation unaffected when reviewer access is false', () => {
+    mockRoleGroup = 'accountant';
+    mockUseActionCount.mockReturnValue(0);
+    mockCanReviewAsDepartmentHead = false;
+    mockCanVerifyAsAccounts = false;
+    renderSidebar();
+
+    expect(
+      screen.queryByRole('link', { name: /accounts verification/i })
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^accounts ledgers & accounts$/i })).toHaveAttribute(
+      'href',
+      '/portal/accounts'
+    );
+  });
 });
 
 describe('Sidebar - Purchase Requests action badge', () => {
   it('shows no badge when there is nothing needing action', () => {
     mockRoleGroup = 'staff';
+    mockCanReviewAsDepartmentHead = false;
+    mockCanVerifyAsAccounts = false;
     mockUseActionCount.mockReturnValue(0);
     renderSidebar();
 

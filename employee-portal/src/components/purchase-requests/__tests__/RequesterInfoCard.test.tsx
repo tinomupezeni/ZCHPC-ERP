@@ -28,6 +28,7 @@ describe('RequesterInfoCard', () => {
     render(<RequesterInfoCard employee={employee} />);
 
     expect(screen.getByText('Richard Matsika')).toBeInTheDocument();
+    expect(screen.getByText('EMP001')).toBeInTheDocument();
     expect(screen.getByText('Systems Administrator')).toBeInTheDocument();
     expect(screen.getByText('+263771234567')).toBeInTheDocument();
     expect(screen.getByText('IT Department')).toBeInTheDocument();

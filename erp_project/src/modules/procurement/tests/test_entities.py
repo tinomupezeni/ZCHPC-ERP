@@ -580,6 +580,65 @@ class TestPurchaseRequest:
         request.submit()
         assert request.status == RequestStatus.PENDING_DEPARTMENT_HEAD
 
+    def test_submit_does_not_append_a_domain_event_on_a_first_time_submission(self):
+        """F19: a fresh submission is not a correction - no event, no notification."""
+        request = self._make_request()
+        request.add_item(self._make_item())
+
+        request.submit()
+
+        assert request.domain_events == []
+
+    def test_submit_after_correction_appends_a_purchase_request_corrected_and_resubmitted_domain_event(
+        self,
+    ):
+        """
+        F19 notifications: resubmitting after a rejection must tell the
+        department head this is a correction, not a first-time submission -
+        submit() is where that's detected (see its own docstring for why).
+        """
+        from modules.procurement.domain.events import PurchaseRequestCorrectedAndResubmitted
+
+        request = self._make_request()
+        request._id = 88
+        request.requisition_number = "PR-00088"
+        request.add_item(self._make_item())
+        request.submit()
+        request.reject(2, "Wrong items")
+        request.clear_domain_events()  # as the reject use case's own publish would have
+        request.correct_and_resubmit()
+
+        assert request.domain_events == []
+
+        request.submit()
+
+        events = request.domain_events
+        assert len(events) == 1
+        event = events[0]
+        assert isinstance(event, PurchaseRequestCorrectedAndResubmitted)
+        assert event.request_id == 88
+        assert event.requisition_number == "PR-00088"
+        assert event.requester_id == request.requester_id
+        assert event.department_id == request.department_id
+
+    def test_submit_after_correction_fires_the_event_regardless_of_which_stage_rejected_it(self):
+        """F19: must not be hard-coded to department-head rejections specifically - rejected at Accounts here."""
+        from modules.procurement.domain.events import PurchaseRequestCorrectedAndResubmitted
+
+        request = self._make_request()
+        request.add_item(self._make_item())
+        request.submit()
+        request.approve_by_department_head(2)
+        request.reject(3, "Category needs revisiting")
+        request.clear_domain_events()
+        request.correct_and_resubmit()
+
+        request.submit()
+
+        events = request.domain_events
+        assert len(events) == 1
+        assert isinstance(events[0], PurchaseRequestCorrectedAndResubmitted)
+
     def test_previous_decision_history_is_preserved(self):
         """Spec #16: Previous decision history is preserved."""
         request = self._make_request()

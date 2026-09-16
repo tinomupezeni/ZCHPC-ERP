@@ -145,9 +145,28 @@ describe('PurchaseRequestAccountsReviewPage - queue', () => {
     });
     renderPage();
 
-    await screen.findByText('Missing required permission');
-    expect(screen.getByText("You don't have access to this queue")).toBeInTheDocument();
+    expect(await screen.findByText("You don't have access to this queue")).toBeInTheDocument();
+    expect(
+      screen.getByText('You do not have access to the Accounts verification queue.')
+    ).toBeInTheDocument();
     expect(screen.queryByText('No requests waiting for your review.')).not.toBeInTheDocument();
+  });
+
+  it('F20 follow-up: never shows the backend\'s raw permission identifier for a 403', async () => {
+    vi.mocked(purchaseRequestService.getPendingAccountsRequests).mockRejectedValue({
+      response: {
+        status: 403,
+        data: {
+          error: "Missing required permission 'procurement.purchase_request.accounts_verify'",
+          code: 'PERMISSION_DENIED',
+        },
+      },
+    });
+    renderPage();
+
+    await screen.findByText("You don't have access to this queue");
+    expect(screen.queryByText(/missing required permission/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/procurement\.purchase_request/i)).not.toBeInTheDocument();
   });
 
   it('shows a generic error state (with retry) for a non-403 failure', async () => {
@@ -201,17 +220,43 @@ describe('PurchaseRequestAccountsReviewPage - detail', () => {
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Riley Requester')).toBeInTheDocument();
-    expect(within(dialog).getByText('IT Department')).toBeInTheDocument();
-    expect(within(dialog).getByText('PR-0042')).toBeInTheDocument();
-    expect(within(dialog).getByText('Laptop')).toBeInTheDocument();
-    expect(within(dialog).getByText('Qty: 2')).toBeInTheDocument();
-    expect(within(dialog).getByText('Unit Cost: $1,200.00')).toBeInTheDocument();
-    expect(within(dialog).getByText('Line Total: $2,400.00')).toBeInTheDocument();
-    expect(within(dialog).getByText('Category: IT Equipment')).toBeInTheDocument();
-    expect(within(dialog).getByText('$2,400.00')).toBeInTheDocument();
+    expect(within(dialog).getAllByText('IT Department').length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText('PR-0042').length).toBeGreaterThan(0);
+    const itemRow = within(dialog).getByText('Laptop').closest('tr')!;
+    expect(within(itemRow).getByText('Delivery: 2 weeks')).toBeInTheDocument();
+    expect(within(itemRow).getByText('IT Equipment')).toBeInTheDocument();
+    const cells = within(itemRow).getAllByRole('cell');
+    expect(cells[3]).toHaveTextContent('2'); // Qty
+    expect(cells[4]).toHaveTextContent('$1,200.00'); // Unit Cost
+    expect(cells[5]).toHaveTextContent('$2,400.00'); // Line Total
+    expect(
+      within(dialog).getByText('Total Estimated Cost').closest('div')
+    ).toHaveTextContent('$2,400.00');
     // Decision history: the earlier Department Head approval is visible.
     expect(within(dialog).getByText('Department Head')).toBeInTheDocument();
     expect(within(dialog).getByText('Approved')).toBeInTheDocument();
+  });
+
+  it('F20: shows Accounts reviewer-oriented status copy, not requester-oriented copy', async () => {
+    vi.mocked(purchaseRequestService.getPendingAccountsRequests).mockResolvedValue([
+      queueItem(),
+    ]);
+    vi.mocked(purchaseRequestService.getRequest).mockResolvedValue(fullRequest());
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByText('PR-0042'));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Awaiting Your Verification')).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(
+        'This request has been approved by the Department Head and requires your budget verification.'
+      )
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByText(/no action needed/i)).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByText('Approved by your department head — Accounts is now verifying the budget.')
+    ).not.toBeInTheDocument();
   });
 
   it('renders the detail read-only: no input/textarea controls for editing the request', async () => {

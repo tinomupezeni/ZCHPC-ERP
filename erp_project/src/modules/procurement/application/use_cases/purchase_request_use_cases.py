@@ -271,12 +271,33 @@ _QUEUE_READERS = {
 
 
 class SubmitPurchaseRequest(BasePurchaseRequestUseCase):
+    """
+    F19: publishes PurchaseRequestCorrectedAndResubmitted after a successful
+    save, but only when this submit is a corrected resubmission - see
+    PurchaseRequest.submit()'s own docstring for how it decides that. A
+    first-time submission raises no domain event and this publishes nothing,
+    identical to the pre-F19 behavior. event_bus defaults to the process-wide
+    singleton, matching RejectPurchaseRequest/ProcessPurchaseRequestByProcurement
+    so existing 2-arg call sites (e.g. the API view) keep working unchanged.
+    """
+
+    def __init__(
+        self,
+        repository: IPurchaseRequestRepository,
+        policy: PurchaseRequestAuthorizationPolicy,
+        event_bus: EventBus | None = None,
+    ) -> None:
+        super().__init__(repository, policy)
+        self._event_bus = event_bus or get_event_bus()
+
     def execute(self, request_id: int, actor: Actor) -> PurchaseRequest:
         request = self._load(request_id, actor)
         self.policy.authorize_submit(actor, request)
 
         request.submit()
-        return self.repository.save(request)
+        saved = self.repository.save(request)
+        self._event_bus.publish_all(request.clear_domain_events())
+        return saved
 
 
 class ApprovePurchaseRequestByDepartmentHead(BasePurchaseRequestUseCase):

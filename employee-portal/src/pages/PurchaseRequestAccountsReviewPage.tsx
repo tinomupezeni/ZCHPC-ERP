@@ -48,15 +48,25 @@ export function PurchaseRequestAccountsReviewPage() {
       setRequests(data);
     } catch (error) {
       const httpStatus = (error as { response?: { status?: number } })?.response?.status;
-      setQueueError({
-        kind: httpStatus === 403 ? 'unauthorized' : 'generic',
-        message: getPurchaseRequestErrorMessage(
-          error,
-          httpStatus === 403
-            ? 'You do not have access to the Accounts verification queue.'
-            : 'Failed to load requests awaiting Accounts verification'
-        ),
-      });
+      setQueueError(
+        httpStatus === 403
+          ? {
+              kind: 'unauthorized',
+              // F20 follow-up: shown as-is to the employee, so this must stay
+              // human-facing - never the backend's raw permission identifier
+              // (e.g. "Missing required permission '...'"), which
+              // getPurchaseRequestErrorMessage would otherwise surface here
+              // since the backend's 403 body does carry one.
+              message: 'You do not have access to the Accounts verification queue.',
+            }
+          : {
+              kind: 'generic',
+              message: getPurchaseRequestErrorMessage(
+                error,
+                'Failed to load requests awaiting Accounts verification'
+              ),
+            }
+      );
     } finally {
       setIsLoading(false);
     }
@@ -176,6 +186,7 @@ export function PurchaseRequestAccountsReviewPage() {
         onClose={closeDetail}
         isLoading={isDetailLoading}
         onEdit={() => {}}
+        viewerRole="accounts"
         actions={
           selectedRequest?.status === 'PENDING_ACCOUNTS' ? (
             <div className="flex justify-end gap-2">

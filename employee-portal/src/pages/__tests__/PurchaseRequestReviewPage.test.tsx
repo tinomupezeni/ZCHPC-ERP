@@ -82,6 +82,14 @@ function renderPage() {
   );
 }
 
+function renderPageAtPath(path: string) {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <PurchaseRequestReviewPage />
+    </MemoryRouter>
+  );
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -106,9 +114,28 @@ describe('PurchaseRequestReviewPage - queue authorization', () => {
     });
     renderPage();
 
-    await screen.findByText('Missing required permission');
-    expect(screen.getByText("You don't have access to this queue")).toBeInTheDocument();
+    expect(await screen.findByText("You don't have access to this queue")).toBeInTheDocument();
+    expect(
+      screen.getByText('You do not have access to the department-head review queue.')
+    ).toBeInTheDocument();
     expect(screen.queryByText('No requests waiting for your review.')).not.toBeInTheDocument();
+  });
+
+  it('F20 follow-up: never shows the backend\'s raw permission identifier for a 403', async () => {
+    vi.mocked(purchaseRequestService.getPendingDepartmentHeadRequests).mockRejectedValue({
+      response: {
+        status: 403,
+        data: {
+          error: "Missing required permission 'procurement.purchase_request.department_head_approve'",
+          code: 'PERMISSION_DENIED',
+        },
+      },
+    });
+    renderPage();
+
+    await screen.findByText("You don't have access to this queue");
+    expect(screen.queryByText(/missing required permission/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/procurement\.purchase_request/i)).not.toBeInTheDocument();
   });
 
   it('shows the empty-queue message for a genuinely empty 200 response', async () => {
@@ -142,8 +169,9 @@ describe('PurchaseRequestReviewPage - detail and review actions', () => {
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Jane Moyo')).toBeInTheDocument();
-    expect(within(dialog).getByText('Laptop')).toBeInTheDocument();
-    expect(within(dialog).getByText('Unit Cost: $1,200.00')).toBeInTheDocument();
+    const itemRow = within(dialog).getByText('Laptop').closest('tr')!;
+    const cells = within(itemRow).getAllByRole('cell');
+    expect(cells[4]).toHaveTextContent('$1,200.00'); // Unit Cost
     expect(within(dialog).getByRole('button', { name: /^approve$/i })).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: /^reject$/i })).toBeInTheDocument();
   });
@@ -168,6 +196,48 @@ describe('PurchaseRequestReviewPage - detail and review actions', () => {
     expect(within(dialog).queryByRole('button', { name: /^reject$/i })).not.toBeInTheDocument();
   });
 
+  it('F19 follow-up: uses reviewer-oriented status copy, never the requester wording, for a first-time PENDING_DEPARTMENT_HEAD request', async () => {
+    vi.mocked(purchaseRequestService.getPendingDepartmentHeadRequests).mockResolvedValue([
+      queueItem(),
+    ]);
+    vi.mocked(purchaseRequestService.getRequest).mockResolvedValue(fullRequest());
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByText('PR-0042'));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Awaiting Your Review')).toBeInTheDocument();
+    expect(
+      within(dialog).getByText('This request requires your review and approval.')
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByText(/no action needed/i)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/your department head is reviewing/i)).not.toBeInTheDocument();
+  });
+
+  it('F19 follow-up: uses corrected-resubmission copy when the request already carries decision history', async () => {
+    vi.mocked(purchaseRequestService.getPendingDepartmentHeadRequests).mockResolvedValue([
+      queueItem(),
+    ]);
+    vi.mocked(purchaseRequestService.getRequest).mockResolvedValue(
+      fullRequest({
+        status: 'PENDING_DEPARTMENT_HEAD',
+        decisions: [
+          { id: 1, stage: 'DEPARTMENT_HEAD', decision: 'APPROVED', actor_id: 9, reason: '', created_at: '2025-01-02T00:00:00Z' },
+          { id: 2, stage: 'ACCOUNTS', decision: 'REJECTED', actor_id: 12, reason: 'Category needs revisiting', created_at: '2025-01-03T00:00:00Z' },
+        ],
+      })
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByText('PR-0042'));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Correction Requires Your Review')).toBeInTheDocument();
+    expect(within(dialog).getByText(/corrected and resubmitted/i)).toBeInTheDocument();
+    // Decision history (including the earlier rejection) remains visible alongside the new copy.
+    expect(within(dialog).getByText('Rejected')).toBeInTheDocument();
+  });
+
   it('handles the detail fetch failing (e.g. the request vanished) without corrupting the queue', async () => {
     vi.mocked(purchaseRequestService.getPendingDepartmentHeadRequests).mockResolvedValue([
       queueItem(),
@@ -185,6 +255,28 @@ describe('PurchaseRequestReviewPage - detail and review actions', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     // The queue itself is untouched by a detail-fetch failure.
     expect(screen.getByText('PR-0042')).toBeInTheDocument();
+  });
+});
+
+describe('PurchaseRequestReviewPage - F19 notification deep link', () => {
+  it('opens the detail for the requestId in the query string on mount (a "Purchase Request Corrected" notification link)', async () => {
+    vi.mocked(purchaseRequestService.getPendingDepartmentHeadRequests).mockResolvedValue([]);
+    vi.mocked(purchaseRequestService.getRequest).mockResolvedValue(fullRequest());
+
+    renderPageAtPath('/portal/purchase-requests/review?requestId=1&action=view');
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(purchaseRequestService.getRequest).toHaveBeenCalledWith(1);
+  });
+
+  it('does not open any detail when there is no requestId in the query string', async () => {
+    vi.mocked(purchaseRequestService.getPendingDepartmentHeadRequests).mockResolvedValue([]);
+
+    renderPageAtPath('/portal/purchase-requests/review');
+
+    await screen.findByText('No requests waiting for your review.');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(purchaseRequestService.getRequest).not.toHaveBeenCalled();
   });
 });
 

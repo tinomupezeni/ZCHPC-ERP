@@ -53,6 +53,36 @@ Employees.email). Re-running: if an actor with that email already exists and
 matches the expected name, its department/position/role/password/active
 state are reconciled (not recreated); if a *different* employee somehow
 already owns that email, the command fails loudly rather than touching it.
+
+Why the Department Head also gets a portal permission (F19 follow-up)
+-----------------------------------------------------------------------
+RBACMiddleware (modules.identity.infrastructure.middleware) gates every
+``/api/v2/<app>/...`` route on nothing finer than "does this actor hold ANY
+permission whose app prefix matches this route's app" (see
+modules.identity.infrastructure.route_access.grants_module_access) - the
+module's own authorization layer is responsible for anything finer, and
+modules.portal's notification endpoints do no further permission check of
+their own beyond that coarse gate (they just scope by the caller's own
+employee_id). So without holding *some* ``portal.*``-prefixed permission,
+PR_TEST_DEPARTMENT_HEAD cannot reach ``/api/v2/portal/notifications/`` at
+all - which matters now that F19 puts a real, user-facing notification on
+that role's own workflow (a rejected request corrected and resubmitted).
+
+The real production convention (see the data migration
+modules.hr.migrations.0017_seed_role_permissions) is to grant every
+employee role the bare ``portal.*`` wildcard outright - there is no
+finer-grained portal permission scheme anywhere in this codebase to select
+from instead. This command deliberately does NOT copy that: granting the
+full wildcard would hand PR_TEST_DEPARTMENT_HEAD access to every portal
+route (attendance, leave, documents, tickets, expenses, payslips), none of
+which this seed command's role is otherwise scoped to touch. Since
+grants_module_access only ever compares the permission string's app prefix
+(never a finer sub-scope - nothing in the portal app currently reads one),
+a narrower, self-documenting string satisfies the exact same gate today
+while not reading as broader than it is; see PORTAL_NOTIFICATION_PERMISSION
+below. Only PR_TEST_DEPARTMENT_HEAD receives it - the other five actors
+were not reported as needing to view their own notifications through this
+workflow, so their permission sets are left untouched.
 """
 
 from dataclasses import dataclass
@@ -76,6 +106,14 @@ from modules.procurement.application.authorization import PurchaseRequestPermiss
 from shared.domain.exceptions import ValidationError
 
 TEST_PASSWORD = "testpass123"
+
+# F19 follow-up: the minimum permission that lets an actor reach
+# /api/v2/portal/notifications/ at all - see the module docstring's
+# "Why the Department Head also gets a portal permission" section for the
+# full reasoning. Not a real, pre-existing permission constant anywhere else
+# in the app (no PortalPermissions class exists) - deliberately narrow and
+# local to this seed command rather than introducing one.
+PORTAL_NOTIFICATION_PERMISSION = "portal.notification.view"
 
 # Search order: prefer whichever of these already exists in this database
 # (see the module docstring on "IT" vs "IT Department" naming) rather than
@@ -103,7 +141,16 @@ ACTORS = [
         "surname": "Head",
         "email": "hana.head@example.com",
         "role_name": "PR_TEST_DEPARTMENT_HEAD",
-        "permissions": [P.DEPARTMENT_HEAD_APPROVE, P.VIEW, P.REJECT],
+        "permissions": [
+            P.DEPARTMENT_HEAD_APPROVE,
+            P.VIEW,
+            P.REJECT,
+            # F19 follow-up: lets Hana reach GET /api/v2/portal/notifications/
+            # to see and follow the "Purchase Request Corrected" notification -
+            # see the module docstring for why this is needed and why it's
+            # scoped this narrowly rather than the real portal.* convention.
+            PORTAL_NOTIFICATION_PERMISSION,
+        ],
         "position_title": "PR Test - Department Head",
         "in_it_department": True,
         "is_department_head": True,
@@ -415,6 +462,7 @@ class Command(BaseCommand):
             ("department_head", P.DEPARTMENT_HEAD_APPROVE),
             ("department_head", P.VIEW),
             ("department_head", P.REJECT),
+            ("department_head", PORTAL_NOTIFICATION_PERMISSION),
             ("accounts", P.ACCOUNTS_VERIFY),
             ("accounts", P.VIEW),
             ("accounts", P.REJECT),

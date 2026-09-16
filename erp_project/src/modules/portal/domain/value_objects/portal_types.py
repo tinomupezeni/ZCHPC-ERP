@@ -123,6 +123,7 @@ class NotificationType(str, Enum):
     SYSTEM = "system"
     PURCHASE_REQUEST_REJECTED = "purchase_request_rejected"
     PURCHASE_REQUEST_PROCESSED = "purchase_request_processed"
+    PURCHASE_REQUEST_CORRECTED = "purchase_request_corrected"
 
 
 class DocumentVisibility(str, Enum):

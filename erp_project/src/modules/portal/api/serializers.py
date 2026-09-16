@@ -315,10 +315,23 @@ class NotificationSerializer(serializers.Serializer):
     a notification to the thing it's about (e.g. a purchase request) - they
     were previously defined on the domain entity but never actually
     serialized, so no notification could ever be navigated to (Slice 3).
+
+    notification_type is stored on the domain entity as a NotificationType
+    (str, Enum) member, not a plain string - source="notification_type.value"
+    reads its .value explicitly. A bare CharField() would call str() on the
+    enum member instead, which for a (str, Enum) mixin yields the Python repr
+    "NotificationType.PURCHASE_REQUEST_CORRECTED" rather than the plain wire
+    value "purchase_request_corrected" (Enum.__str__ wins over str's, even
+    though the mixin makes value-equality against a plain string work) -
+    silently breaking every frontend check that compares this field against
+    a literal type string, e.g. notificationNavigation.ts's deep-link
+    routing. F19 follow-up found this via the first test ever to exercise
+    this endpoint's real serialization rather than asserting on the
+    repository/domain entity directly.
     """
 
     id = serializers.IntegerField()
-    notification_type = serializers.CharField()
+    notification_type = serializers.CharField(source="notification_type.value")
     title = serializers.CharField()
     message = serializers.CharField()
     is_read = serializers.BooleanField()

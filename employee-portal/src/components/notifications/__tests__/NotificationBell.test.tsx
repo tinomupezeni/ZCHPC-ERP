@@ -164,6 +164,33 @@ describe('NotificationBell - rendering notifications', () => {
       screen.getByText(/Your purchase requisition PR-00002 has been processed/)
     ).toBeInTheDocument();
   });
+
+  it('F19: renders the "Purchase Request Corrected" title/message for a department head notification, marked unread', async () => {
+    mockState({
+      notifications: [
+        makeNotification({
+          id: 4,
+          is_read: false,
+          notification_type: 'purchase_request_corrected',
+          title: 'Purchase Request Corrected',
+          message: 'PR-00026 has been corrected and requires your re-approval.',
+          related_object_id: 26,
+        }),
+      ],
+    });
+    const user = userEvent.setup();
+    renderBell();
+
+    await user.click(screen.getByRole('button', { name: /notifications/i }));
+
+    const notificationButton = screen.getByText('Purchase Request Corrected').closest('button');
+    expect(notificationButton).toBeInTheDocument();
+    expect(
+      screen.getByText('PR-00026 has been corrected and requires your re-approval.')
+    ).toBeInTheDocument();
+    // Unread indicator dot (see NotificationBell.tsx: rendered only when !is_read).
+    expect(notificationButton!.querySelector('.bg-blue-600')).toBeInTheDocument();
+  });
 });
 
 describe('NotificationBell - interacting with a notification', () => {
@@ -207,6 +234,30 @@ describe('NotificationBell - interacting with a notification', () => {
 
     expect(mockMarkAsRead).toHaveBeenCalledWith(2);
     expect(mockNavigate).toHaveBeenCalledWith('/portal/purchase-requests?requestId=7&action=view');
+  });
+
+  it('F19: marks a corrected notification read and navigates to the Department Head review deep link', async () => {
+    mockState({
+      notifications: [
+        makeNotification({
+          id: 4,
+          notification_type: 'purchase_request_corrected',
+          title: 'Purchase Request Corrected',
+          message: 'PR-00026 has been corrected and requires your re-approval.',
+          related_object_id: 26,
+        }),
+      ],
+    });
+    const user = userEvent.setup();
+    renderBell();
+    await user.click(screen.getByRole('button', { name: /notifications/i }));
+
+    await user.click(screen.getByText('Purchase Request Corrected'));
+
+    expect(mockMarkAsRead).toHaveBeenCalledWith(4);
+    expect(mockNavigate).toHaveBeenCalledWith(
+      '/portal/purchase-requests/review?requestId=26&action=view'
+    );
   });
 
   it('marks a non-linkable notification read without navigating', async () => {

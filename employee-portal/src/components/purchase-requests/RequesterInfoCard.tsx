@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { UserRound } from 'lucide-react';
+import { DocumentFieldGrid, DocumentField } from '@/components/documents';
 import type { Employee } from '@/types/auth.types';
 
 interface RequesterInfoCardProps {
@@ -13,15 +14,16 @@ interface RequesterInfoCardProps {
  * department_name, designation and contact when the request is created
  * (see modules.procurement.api.actors.requester_identity), so nothing here
  * is retyped by the employee.
+ *
+ * Employee ID (F20) is available here (employee.employee_id, the EC number)
+ * but deliberately isn't shown on the read-only PurchaseRequestDetail view of
+ * an already-submitted request - the backend's PurchaseRequest response has
+ * no EC-number field, only an internal numeric requester_id, and F20's own
+ * "do not invent business fields" instruction rules out fabricating one
+ * there. This form has the real authenticated employee object, so showing it
+ * here is showing a field that actually exists, not inventing one.
  */
 export function RequesterInfoCard({ employee }: RequesterInfoCardProps) {
-  const fields: { label: string; value: string }[] = [
-    { label: 'Requested By', value: employee.full_name },
-    { label: 'Designation', value: employee.position_title || 'Not set' },
-    { label: 'Contact', value: employee.phone || employee.email || 'Not set' },
-    { label: 'Department', value: employee.department_name || 'Not set' },
-  ];
-
   return (
     <Card>
       <CardHeader>
@@ -31,14 +33,16 @@ export function RequesterInfoCard({ employee }: RequesterInfoCardProps) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-          {fields.map((field) => (
-            <div key={field.label}>
-              <p className="text-muted-foreground">{field.label}</p>
-              <p className="font-medium truncate">{field.value}</p>
-            </div>
-          ))}
-        </div>
+        <DocumentFieldGrid>
+          <DocumentField label="Requested By" value={employee.full_name} />
+          <DocumentField label="Employee ID" value={employee.employee_id} />
+          <DocumentField label="Designation" value={employee.position_title || 'Not set'} />
+          <DocumentField
+            label="Contact"
+            value={employee.phone || employee.email || 'Not set'}
+          />
+          <DocumentField label="Department" value={employee.department_name || 'Not set'} />
+        </DocumentFieldGrid>
       </CardContent>
     </Card>
   );

@@ -232,6 +232,36 @@ class Notification(Entity[int]):
         )
 
     @classmethod
+    def purchase_request_corrected(
+        cls,
+        employee_id: int,
+        request_id: int,
+        requisition_number: str,
+    ) -> "Notification":
+        """
+        Create a purchase-request-corrected notification for the department
+        head (F19).
+
+        Unlike every other purchase_request_* notification, employee_id here
+        is the department head, not the requester - a rejected request that
+        gets corrected and resubmitted returns to PENDING_DEPARTMENT_HEAD via
+        the normal submit flow, and the department head must be told
+        explicitly that this is a correction awaiting re-approval, not a
+        first-time submission they might otherwise approve on the assumption
+        nothing has changed since they last saw it.
+        """
+        return cls.create(
+            employee_id=employee_id,
+            notification_type=NotificationType.PURCHASE_REQUEST_CORRECTED,
+            title="Purchase Request Corrected",
+            message=(
+                f"{requisition_number} has been corrected and requires your re-approval."
+            ),
+            related_object_type="purchase_request",
+            related_object_id=request_id,
+        )
+
+    @classmethod
     def announcement(
         cls,
         employee_id: int,

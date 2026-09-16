@@ -8,8 +8,14 @@ import {
   getEditCtaLabel,
   getProgressLabel,
   getStageInfo,
+  getStatusHeroLabel,
+  getStatusHeroMessage,
+  getSupersededRejection,
   getWaitingHelperLine,
+  hasCorrectionHistory,
   isActionRequired,
+  isCorrectedResubmission,
+  stageLabel,
   statusTone,
 } from '../statusConfig';
 import type {
@@ -169,6 +175,22 @@ describe('getWaitingHelperLine', () => {
     expect(getWaitingHelperLine('PENDING_DIRECTOR')).toBe('No action needed from you.');
     expect(getWaitingHelperLine('PENDING_PROCUREMENT')).toBe('No action needed from you.');
   });
+
+  it('F19: defaults to the requester perspective when no viewerRole is passed', () => {
+    expect(getWaitingHelperLine('PENDING_DEPARTMENT_HEAD')).toBeNull();
+    expect(getWaitingHelperLine('PENDING_DEPARTMENT_HEAD', 'requester')).toBeNull();
+  });
+
+  it('F19: never says "No action needed" to a department head reviewing PENDING_DEPARTMENT_HEAD', () => {
+    expect(getWaitingHelperLine('PENDING_DEPARTMENT_HEAD', 'department_head')).toBeNull();
+  });
+
+  it('F19: a department head viewer is unaffected for every other status', () => {
+    expect(getWaitingHelperLine('PENDING_ACCOUNTS', 'department_head')).toBe(
+      'No action needed from you.'
+    );
+    expect(getWaitingHelperLine('DRAFT', 'department_head')).toBeNull();
+  });
 });
 
 /**
@@ -210,6 +232,193 @@ function requestWithDecisions(
     updated_at: '2025-01-01T00:00:00Z',
   };
 }
+
+/**
+ * F19 follow-up: status hero copy must be written from the current
+ * viewer's perspective. Requester copy (the default, and every other
+ * status) must be completely unaffected - only a department head looking
+ * at PENDING_DEPARTMENT_HEAD gets different wording, and a corrected
+ * resubmission (decisions already present) gets a third variant on top of
+ * that, all without any new backend field.
+ */
+describe('getStatusHeroLabel / getStatusHeroMessage / isCorrectedResubmission', () => {
+  it('defaults to the requester-oriented STATUS_LABELS/STATUS_MESSAGES when no viewerRole is passed', () => {
+    const request = requestWithDecisions('PENDING_DEPARTMENT_HEAD', []);
+
+    expect(getStatusHeroLabel(request)).toBe(STATUS_LABELS.PENDING_DEPARTMENT_HEAD);
+    expect(getStatusHeroMessage(request)).toBe(STATUS_MESSAGES.PENDING_DEPARTMENT_HEAD);
+  });
+
+  it('keeps requester-oriented copy for a requester viewer explicitly', () => {
+    const request = requestWithDecisions('PENDING_DEPARTMENT_HEAD', []);
+
+    expect(getStatusHeroLabel(request, 'requester')).toBe(STATUS_LABELS.PENDING_DEPARTMENT_HEAD);
+    expect(getStatusHeroMessage(request, 'requester')).toBe(
+      STATUS_MESSAGES.PENDING_DEPARTMENT_HEAD
+    );
+  });
+
+  it('uses reviewer-oriented copy for a department head viewing a first-time PENDING_DEPARTMENT_HEAD request', () => {
+    const request = requestWithDecisions('PENDING_DEPARTMENT_HEAD', []);
+
+    expect(isCorrectedResubmission(request)).toBe(false);
+    expect(getStatusHeroLabel(request, 'department_head')).toBe('Awaiting Your Review');
+    expect(getStatusHeroMessage(request, 'department_head')).toBe(
+      'This request requires your review and approval.'
+    );
+    // Must never say either of these to the person who can act right now.
+    expect(getStatusHeroMessage(request, 'department_head')).not.toMatch(/no action needed/i);
+    expect(getStatusHeroMessage(request, 'department_head')).not.toMatch(
+      /your department head is reviewing/i
+    );
+  });
+
+  it('uses corrected-resubmission copy for a department head viewing a request with prior decision history', () => {
+    const request = requestWithDecisions('PENDING_DEPARTMENT_HEAD', [
+      decision('DEPARTMENT_HEAD', 'APPROVED', '2025-01-01T09:00:00Z'),
+      decision('ACCOUNTS', 'REJECTED', '2025-01-01T10:00:00Z', 'Category needs revisiting'),
+    ]);
+
+    expect(isCorrectedResubmission(request)).toBe(true);
+    expect(getStatusHeroLabel(request, 'department_head')).toBe('Correction Requires Your Review');
+    expect(getStatusHeroMessage(request, 'department_head')).toMatch(/corrected and resubmitted/i);
+  });
+
+  it('is not corrected-resubmission for a request with decisions at any other status', () => {
+    const request = requestWithDecisions('PENDING_ACCOUNTS', [
+      decision('DEPARTMENT_HEAD', 'APPROVED', '2025-01-01T09:00:00Z'),
+    ]);
+
+    expect(isCorrectedResubmission(request)).toBe(false);
+  });
+
+  it('does not change copy for a department head viewer at any status other than PENDING_DEPARTMENT_HEAD', () => {
+    for (const status of ['DRAFT', 'PENDING_ACCOUNTS', 'REJECTED', 'PROCESSED'] as const) {
+      const request = requestWithDecisions(status, []);
+      expect(getStatusHeroLabel(request, 'department_head')).toBe(STATUS_LABELS[status]);
+      expect(getStatusHeroMessage(request, 'department_head')).toBe(STATUS_MESSAGES[status]);
+    }
+  });
+});
+
+/**
+ * F20: the same reviewer-perspective override pattern F19 built for
+ * department_head, generalized to accounts/gm/director/procurement. Each
+ * role only differs from the requester's STATUS_LABELS/STATUS_MESSAGES at
+ * the one status it actually reviews.
+ */
+describe('getStatusHeroLabel / getStatusHeroMessage - F20 reviewer roles', () => {
+  it('uses Accounts reviewer-oriented copy only at PENDING_ACCOUNTS', () => {
+    const pending = requestWithDecisions('PENDING_ACCOUNTS', []);
+    expect(getStatusHeroLabel(pending, 'accounts')).toBe('Awaiting Your Verification');
+    expect(getStatusHeroMessage(pending, 'accounts')).toBe(
+      'This request has been approved by the Department Head and requires your budget verification.'
+    );
+
+    for (const status of ['DRAFT', 'PENDING_DEPARTMENT_HEAD', 'REJECTED', 'PROCESSED'] as const) {
+      const request = requestWithDecisions(status, []);
+      expect(getStatusHeroLabel(request, 'accounts')).toBe(STATUS_LABELS[status]);
+      expect(getStatusHeroMessage(request, 'accounts')).toBe(STATUS_MESSAGES[status]);
+    }
+  });
+
+  it('uses GM reviewer-oriented copy only at PENDING_GM', () => {
+    const pending = requestWithDecisions('PENDING_GM', []);
+    expect(getStatusHeroLabel(pending, 'gm')).toBe('Awaiting Your Recommendation');
+    expect(getStatusHeroMessage(pending, 'gm')).toBe('This request requires your recommendation.');
+  });
+
+  it('uses Director reviewer-oriented copy only at PENDING_DIRECTOR', () => {
+    const pending = requestWithDecisions('PENDING_DIRECTOR', []);
+    expect(getStatusHeroLabel(pending, 'director')).toBe('Awaiting Your Approval');
+    expect(getStatusHeroMessage(pending, 'director')).toBe('This request requires your approval.');
+  });
+
+  it('uses Procurement reviewer-oriented copy only at PENDING_PROCUREMENT', () => {
+    const pending = requestWithDecisions('PENDING_PROCUREMENT', []);
+    expect(getStatusHeroLabel(pending, 'procurement')).toBe('Awaiting Processing');
+    expect(getStatusHeroMessage(pending, 'procurement')).toBe(
+      'This request is ready for procurement processing.'
+    );
+  });
+
+  it('never suppresses "No action needed" incorrectly - only the reviewing role loses it at their own stage', () => {
+    expect(getWaitingHelperLine('PENDING_ACCOUNTS', 'accounts')).toBeNull();
+    expect(getWaitingHelperLine('PENDING_ACCOUNTS', 'gm')).toBe('No action needed from you.');
+    expect(getWaitingHelperLine('PENDING_GM', 'gm')).toBeNull();
+    expect(getWaitingHelperLine('PENDING_DIRECTOR', 'director')).toBeNull();
+    expect(getWaitingHelperLine('PENDING_PROCUREMENT', 'procurement')).toBeNull();
+  });
+
+  it('leaves the requester\'s own copy at every status completely unaffected by any reviewer role existing', () => {
+    for (const status of ALL_STATUSES) {
+      const request = requestWithDecisions(status, []);
+      expect(getStatusHeroLabel(request)).toBe(STATUS_LABELS[status]);
+      expect(getStatusHeroMessage(request)).toBe(STATUS_MESSAGES[status]);
+    }
+  });
+});
+
+describe('stageLabel', () => {
+  it('returns the human-readable label for each pipeline stage', () => {
+    expect(stageLabel('DEPARTMENT_HEAD')).toBe('Department Head');
+    expect(stageLabel('ACCOUNTS')).toBe('Accounts Verification');
+    expect(stageLabel('GM')).toBe('GM Recommendation');
+    expect(stageLabel('DIRECTOR')).toBe('Director Approval');
+  });
+});
+
+/**
+ * F20: surfaces a rejection that the stage-by-stage Approval Workflow
+ * section can no longer show on its own (getStageInfo only ever reports the
+ * LATEST decision per stage), so "this was rejected and corrected" stays
+ * understandable even after the request has moved well past that point.
+ */
+describe('getSupersededRejection / hasCorrectionHistory', () => {
+  it('returns undefined for a request that has never been rejected', () => {
+    const request = requestWithDecisions('PENDING_ACCOUNTS', [
+      decision('DEPARTMENT_HEAD', 'APPROVED', '2025-01-01T09:00:00Z'),
+    ]);
+    expect(getSupersededRejection(request)).toBeUndefined();
+    expect(hasCorrectionHistory(request)).toBe(false);
+  });
+
+  it('finds the rejection once a later decision has superseded it', () => {
+    const request = requestWithDecisions('PENDING_ACCOUNTS', [
+      decision('DEPARTMENT_HEAD', 'REJECTED', '2025-01-01T09:00:00Z', 'Wrong model'),
+      decision('DEPARTMENT_HEAD', 'APPROVED', '2025-01-02T09:00:00Z'),
+    ]);
+    const superseded = getSupersededRejection(request);
+    expect(superseded?.reason).toBe('Wrong model');
+    expect(hasCorrectionHistory(request)).toBe(true);
+  });
+
+  it('does not treat the CURRENTLY active rejection (nothing after it) as superseded', () => {
+    const request = requestWithDecisions('REJECTED', [
+      decision('ACCOUNTS', 'REJECTED', '2025-01-01T09:00:00Z', 'Budget code inactive'),
+    ]);
+    expect(getSupersededRejection(request)).toBeUndefined();
+    expect(hasCorrectionHistory(request)).toBe(false);
+  });
+
+  it('still finds an earlier superseded rejection even while a later, different rejection is currently active', () => {
+    const request = requestWithDecisions('REJECTED', [
+      decision('DEPARTMENT_HEAD', 'REJECTED', '2025-01-01T09:00:00Z', 'Wrong model'),
+      decision('DEPARTMENT_HEAD', 'APPROVED', '2025-01-02T09:00:00Z'),
+      decision('ACCOUNTS', 'REJECTED', '2025-01-03T09:00:00Z', 'Budget code inactive'),
+    ]);
+    const superseded = getSupersededRejection(request);
+    expect(superseded?.reason).toBe('Wrong model');
+    expect(hasCorrectionHistory(request)).toBe(true);
+  });
+
+  it('finds the rejection for a department head re-reviewing a just-corrected request (only one decision exists)', () => {
+    const request = requestWithDecisions('PENDING_DEPARTMENT_HEAD', [
+      decision('ACCOUNTS', 'REJECTED', '2025-01-01T09:00:00Z', 'Category needs revisiting'),
+    ]);
+    expect(hasCorrectionHistory(request)).toBe(true);
+  });
+});
 
 const PIPELINE_STAGES: PurchaseRequestDecisionStage[] = [
   'DEPARTMENT_HEAD',

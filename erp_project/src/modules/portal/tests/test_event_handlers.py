@@ -14,6 +14,7 @@ import pytest
 from modules.portal import event_handlers
 from modules.portal.domain.value_objects import NotificationType
 from modules.procurement.domain.events import (
+    PurchaseRequestCorrectedAndResubmitted,
     PurchaseRequestProcessed,
     PurchaseRequestRejected,
 )
@@ -84,8 +85,104 @@ class TestHandlePurchaseRequestProcessed:
         assert "PR-00042" in notification.message
 
 
+@pytest.mark.django_db
+class TestHandlePurchaseRequestCorrectedAndResubmitted:
+    """
+    F19: unlike Rejected/Processed, this handler must resolve a recipient
+    (the department head) from the HR model - so, unlike the rest of this
+    file, these tests need real Department/Employees rows rather than a bare
+    Mock.
+    """
+
+    def _department_with_head(self, name="Test Department", head_email="head@example.com"):
+        from modules.hr.infrastructure.persistence.models import Department, Employees
+
+        head = Employees.objects.create(
+            first_name="Hana", surname="Head", email=head_email
+        )
+        department = Department.objects.create(name=name, head=head)
+        return department, head
+
+    def test_creates_a_notification_for_the_departments_head(self, notification_repository):
+        department, head = self._department_with_head()
+        event = PurchaseRequestCorrectedAndResubmitted(
+            request_id=42,
+            requisition_number="PR-00042",
+            requester_id=7,
+            department_id=department.id,
+        )
+
+        event_handlers.handle_purchase_request_corrected_and_resubmitted(event)
+
+        notification_repository.save.assert_called_once()
+        (notification,), _ = notification_repository.save.call_args
+        assert notification.employee_id == head.id
+        assert notification.notification_type == NotificationType.PURCHASE_REQUEST_CORRECTED
+        assert notification.related_object_type == "purchase_request"
+        assert notification.related_object_id == 42
+        assert "PR-00042" in notification.message
+        assert "corrected" in notification.message.lower()
+        assert "re-approval" in notification.message.lower()
+
+    def test_recipient_is_the_department_head_not_the_requester(self, notification_repository):
+        """A requester cannot end up as their own correction's notification recipient."""
+        department, head = self._department_with_head(
+            name="Test Department 2", head_email="head2@example.com"
+        )
+        event = PurchaseRequestCorrectedAndResubmitted(
+            request_id=1,
+            requisition_number="PR-00001",
+            requester_id=999,
+            department_id=department.id,
+        )
+
+        event_handlers.handle_purchase_request_corrected_and_resubmitted(event)
+
+        (notification,), _ = notification_repository.save.call_args
+        assert notification.employee_id == head.id
+        assert notification.employee_id != 999
+
+    def test_no_recorded_department_head_skips_the_notification_without_raising(
+        self, notification_repository
+    ):
+        """
+        Matches the existing non-strict notification policy (see
+        ProcessPurchaseRequestByProcurement's docstring): a missing
+        recipient must not raise - the resubmission it's reacting to has
+        already succeeded and must stay successful either way.
+        """
+        from modules.hr.infrastructure.persistence.models import Department
+
+        department = Department.objects.create(name="Headless Department")  # head is None
+
+        event = PurchaseRequestCorrectedAndResubmitted(
+            request_id=5,
+            requisition_number="PR-00005",
+            requester_id=7,
+            department_id=department.id,
+        )
+
+        event_handlers.handle_purchase_request_corrected_and_resubmitted(event)
+
+        notification_repository.save.assert_not_called()
+
+    def test_nonexistent_department_skips_the_notification_without_raising(
+        self, notification_repository
+    ):
+        event = PurchaseRequestCorrectedAndResubmitted(
+            request_id=6,
+            requisition_number="PR-00006",
+            requester_id=7,
+            department_id=999999,
+        )
+
+        event_handlers.handle_purchase_request_corrected_and_resubmitted(event)
+
+        notification_repository.save.assert_not_called()
+
+
 class TestRegister:
-    def test_subscribes_both_handlers_exactly_once_even_if_called_twice(self):
+    def test_subscribes_every_handler_exactly_once_even_if_called_twice(self):
         """
         Guards against duplicate notifications from double app-registry setup
         (see event_handlers.register's docstring) - calling register() twice
@@ -96,6 +193,7 @@ class TestRegister:
         bus = get_event_bus()
         bus.clear_handlers(PurchaseRequestRejected)
         bus.clear_handlers(PurchaseRequestProcessed)
+        bus.clear_handlers(PurchaseRequestCorrectedAndResubmitted)
 
         event_handlers.register()
         event_handlers.register()
@@ -105,6 +203,9 @@ class TestRegister:
         ) == 1
         assert bus.get_handlers(PurchaseRequestProcessed).count(
             event_handlers.handle_purchase_request_processed
+        ) == 1
+        assert bus.get_handlers(PurchaseRequestCorrectedAndResubmitted).count(
+            event_handlers.handle_purchase_request_corrected_and_resubmitted
         ) == 1
 
         # Restore the real subscriptions the rest of the app relies on.

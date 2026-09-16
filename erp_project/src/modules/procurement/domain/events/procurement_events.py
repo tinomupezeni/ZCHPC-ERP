@@ -115,6 +115,32 @@ class PurchaseRequestProcessed(DomainEvent):
 
 
 @dataclass(frozen=True)
+class PurchaseRequestCorrectedAndResubmitted(DomainEvent):
+    """
+    Event raised when a previously rejected purchase request is resubmitted
+    (F19 notifications).
+
+    Raised by PurchaseRequest.submit() itself, not by correct_and_resubmit()
+    - correct_and_resubmit() only ever returns a REJECTED request to DRAFT;
+    it is the following submit() call that actually re-enters the workflow
+    at PENDING_DEPARTMENT_HEAD, so that is the one place that can tell a
+    corrected resubmission apart from a first-time submission (see
+    PurchaseRequest.submit()'s own docstring for how).
+
+    Carries department_id (not a resolved department-head employee id):
+    the aggregate has no way to look up who currently heads that
+    department - resolving that recipient is an infrastructure concern for
+    whichever handler consumes this event, not something the domain layer
+    can or should know.
+    """
+
+    request_id: int
+    requisition_number: str
+    requester_id: int
+    department_id: int
+
+
+@dataclass(frozen=True)
 class PurchaseOrderCreated(DomainEvent):
     """Event raised when a purchase order is created."""
 

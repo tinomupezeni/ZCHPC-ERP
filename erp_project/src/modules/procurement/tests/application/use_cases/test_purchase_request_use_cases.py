@@ -345,6 +345,65 @@ class TestSubmitPurchaseRequest:
             use_case.execute(100, requester)
         repository.save.assert_not_called()
 
+    def test_does_not_publish_on_a_first_time_submission(
+        self, repository, policy, requester, draft_request_with_item
+    ):
+        """F19: a fresh submission must not fire the corrected-and-resubmitted notification."""
+        repository.get_by_id.return_value = draft_request_with_item
+        event_bus = Mock()
+        use_case = SubmitPurchaseRequest(repository, policy, event_bus=event_bus)
+
+        use_case.execute(100, requester)
+
+        event_bus.publish_all.assert_called_once_with([])
+
+    def test_publishes_corrected_and_resubmitted_after_a_rejection(
+        self, repository, policy, requester, draft_request_with_item
+    ):
+        """
+        F19 notifications: the event bus must be given whatever domain
+        events submit() recorded on `request` - not events read off the use
+        case's return value, since the real repository's save() reconstructs
+        and returns a different PurchaseRequest instance (mirrors
+        ProcessPurchaseRequestByProcurement/RejectPurchaseRequest's own tests).
+        """
+        from modules.procurement.domain.events import PurchaseRequestCorrectedAndResubmitted
+
+        draft_request_with_item.submit()
+        draft_request_with_item.reject(DEPARTMENT_HEAD_ID, "Wrong items")
+        draft_request_with_item.clear_domain_events()
+        draft_request_with_item.correct_and_resubmit()
+        repository.get_by_id.return_value = draft_request_with_item
+        event_bus = Mock()
+        use_case = SubmitPurchaseRequest(repository, policy, event_bus=event_bus)
+
+        use_case.execute(100, requester)
+
+        event_bus.publish_all.assert_called_once()
+        (published,), _ = event_bus.publish_all.call_args
+        assert len(published) == 1
+        assert isinstance(published[0], PurchaseRequestCorrectedAndResubmitted)
+        assert published[0].request_id == draft_request_with_item.id
+        assert published[0].requester_id == REQUESTER_ID
+        assert published[0].department_id == DEPARTMENT_ID
+        # Events must not still be sitting on the aggregate after publishing.
+        assert draft_request_with_item.domain_events == []
+
+    def test_does_not_publish_when_resubmission_fails(
+        self, repository, policy, requester, draft_request_with_item
+    ):
+        """An already-submitted request can't be submitted again - no save, no event, no notification."""
+        draft_request_with_item.submit()
+        repository.get_by_id.return_value = draft_request_with_item
+        event_bus = Mock()
+        use_case = SubmitPurchaseRequest(repository, policy, event_bus=event_bus)
+
+        with pytest.raises(ValidationError):
+            use_case.execute(100, requester)
+
+        repository.save.assert_not_called()
+        event_bus.publish_all.assert_not_called()
+
 
 class TestApprovePurchaseRequestByDepartmentHead:
     """Tests for the ApprovePurchaseRequestByDepartmentHead use case."""

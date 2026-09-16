@@ -241,6 +241,7 @@ class Notification(models.Model):
         ('system', 'System Notification'),
         ('purchase_request_rejected', 'Purchase Request Rejected'),
         ('purchase_request_processed', 'Purchase Request Processed'),
+        ('purchase_request_corrected', 'Purchase Request Corrected'),
     ]
 
     employee = models.ForeignKey(

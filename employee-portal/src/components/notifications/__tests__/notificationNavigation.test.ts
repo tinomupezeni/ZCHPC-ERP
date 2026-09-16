@@ -32,6 +32,13 @@ describe('purchaseRequestNavigationTarget', () => {
     expect(target).toBe('/portal/purchase-requests?requestId=7&action=view');
   });
 
+  it('F19: links a corrected notification to the Department Head review page, not the requester page', () => {
+    const target = purchaseRequestNavigationTarget(
+      makeNotification({ notification_type: 'purchase_request_corrected', related_object_id: 24 })
+    );
+    expect(target).toBe('/portal/purchase-requests/review?requestId=24&action=view');
+  });
+
   it('returns null when related_object_type is not a purchase request', () => {
     const target = purchaseRequestNavigationTarget(
       makeNotification({ related_object_type: 'leave_request', related_object_id: 1 })

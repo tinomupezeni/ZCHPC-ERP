@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useRole, type RoleGroup } from '@/hooks/useRole';
 import { usePurchaseRequestActionCount } from '@/hooks/usePurchaseRequestActionCount';
+import { usePurchaseRequestReviewerAccess } from '@/hooks/usePurchaseRequestReviewerAccess';
 
 const PURCHASE_REQUESTS_PATH = '/portal/purchase-requests';
 
@@ -65,7 +66,6 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
     { path: '/portal', label: 'Dashboard', icon: Home, description: 'Team overview' },
     { path: '/portal/leave', label: 'Leave Approvals', icon: ClipboardList, description: 'Review team leave' },
     { path: '/portal/purchase-requests', label: 'Purchase Requests', icon: ShoppingBag, description: 'Raise a requisition' },
-    { path: '/portal/purchase-requests/review', label: 'Review Purchase Requests', icon: FileCheck, description: 'Approve or reject as department head' },
     { path: '/portal/fuel-requisitions', label: 'Fuel Requisitions', icon: Fuel, description: 'Approve fuel requests' },
     { path: '/portal/stores-requisitions', label: 'Stores Requisitions', icon: ClipboardCheck, description: 'Approve stores requests' },
     { path: '/portal/comparative-schedules', label: 'Comparative Schedules', icon: Scale, description: 'Approve schedules' },
@@ -83,7 +83,6 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
     { path: '/portal/comparative-schedules', label: 'Comparative Schedules', icon: Scale, description: 'Approve schedules' },
     { path: '/portal/leave', label: 'Leave', icon: CalendarDays, description: 'Request time off' },
     { path: '/portal/purchase-requests', label: 'Purchase Requests', icon: ShoppingBag, description: 'Raise a requisition' },
-    { path: '/portal/purchase-requests/accounts', label: 'Accounts Verification', icon: FileCheck, description: 'Verify or reject purchase requests' },
     { path: '/portal/payslips', label: 'My Payslips', icon: FileText, description: 'Your earnings' },
     { path: '/portal/attendance', label: 'Attendance', icon: Clock, description: 'Clock in/out' },
   ],
@@ -117,6 +116,33 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
   ],
 };
 
+/**
+ * F20 follow-up: the Department Head Review / Accounts Verification links
+ * are no longer part of the static per-roleGroup NAV_ITEMS map above -
+ * roleGroup is a coarse role-NAME guess (see useRole's own docstring) that
+ * doesn't reflect actual purchase-request permission, and for the seeded
+ * PR_TEST_* accounts specifically it can't: their role_name comes back null
+ * from the portal login/me endpoints, so every one of them - requester,
+ * department head, accounts alike - maps to the same 'staff' group. These
+ * two links are instead shown/hidden per-employee based on
+ * usePurchaseRequestReviewerAccess, independent of roleGroup, and inserted
+ * right after "Purchase Requests" regardless of which role group's base
+ * list they're joining.
+ */
+const DEPARTMENT_HEAD_REVIEW_ITEM: NavItem = {
+  path: '/portal/purchase-requests/review',
+  label: 'Department Head Review',
+  icon: FileCheck,
+  description: 'Approve or reject as department head',
+};
+
+const ACCOUNTS_VERIFICATION_ITEM: NavItem = {
+  path: '/portal/purchase-requests/accounts',
+  label: 'Accounts Verification',
+  icon: FileCheck,
+  description: 'Verify or reject purchase requests',
+};
+
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -124,8 +150,22 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { roleGroup } = useRole();
-  const navItems = NAV_ITEMS[roleGroup] ?? NAV_ITEMS.staff;
+  const { canReviewAsDepartmentHead, canVerifyAsAccounts } = usePurchaseRequestReviewerAccess();
   const purchaseRequestActionCount = usePurchaseRequestActionCount();
+
+  const baseNavItems = NAV_ITEMS[roleGroup] ?? NAV_ITEMS.staff;
+  const reviewerItems: NavItem[] = [];
+  if (canReviewAsDepartmentHead) reviewerItems.push(DEPARTMENT_HEAD_REVIEW_ITEM);
+  if (canVerifyAsAccounts) reviewerItems.push(ACCOUNTS_VERIFICATION_ITEM);
+
+  const navItems = [...baseNavItems];
+  if (reviewerItems.length > 0) {
+    const purchaseRequestsIndex = navItems.findIndex(
+      (item) => item.path === PURCHASE_REQUESTS_PATH
+    );
+    const insertAt = purchaseRequestsIndex === -1 ? navItems.length : purchaseRequestsIndex + 1;
+    navItems.splice(insertAt, 0, ...reviewerItems);
+  }
 
   return (
     <>

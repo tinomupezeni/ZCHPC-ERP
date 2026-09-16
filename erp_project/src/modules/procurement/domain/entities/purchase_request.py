@@ -10,6 +10,7 @@ from typing import List, Optional
 from shared.domain.base import AggregateRoot, Entity
 from shared.domain.exceptions import ValidationError
 from modules.procurement.domain.events import (
+    PurchaseRequestCorrectedAndResubmitted,
     PurchaseRequestProcessed,
     PurchaseRequestRejected,
 )
@@ -138,11 +139,35 @@ class PurchaseRequest(AggregateRoot[int]):
         self.decisions.append(decision_obj)
 
     def submit(self) -> None:
+        """
+        DRAFT -> PENDING_DEPARTMENT_HEAD.
+
+        F19: DRAFT is reached two ways - a brand-new request that has never
+        had a decision made on it, or a REJECTED request returned to DRAFT by
+        correct_and_resubmit() (which never touches `decisions`). Decisions
+        only ever accumulate via approve/verify/recommend/reject, none of
+        which can run while DRAFT - so a non-empty `decisions` here can only
+        mean this DRAFT came from a correction, regardless of which stage
+        rejected it or how many times. That is what distinguishes a
+        first-time submission (no event) from a corrected resubmission
+        (PurchaseRequestCorrectedAndResubmitted), without hard-coding any
+        particular stage.
+        """
         if self.status != RequestStatus.DRAFT:
             raise ValidationError(f"Cannot submit from status {self.status.value}")
         self.validate_for_submission()
+        is_corrected_resubmission = bool(self.decisions)
         self.status = RequestStatus.PENDING_DEPARTMENT_HEAD
         self.updated_at = _utc_now()
+        if is_corrected_resubmission:
+            self.add_domain_event(
+                PurchaseRequestCorrectedAndResubmitted(
+                    request_id=self.id,
+                    requisition_number=self.requisition_number,
+                    requester_id=self.requester_id,
+                    department_id=self.department_id,
+                )
+            )
 
     def approve_by_department_head(self, actor_id: int) -> None:
         if self.status != RequestStatus.PENDING_DEPARTMENT_HEAD:

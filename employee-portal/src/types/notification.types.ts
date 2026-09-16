@@ -10,7 +10,8 @@ export type NotificationType =
   | 'announcement'
   | 'system'
   | 'purchase_request_rejected'
-  | 'purchase_request_processed';
+  | 'purchase_request_processed'
+  | 'purchase_request_corrected';
 
 export interface Notification {
   id: number;

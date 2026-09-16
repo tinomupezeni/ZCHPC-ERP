@@ -29,6 +29,7 @@ from modules.portal.infrastructure.persistence.django_repositories import (
     DjangoNotificationRepository,
 )
 from modules.procurement.domain.events import (
+    PurchaseRequestCorrectedAndResubmitted,
     PurchaseRequestProcessed,
     PurchaseRequestRejected,
 )
@@ -37,6 +38,27 @@ from shared.infrastructure import get_event_bus
 logger = logging.getLogger(__name__)
 
 _notification_repository = DjangoNotificationRepository()
+
+
+def _department_head_employee_id(department_id: int) -> int | None:
+    """
+    Resolve the recorded head of a department (F10's Department.head_id)
+    directly against the HR model.
+
+    Deliberately does not import modules.procurement's own
+    DjangoOrganizationalDirectory, which reads this same field for
+    department-head authorization - this module's own docstring commits to
+    depending only on procurement's published events "and nothing deeper in
+    procurement", so this reads the one HR field it needs directly instead
+    of reusing a procurement-internal adapter.
+    """
+    from modules.hr.infrastructure.persistence.models import Department
+
+    return (
+        Department.objects.filter(pk=department_id)
+        .values_list("head_id", flat=True)
+        .first()
+    )
 
 
 def handle_purchase_request_rejected(event: PurchaseRequestRejected) -> None:
@@ -68,6 +90,48 @@ def handle_purchase_request_processed(event: PurchaseRequestProcessed) -> None:
     )
 
 
+def handle_purchase_request_corrected_and_resubmitted(
+    event: PurchaseRequestCorrectedAndResubmitted,
+) -> None:
+    """
+    F19: a rejected request corrected and resubmitted returns to
+    PENDING_DEPARTMENT_HEAD via the normal submit flow (same status a
+    first-time submission reaches) - the department head must be told
+    explicitly that this is a correction awaiting re-approval, not a
+    first-time submission, so they don't approve it on the assumption
+    nothing has changed since they last looked at it.
+
+    If the department currently has no recorded head, there is no one to
+    notify. This is not treated as an error: matching the established,
+    documented non-strict notification policy (see
+    ProcessPurchaseRequestByProcurement's docstring - a missed notification
+    must never undo or fail an already-successful workflow transition), the
+    resubmission itself has already succeeded and stays successful; the gap
+    is logged so it is visible operationally rather than silently dropped.
+    """
+    head_employee_id = _department_head_employee_id(event.department_id)
+    if head_employee_id is None:
+        logger.warning(
+            "No department head recorded for department %s - skipping the "
+            "corrected-and-resubmitted notification for request %s",
+            event.department_id,
+            event.request_id,
+        )
+        return
+
+    notification = Notification.purchase_request_corrected(
+        employee_id=head_employee_id,
+        request_id=event.request_id,
+        requisition_number=event.requisition_number,
+    )
+    _notification_repository.save(notification)
+    logger.info(
+        "Created purchase_request_corrected notification for department head %s (request %s)",
+        head_employee_id,
+        event.request_id,
+    )
+
+
 def register() -> None:
     """
     Subscribe this module's handlers to the global event bus.
@@ -89,3 +153,11 @@ def register() -> None:
         PurchaseRequestProcessed
     ):
         event_bus.subscribe(PurchaseRequestProcessed, handle_purchase_request_processed)
+
+    if handle_purchase_request_corrected_and_resubmitted not in event_bus.get_handlers(
+        PurchaseRequestCorrectedAndResubmitted
+    ):
+        event_bus.subscribe(
+            PurchaseRequestCorrectedAndResubmitted,
+            handle_purchase_request_corrected_and_resubmitted,
+        )

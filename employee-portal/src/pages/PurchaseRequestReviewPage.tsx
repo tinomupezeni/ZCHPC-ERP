@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { CheckCircle, XCircle } from 'lucide-react';
 import { PageHeader } from '@/components/layout';
@@ -24,6 +25,8 @@ import type { PurchaseRequest, PurchaseRequestListItem } from '@/types/purchase-
  * generic workflow engine now.
  */
 export function PurchaseRequestReviewPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [requests, setRequests] = useState<PurchaseRequestListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [queueError, setQueueError] = useState<ReviewQueueError | null>(null);
@@ -47,15 +50,25 @@ export function PurchaseRequestReviewPage() {
       setRequests(data);
     } catch (error) {
       const httpStatus = (error as { response?: { status?: number } })?.response?.status;
-      setQueueError({
-        kind: httpStatus === 403 ? 'unauthorized' : 'generic',
-        message: getPurchaseRequestErrorMessage(
-          error,
-          httpStatus === 403
-            ? 'You do not have access to the department-head review queue.'
-            : 'Failed to load requests awaiting your review'
-        ),
-      });
+      setQueueError(
+        httpStatus === 403
+          ? {
+              kind: 'unauthorized',
+              // F20 follow-up: shown as-is to the employee, so this must stay
+              // human-facing - never the backend's raw permission identifier
+              // (e.g. "Missing required permission '...'"), which
+              // getPurchaseRequestErrorMessage would otherwise surface here
+              // since the backend's 403 body does carry one.
+              message: 'You do not have access to the department-head review queue.',
+            }
+          : {
+              kind: 'generic',
+              message: getPurchaseRequestErrorMessage(
+                error,
+                'Failed to load requests awaiting your review'
+              ),
+            }
+      );
     } finally {
       setIsLoading(false);
     }
@@ -88,6 +101,25 @@ export function PurchaseRequestReviewPage() {
       setIsDetailLoading(false);
     }
   };
+
+  /**
+   * F19: a "Purchase Request Corrected" notification links here as
+   * /portal/purchase-requests/review?requestId=<id>&action=view - the same
+   * requestId/action query-param convention PurchaseRequestsPage already
+   * uses for the requester-facing notifications. This page only ever opens
+   * the read-only detail (there is no edit mode here), so action is read for
+   * consistency but not otherwise branched on. Handled once, then the
+   * params are cleared so refreshing or navigating back doesn't re-trigger
+   * the same deep link.
+   */
+  useEffect(() => {
+    const requestId = Number(searchParams.get('requestId'));
+    if (!requestId) return;
+
+    handleView(requestId);
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const handleOpenApprove = () => {
     if (!selectedRequest) return;
@@ -175,6 +207,7 @@ export function PurchaseRequestReviewPage() {
         onClose={closeDetail}
         isLoading={isDetailLoading}
         onEdit={() => {}}
+        viewerRole="department_head"
         actions={
           selectedRequest?.status === 'PENDING_DEPARTMENT_HEAD' ? (
             <div className="flex justify-end gap-2">
