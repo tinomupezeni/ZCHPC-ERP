@@ -54,6 +54,7 @@ apiClient.interceptors.response.use(
 
       const refreshToken = localStorage.getItem('refreshToken');
       if (!refreshToken) {
+        isRefreshing = false;
         window.dispatchEvent(new Event('auth:logout'));
         return Promise.reject(error);
       }
@@ -74,6 +75,7 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
+        isRefreshing = false;
         window.dispatchEvent(new Event('auth:logout'));
         return Promise.reject(refreshError);
       } finally {
