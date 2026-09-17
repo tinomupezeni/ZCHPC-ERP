@@ -9,6 +9,7 @@ import { PurchaseRequestsPage } from '@/pages/PurchaseRequestsPage';
 import { PurchaseRequestReviewPage } from '@/pages/PurchaseRequestReviewPage';
 import { PurchaseRequestAccountsReviewPage } from '@/pages/PurchaseRequestAccountsReviewPage';
 import { PurchaseRequestGMReviewPage } from '@/pages/PurchaseRequestGMReviewPage';
+import { PurchaseRequestDirectorReviewPage } from '@/pages/PurchaseRequestDirectorReviewPage';
 import { FuelRequisitionsPage } from '@/pages/FuelRequisitionsPage';
 import { StoresRequisitionsPage } from '@/pages/StoresRequisitionsPage';
 import { ComparativeSchedulesPage } from '@/pages/ComparativeSchedulesPage';
@@ -63,6 +64,10 @@ function App() {
             <Route
               path="/portal/purchase-requests/gm"
               element={<PurchaseRequestGMReviewPage />}
+            />
+            <Route
+              path="/portal/purchase-requests/director"
+              element={<PurchaseRequestDirectorReviewPage />}
             />
             <Route path="/portal/fuel-requisitions" element={<FuelRequisitionsPage />} />
             <Route path="/portal/stores-requisitions" element={<StoresRequisitionsPage />} />

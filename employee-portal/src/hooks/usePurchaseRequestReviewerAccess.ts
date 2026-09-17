@@ -10,12 +10,13 @@ export interface PurchaseRequestReviewerAccess {
   canReviewAsDepartmentHead: boolean | null;
   canVerifyAsAccounts: boolean | null;
   canRecommendAsGM: boolean | null;
+  canApproveAsDirector: boolean | null;
 }
 
 /**
  * Whether the current employee can reach the Department Head review queue,
- * the Accounts verification queue, and/or the GM recommendation queue (F20
- * follow-up, extended for F21).
+ * the Accounts verification queue, the GM recommendation queue, and/or the
+ * Director approval queue (F20 follow-up, extended for F21 and F22).
  *
  * There is no permissions list anywhere the frontend can read today: the
  * portal login/`me` responses (EmployeeProfileSerializer) carry only name/
@@ -26,12 +27,14 @@ export interface PurchaseRequestReviewerAccess {
  * doesn't line up with their actual purchase-request permission - for the
  * seeded accounts specifically, role_name comes back null entirely, so
  * useRole() falls back to 'staff' for every one of them regardless of who
- * actually holds department_head_approve/accounts_verify/gm_recommend.
+ * actually holds department_head_approve/accounts_verify/gm_recommend/
+ * director_approve.
  *
  * Rather than adding a new backend endpoint just to expose permission
  * strings, this reuses the exact same queue endpoints the review pages
  * themselves already call (getPendingDepartmentHeadRequests/
- * getPendingAccountsRequests/getPendingGMRequests) - a 200 (even with zero
+ * getPendingAccountsRequests/getPendingGMRequests/
+ * getPendingDirectorRequests) - a 200 (even with zero
  * rows) means the backend's own RBAC + PurchaseRequestAuthorizationPolicy
  * checks let this actor in, and any failure means they don't. That IS the
  * application's authoritative permission information, obtained through its
@@ -52,6 +55,7 @@ export function usePurchaseRequestReviewerAccess(): PurchaseRequestReviewerAcces
   );
   const [canVerifyAsAccounts, setCanVerifyAsAccounts] = useState<boolean | null>(null);
   const [canRecommendAsGM, setCanRecommendAsGM] = useState<boolean | null>(null);
+  const [canApproveAsDirector, setCanApproveAsDirector] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,12 +87,26 @@ export function usePurchaseRequestReviewerAccess(): PurchaseRequestReviewerAcces
         if (!cancelled) setCanRecommendAsGM(false);
       });
 
+    purchaseRequestService
+      .getPendingDirectorRequests()
+      .then(() => {
+        if (!cancelled) setCanApproveAsDirector(true);
+      })
+      .catch(() => {
+        if (!cancelled) setCanApproveAsDirector(false);
+      });
+
     return () => {
       cancelled = true;
     };
   }, []);
 
-  return { canReviewAsDepartmentHead, canVerifyAsAccounts, canRecommendAsGM };
+  return {
+    canReviewAsDepartmentHead,
+    canVerifyAsAccounts,
+    canRecommendAsGM,
+    canApproveAsDirector,
+  };
 }
 
 export default usePurchaseRequestReviewerAccess;

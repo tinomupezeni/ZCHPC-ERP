@@ -258,6 +258,48 @@ describe('purchaseRequestService', () => {
     });
   });
 
+  it('lists the Director review queue via scope=pending-director (F22)', async () => {
+    getMock.mockResolvedValue({ data: [] });
+
+    await purchaseRequestService.getPendingDirectorRequests();
+
+    expect(getMock).toHaveBeenCalledWith('/procurement/requests/', {
+      params: { scope: 'pending-director' },
+    });
+  });
+
+  it('propagates a failed Director queue load (e.g. a 403) rather than swallowing it (F22)', async () => {
+    const error = { response: { status: 403, data: { code: 'PERMISSION_DENIED' } } };
+    getMock.mockRejectedValue(error);
+
+    await expect(purchaseRequestService.getPendingDirectorRequests()).rejects.toBe(error);
+  });
+
+  it('approves a request as Director via POST .../director/approve/ with no body (F22)', async () => {
+    postMock.mockResolvedValue({ data: { id: 7, status: 'PENDING_PROCUREMENT' } });
+
+    await purchaseRequestService.approveByDirector(7);
+
+    expect(postMock).toHaveBeenCalledWith('/procurement/requests/7/director/approve/');
+  });
+
+  it('propagates a failed Director approval (e.g. a 400 stale-status error) rather than swallowing it (F22)', async () => {
+    const error = { response: { status: 400, data: { error: 'Request is not pending Director review' } } };
+    postMock.mockRejectedValue(error);
+
+    await expect(purchaseRequestService.approveByDirector(7)).rejects.toBe(error);
+  });
+
+  it('rejects a request at the Director stage via the same generic reject endpoint (F22)', async () => {
+    postMock.mockResolvedValue({ data: { id: 7, status: 'REJECTED' } });
+
+    await purchaseRequestService.rejectRequest(7, 'Exceeds board-approved capital expenditure limit');
+
+    expect(postMock).toHaveBeenCalledWith('/procurement/requests/7/reject/', {
+      reason: 'Exceeds board-approved capital expenditure limit',
+    });
+  });
+
   it('never sends budget_code_id in the update payload shape', async () => {
     patchMock.mockResolvedValue({ data: { id: 7, status: 'DRAFT' } });
 

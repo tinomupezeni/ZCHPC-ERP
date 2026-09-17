@@ -151,6 +151,14 @@ const GM_RECOMMENDATION_ITEM: NavItem = {
   description: 'Recommend or reject purchase requests',
 };
 
+/** F22: same pattern - gated on canApproveAsDirector, not roleGroup. */
+const DIRECTOR_APPROVAL_ITEM: NavItem = {
+  path: '/portal/purchase-requests/director',
+  label: 'Director Approval',
+  icon: FileCheck,
+  description: 'Approve or reject purchase requests',
+};
+
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -158,7 +166,7 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { roleGroup } = useRole();
-  const { canReviewAsDepartmentHead, canVerifyAsAccounts, canRecommendAsGM } =
+  const { canReviewAsDepartmentHead, canVerifyAsAccounts, canRecommendAsGM, canApproveAsDirector } =
     usePurchaseRequestReviewerAccess();
   const purchaseRequestActionCount = usePurchaseRequestActionCount();
 
@@ -167,6 +175,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   if (canReviewAsDepartmentHead) reviewerItems.push(DEPARTMENT_HEAD_REVIEW_ITEM);
   if (canVerifyAsAccounts) reviewerItems.push(ACCOUNTS_VERIFICATION_ITEM);
   if (canRecommendAsGM) reviewerItems.push(GM_RECOMMENDATION_ITEM);
+  if (canApproveAsDirector) reviewerItems.push(DIRECTOR_APPROVAL_ITEM);
 
   const navItems = [...baseNavItems];
   if (reviewerItems.length > 0) {

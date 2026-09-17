@@ -24,11 +24,13 @@ vi.mock('@/hooks/usePurchaseRequestActionCount', () => ({
 let mockCanReviewAsDepartmentHead: boolean | null = false;
 let mockCanVerifyAsAccounts: boolean | null = false;
 let mockCanRecommendAsGM: boolean | null = false;
+let mockCanApproveAsDirector: boolean | null = false;
 vi.mock('@/hooks/usePurchaseRequestReviewerAccess', () => ({
   usePurchaseRequestReviewerAccess: () => ({
     canReviewAsDepartmentHead: mockCanReviewAsDepartmentHead,
     canVerifyAsAccounts: mockCanVerifyAsAccounts,
     canRecommendAsGM: mockCanRecommendAsGM,
+    canApproveAsDirector: mockCanApproveAsDirector,
   }),
 }));
 
@@ -47,6 +49,7 @@ describe('Sidebar - F20 follow-up: permission-aware Purchase Request review navi
     mockCanReviewAsDepartmentHead = true;
     mockCanVerifyAsAccounts = false;
     mockCanRecommendAsGM = false;
+    mockCanApproveAsDirector = false;
     renderSidebar();
 
     expect(
@@ -60,6 +63,7 @@ describe('Sidebar - F20 follow-up: permission-aware Purchase Request review navi
     mockCanReviewAsDepartmentHead = false;
     mockCanVerifyAsAccounts = false;
     mockCanRecommendAsGM = false;
+    mockCanApproveAsDirector = false;
     renderSidebar();
 
     expect(
@@ -86,6 +90,7 @@ describe('Sidebar - F20 follow-up: permission-aware Purchase Request review navi
     mockCanReviewAsDepartmentHead = null;
     mockCanVerifyAsAccounts = null;
     mockCanRecommendAsGM = null;
+    mockCanApproveAsDirector = null;
     renderSidebar();
 
     expect(
@@ -97,6 +102,9 @@ describe('Sidebar - F20 follow-up: permission-aware Purchase Request review navi
     expect(
       screen.queryByRole('link', { name: /gm recommendation/i })
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: /director approval/i })
+    ).not.toBeInTheDocument();
   });
 
   it('shows "Accounts Verification" only when the reviewer-access check says so, regardless of role group', () => {
@@ -105,6 +113,7 @@ describe('Sidebar - F20 follow-up: permission-aware Purchase Request review navi
     mockCanReviewAsDepartmentHead = false;
     mockCanVerifyAsAccounts = true;
     mockCanRecommendAsGM = false;
+    mockCanApproveAsDirector = false;
     renderSidebar();
 
     expect(
@@ -118,6 +127,7 @@ describe('Sidebar - F20 follow-up: permission-aware Purchase Request review navi
     mockCanReviewAsDepartmentHead = true;
     mockCanVerifyAsAccounts = true;
     mockCanRecommendAsGM = false;
+    mockCanApproveAsDirector = false;
     renderSidebar();
 
     expect(
@@ -134,6 +144,7 @@ describe('Sidebar - F20 follow-up: permission-aware Purchase Request review navi
     mockCanReviewAsDepartmentHead = false;
     mockCanVerifyAsAccounts = true;
     mockCanRecommendAsGM = false;
+    mockCanApproveAsDirector = false;
     renderSidebar();
 
     expect(screen.getByRole('link', { name: /^accounts ledgers & accounts$/i })).toHaveAttribute(
@@ -151,6 +162,7 @@ describe('Sidebar - F20 follow-up: permission-aware Purchase Request review navi
     mockCanReviewAsDepartmentHead = false;
     mockCanVerifyAsAccounts = false;
     mockCanRecommendAsGM = false;
+    mockCanApproveAsDirector = false;
     renderSidebar();
 
     expect(
@@ -170,6 +182,7 @@ describe('Sidebar - F21: permission-aware GM Recommendation navigation', () => {
     mockCanReviewAsDepartmentHead = false;
     mockCanVerifyAsAccounts = false;
     mockCanRecommendAsGM = true;
+    mockCanApproveAsDirector = false;
     renderSidebar();
 
     expect(
@@ -183,6 +196,7 @@ describe('Sidebar - F21: permission-aware GM Recommendation navigation', () => {
     mockCanReviewAsDepartmentHead = false;
     mockCanVerifyAsAccounts = false;
     mockCanRecommendAsGM = false;
+    mockCanApproveAsDirector = false;
     renderSidebar();
 
     expect(
@@ -196,6 +210,7 @@ describe('Sidebar - F21: permission-aware GM Recommendation navigation', () => {
     mockCanReviewAsDepartmentHead = false;
     mockCanVerifyAsAccounts = false;
     mockCanRecommendAsGM = null;
+    mockCanApproveAsDirector = false;
     renderSidebar();
 
     expect(
@@ -209,11 +224,92 @@ describe('Sidebar - F21: permission-aware GM Recommendation navigation', () => {
     mockCanReviewAsDepartmentHead = true;
     mockCanVerifyAsAccounts = true;
     mockCanRecommendAsGM = true;
+    mockCanApproveAsDirector = false;
     renderSidebar();
 
     expect(screen.getByRole('link', { name: /department head review/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /accounts verification/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /gm recommendation/i })).toBeInTheDocument();
+  });
+});
+
+describe('Sidebar - F22: permission-aware Director Approval navigation', () => {
+  it('shows "Director Approval" only when the reviewer-access check says so, regardless of role group', () => {
+    mockRoleGroup = 'staff';
+    mockUseActionCount.mockReturnValue(0);
+    mockCanReviewAsDepartmentHead = false;
+    mockCanVerifyAsAccounts = false;
+    mockCanRecommendAsGM = false;
+    mockCanApproveAsDirector = true;
+    renderSidebar();
+
+    expect(
+      screen.getByRole('link', { name: /director approval/i })
+    ).toHaveAttribute('href', '/portal/purchase-requests/director');
+  });
+
+  it('does not show "Director Approval" for a non-Director (no reviewer access)', () => {
+    mockRoleGroup = 'staff';
+    mockUseActionCount.mockReturnValue(0);
+    mockCanReviewAsDepartmentHead = false;
+    mockCanVerifyAsAccounts = false;
+    mockCanRecommendAsGM = false;
+    mockCanApproveAsDirector = false;
+    renderSidebar();
+
+    expect(
+      screen.queryByRole('link', { name: /director approval/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not show "Director Approval" while the access check is still in flight (null), even if other reviewer checks already resolved', () => {
+    mockRoleGroup = 'staff';
+    mockUseActionCount.mockReturnValue(0);
+    mockCanReviewAsDepartmentHead = false;
+    mockCanVerifyAsAccounts = false;
+    mockCanRecommendAsGM = false;
+    mockCanApproveAsDirector = null;
+    renderSidebar();
+
+    expect(
+      screen.queryByRole('link', { name: /director approval/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows all four reviewer links together when every check passes, and each stays independent of the others', () => {
+    mockRoleGroup = 'staff';
+    mockUseActionCount.mockReturnValue(0);
+    mockCanReviewAsDepartmentHead = true;
+    mockCanVerifyAsAccounts = true;
+    mockCanRecommendAsGM = true;
+    mockCanApproveAsDirector = true;
+    renderSidebar();
+
+    expect(screen.getByRole('link', { name: /department head review/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /accounts verification/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /gm recommendation/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /director approval/i })).toBeInTheDocument();
+  });
+
+  it('shows only Director Approval when only that permission is held, leaving the other three reviewer links absent', () => {
+    mockRoleGroup = 'staff';
+    mockUseActionCount.mockReturnValue(0);
+    mockCanReviewAsDepartmentHead = false;
+    mockCanVerifyAsAccounts = false;
+    mockCanRecommendAsGM = false;
+    mockCanApproveAsDirector = true;
+    renderSidebar();
+
+    expect(screen.getByRole('link', { name: /director approval/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: /department head review/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: /accounts verification/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: /gm recommendation/i })
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -223,6 +319,7 @@ describe('Sidebar - Purchase Requests action badge', () => {
     mockCanReviewAsDepartmentHead = false;
     mockCanVerifyAsAccounts = false;
     mockCanRecommendAsGM = false;
+    mockCanApproveAsDirector = false;
     mockUseActionCount.mockReturnValue(0);
     renderSidebar();
 

@@ -70,6 +70,20 @@ export const purchaseRequestService = {
     return response.data;
   },
 
+  /**
+   * F22: requests awaiting Director approval. Same shape as GM/Accounts -
+   * organization-wide (authorize_director_approval has no department-scoping
+   * check), gated purely on the director_approve permission. A 403 means the
+   * caller holds no Director capability at all, distinct from a genuinely
+   * empty queue.
+   */
+  async getPendingDirectorRequests(): Promise<PurchaseRequestListItem[]> {
+    const response = await api.get<PurchaseRequestListItem[]>('/procurement/requests/', {
+      params: { scope: 'pending-director' },
+    });
+    return response.data;
+  },
+
   async getRequest(id: number): Promise<PurchaseRequest> {
     const response = await api.get<PurchaseRequest>(`/procurement/requests/${id}/`);
     return response.data;
@@ -131,6 +145,19 @@ export const purchaseRequestService = {
    */
   async recommendByGM(id: number): Promise<PurchaseRequest> {
     const response = await api.post<PurchaseRequest>(`/procurement/requests/${id}/gm/recommend/`);
+    return response.data;
+  },
+
+  /**
+   * F22: approve a request currently awaiting Director approval. Moves it to
+   * PENDING_PROCUREMENT on success (ApprovePurchaseRequestByDirector) - no
+   * request body, same full-detail response shape as approve/verify/
+   * recommend.
+   */
+  async approveByDirector(id: number): Promise<PurchaseRequest> {
+    const response = await api.post<PurchaseRequest>(
+      `/procurement/requests/${id}/director/approve/`
+    );
     return response.data;
   },
 

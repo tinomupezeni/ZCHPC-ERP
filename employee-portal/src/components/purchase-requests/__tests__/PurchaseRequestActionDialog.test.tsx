@@ -232,3 +232,51 @@ describe('PurchaseRequestActionDialog - stage-specific copy (F21 GM)', () => {
     expect(screen.queryByText(/approving/i)).not.toBeInTheDocument();
   });
 });
+
+/**
+ * F22: Director approval deliberately reuses the dialog's own "Approve"
+ * default (confirmLabel="Approve" matches DEFAULT_CONFIRM_LABEL, so the
+ * caller only overrides `description`) - unlike Accounts ("Verify") and GM
+ * ("Recommend"), which both override confirmLabel too. This proves the
+ * default wording still reads correctly for a stage that intentionally
+ * doesn't rename the verb, with only a stage-specific description.
+ */
+describe('PurchaseRequestActionDialog - stage-specific copy (F22 Director)', () => {
+  it('uses the "Approve" default confirm label with only a custom Director description', () => {
+    render(
+      <PurchaseRequestActionDialog
+        requisitionNumber="PR-0042"
+        isSubmitting={false}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+        description="Approving this request will send it to Procurement for processing."
+        confirmLabel="Approve"
+      />
+    );
+
+    expect(screen.getByText('Approve PR-0042?')).toBeInTheDocument();
+    expect(
+      screen.getByText('Approving this request will send it to Procurement for processing.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/verify/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/recommend/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^approve$/i })).toBeInTheDocument();
+  });
+
+  it('shows an "Approving..." in-flight label (not "Recommending..." or "Verifying...") for Director approval', () => {
+    render(
+      <PurchaseRequestActionDialog
+        requisitionNumber="PR-0042"
+        isSubmitting={true}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+        description="Approving this request will send it to Procurement for processing."
+        confirmLabel="Approve"
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /^approving\.\.\.$/i })).toBeDisabled();
+    expect(screen.queryByText(/recommending/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/verifying/i)).not.toBeInTheDocument();
+  });
+});
