@@ -143,6 +143,14 @@ const ACCOUNTS_VERIFICATION_ITEM: NavItem = {
   description: 'Verify or reject purchase requests',
 };
 
+/** F21: same pattern as the two items above - gated on canRecommendAsGM, not roleGroup. */
+const GM_RECOMMENDATION_ITEM: NavItem = {
+  path: '/portal/purchase-requests/gm',
+  label: 'GM Recommendation',
+  icon: FileCheck,
+  description: 'Recommend or reject purchase requests',
+};
+
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -150,13 +158,15 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { roleGroup } = useRole();
-  const { canReviewAsDepartmentHead, canVerifyAsAccounts } = usePurchaseRequestReviewerAccess();
+  const { canReviewAsDepartmentHead, canVerifyAsAccounts, canRecommendAsGM } =
+    usePurchaseRequestReviewerAccess();
   const purchaseRequestActionCount = usePurchaseRequestActionCount();
 
   const baseNavItems = NAV_ITEMS[roleGroup] ?? NAV_ITEMS.staff;
   const reviewerItems: NavItem[] = [];
   if (canReviewAsDepartmentHead) reviewerItems.push(DEPARTMENT_HEAD_REVIEW_ITEM);
   if (canVerifyAsAccounts) reviewerItems.push(ACCOUNTS_VERIFICATION_ITEM);
+  if (canRecommendAsGM) reviewerItems.push(GM_RECOMMENDATION_ITEM);
 
   const navItems = [...baseNavItems];
   if (reviewerItems.length > 0) {

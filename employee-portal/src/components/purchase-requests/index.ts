@@ -9,5 +9,5 @@ export { PurchaseRequestStatusBadge } from './PurchaseRequestStatusBadge';
 export { PurchaseRequestReviewCard } from './PurchaseRequestReviewCard';
 export { PurchaseRequestReviewList } from './PurchaseRequestReviewList';
 export type { ReviewQueueError } from './PurchaseRequestReviewList';
-export { PurchaseRequestApproveDialog } from './PurchaseRequestApproveDialog';
+export { PurchaseRequestActionDialog } from './PurchaseRequestActionDialog';
 export { PurchaseRequestRejectDialog } from './PurchaseRequestRejectDialog';

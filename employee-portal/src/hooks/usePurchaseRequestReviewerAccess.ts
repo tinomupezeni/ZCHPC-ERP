@@ -9,11 +9,13 @@ export interface PurchaseRequestReviewerAccess {
    */
   canReviewAsDepartmentHead: boolean | null;
   canVerifyAsAccounts: boolean | null;
+  canRecommendAsGM: boolean | null;
 }
 
 /**
- * Whether the current employee can reach the Department Head review queue
- * and/or the Accounts verification queue (F20 follow-up).
+ * Whether the current employee can reach the Department Head review queue,
+ * the Accounts verification queue, and/or the GM recommendation queue (F20
+ * follow-up, extended for F21).
  *
  * There is no permissions list anywhere the frontend can read today: the
  * portal login/`me` responses (EmployeeProfileSerializer) carry only name/
@@ -24,16 +26,16 @@ export interface PurchaseRequestReviewerAccess {
  * doesn't line up with their actual purchase-request permission - for the
  * seeded accounts specifically, role_name comes back null entirely, so
  * useRole() falls back to 'staff' for every one of them regardless of who
- * actually holds department_head_approve/accounts_verify.
+ * actually holds department_head_approve/accounts_verify/gm_recommend.
  *
  * Rather than adding a new backend endpoint just to expose permission
- * strings, this reuses the exact same two queue endpoints the review pages
+ * strings, this reuses the exact same queue endpoints the review pages
  * themselves already call (getPendingDepartmentHeadRequests/
- * getPendingAccountsRequests) - a 200 (even with zero rows) means the
- * backend's own RBAC + PurchaseRequestAuthorizationPolicy checks let this
- * actor in, and any failure means they don't. That IS the application's
- * authoritative permission information, obtained through its existing
- * surface rather than a guessed role name or a new API. Mirrors
+ * getPendingAccountsRequests/getPendingGMRequests) - a 200 (even with zero
+ * rows) means the backend's own RBAC + PurchaseRequestAuthorizationPolicy
+ * checks let this actor in, and any failure means they don't. That IS the
+ * application's authoritative permission information, obtained through its
+ * existing surface rather than a guessed role name or a new API. Mirrors
  * usePurchaseRequestActionCount's own precedent: the sidebar is mounted
  * independently of the review pages (siblings under MainLayout, no shared
  * fetch/cache), so it does its own lightweight calls rather than reusing
@@ -49,6 +51,7 @@ export function usePurchaseRequestReviewerAccess(): PurchaseRequestReviewerAcces
     null
   );
   const [canVerifyAsAccounts, setCanVerifyAsAccounts] = useState<boolean | null>(null);
+  const [canRecommendAsGM, setCanRecommendAsGM] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,12 +74,21 @@ export function usePurchaseRequestReviewerAccess(): PurchaseRequestReviewerAcces
         if (!cancelled) setCanVerifyAsAccounts(false);
       });
 
+    purchaseRequestService
+      .getPendingGMRequests()
+      .then(() => {
+        if (!cancelled) setCanRecommendAsGM(true);
+      })
+      .catch(() => {
+        if (!cancelled) setCanRecommendAsGM(false);
+      });
+
     return () => {
       cancelled = true;
     };
   }, []);
 
-  return { canReviewAsDepartmentHead, canVerifyAsAccounts };
+  return { canReviewAsDepartmentHead, canVerifyAsAccounts, canRecommendAsGM };
 }
 
 export default usePurchaseRequestReviewerAccess;

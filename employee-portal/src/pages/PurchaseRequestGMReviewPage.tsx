@@ -17,14 +17,16 @@ import {
 import type { PurchaseRequest, PurchaseRequestListItem } from '@/types/purchase-request.types';
 
 /**
- * F18: the Accounts review queue. A deliberate copy/adapt of
- * PurchaseRequestReviewPage (F17's Department Head page), not a shared
- * abstraction - the only real differences are which two service methods are
- * called, the page copy, and the Verify dialog's stage-specific wording.
- * GM/Director will likely follow the same pattern rather than a generic
- * "ReviewPageFactory" - see F17/F18's own investigation reports for why.
+ * F21: the GM recommendation queue. A deliberate copy/adapt of
+ * PurchaseRequestAccountsReviewPage (F18) - confirmed by backend
+ * investigation to behave identically in shape (organization-wide
+ * authorization, no department scoping, same generic reject endpoint), with
+ * only the service methods, page copy, and the action dialog's stage-
+ * specific wording actually differing. See F17/F18's own investigation
+ * reports for why this stays a copy/adapt rather than a shared
+ * "ReviewPageFactory" abstraction.
  */
-export function PurchaseRequestAccountsReviewPage() {
+export function PurchaseRequestGMReviewPage() {
   const [requests, setRequests] = useState<PurchaseRequestListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [queueError, setQueueError] = useState<ReviewQueueError | null>(null);
@@ -33,8 +35,8 @@ export function PurchaseRequestAccountsReviewPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
 
-  const [pendingVerify, setPendingVerify] = useState<PurchaseRequest | null>(null);
-  const [isVerifying, setIsVerifying] = useState(false);
+  const [pendingRecommend, setPendingRecommend] = useState<PurchaseRequest | null>(null);
+  const [isRecommending, setIsRecommending] = useState(false);
 
   const [pendingReject, setPendingReject] = useState<PurchaseRequest | null>(null);
   const [rejectReason, setRejectReason] = useState('');
@@ -44,7 +46,7 @@ export function PurchaseRequestAccountsReviewPage() {
     setIsLoading(true);
     setQueueError(null);
     try {
-      const data = await purchaseRequestService.getPendingAccountsRequests();
+      const data = await purchaseRequestService.getPendingGMRequests();
       setRequests(data);
     } catch (error) {
       const httpStatus = (error as { response?: { status?: number } })?.response?.status;
@@ -52,18 +54,19 @@ export function PurchaseRequestAccountsReviewPage() {
         httpStatus === 403
           ? {
               kind: 'unauthorized',
-              // F20 follow-up: shown as-is to the employee, so this must stay
-              // human-facing - never the backend's raw permission identifier
-              // (e.g. "Missing required permission '...'"), which
-              // getPurchaseRequestErrorMessage would otherwise surface here
-              // since the backend's 403 body does carry one.
-              message: 'You do not have access to the Accounts verification queue.',
+              // F20 follow-up convention: shown as-is to the employee, so
+              // this must stay human-facing - never the backend's raw
+              // permission identifier (e.g. "Missing required permission
+              // '...'"), which getPurchaseRequestErrorMessage would
+              // otherwise surface here since the backend's 403 body does
+              // carry one.
+              message: 'You do not have access to the GM recommendation queue.',
             }
           : {
               kind: 'generic',
               message: getPurchaseRequestErrorMessage(
                 error,
-                'Failed to load requests awaiting Accounts verification'
+                'Failed to load requests awaiting GM recommendation'
               ),
             }
       );
@@ -100,14 +103,14 @@ export function PurchaseRequestAccountsReviewPage() {
     }
   };
 
-  const handleOpenVerify = () => {
+  const handleOpenRecommend = () => {
     if (!selectedRequest) return;
-    setPendingVerify(selectedRequest);
+    setPendingRecommend(selectedRequest);
   };
 
-  const handleCancelVerify = () => {
-    if (isVerifying) return;
-    setPendingVerify(null);
+  const handleCancelRecommend = () => {
+    if (isRecommending) return;
+    setPendingRecommend(null);
   };
 
   /**
@@ -115,19 +118,19 @@ export function PurchaseRequestAccountsReviewPage() {
    * queue and the detail view only closes once the 200 actually comes back.
    * A failure leaves everything exactly as it was, with an error toast.
    */
-  const handleConfirmVerify = async () => {
-    if (!pendingVerify) return;
-    setIsVerifying(true);
+  const handleConfirmRecommend = async () => {
+    if (!pendingRecommend) return;
+    setIsRecommending(true);
     try {
-      await purchaseRequestService.verifyByAccounts(pendingVerify.id);
-      removeFromQueue(pendingVerify.id);
-      toast.success(`${pendingVerify.requisition_number} verified and sent to the General Manager`);
-      setPendingVerify(null);
+      await purchaseRequestService.recommendByGM(pendingRecommend.id);
+      removeFromQueue(pendingRecommend.id);
+      toast.success(`${pendingRecommend.requisition_number} recommended and sent to the Director`);
+      setPendingRecommend(null);
       closeDetail();
     } catch (error) {
-      toast.error(getPurchaseRequestErrorMessage(error, 'Failed to verify purchase request'));
+      toast.error(getPurchaseRequestErrorMessage(error, 'Failed to recommend purchase request'));
     } finally {
-      setIsVerifying(false);
+      setIsRecommending(false);
     }
   };
 
@@ -168,8 +171,8 @@ export function PurchaseRequestAccountsReviewPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Accounts Verification"
-        description="Review purchase requests awaiting Accounts verification."
+        title="GM Recommendation"
+        description="Review purchase requests awaiting GM recommendation."
       />
 
       <PurchaseRequestReviewList
@@ -186,17 +189,17 @@ export function PurchaseRequestAccountsReviewPage() {
         onClose={closeDetail}
         isLoading={isDetailLoading}
         onEdit={() => {}}
-        viewerRole="accounts"
+        viewerRole="gm"
         actions={
-          selectedRequest?.status === 'PENDING_ACCOUNTS' ? (
+          selectedRequest?.status === 'PENDING_GM' ? (
             <div className="flex justify-end gap-2">
               <Button type="button" variant="destructive" onClick={handleOpenReject}>
                 <XCircle className="h-4 w-4 mr-1.5" />
                 Reject
               </Button>
-              <Button type="button" onClick={handleOpenVerify}>
+              <Button type="button" onClick={handleOpenRecommend}>
                 <CheckCircle className="h-4 w-4 mr-1.5" />
-                Verify
+                Recommend
               </Button>
             </div>
           ) : undefined
@@ -204,13 +207,13 @@ export function PurchaseRequestAccountsReviewPage() {
       />
 
       <PurchaseRequestActionDialog
-        requisitionNumber={pendingVerify?.requisition_number ?? null}
-        isSubmitting={isVerifying}
-        onConfirm={handleConfirmVerify}
-        onCancel={handleCancelVerify}
-        title={`Verify ${pendingVerify?.requisition_number}?`}
-        description="This will send the request to the General Manager for review."
-        confirmLabel="Verify"
+        requisitionNumber={pendingRecommend?.requisition_number ?? null}
+        isSubmitting={isRecommending}
+        onConfirm={handleConfirmRecommend}
+        onCancel={handleCancelRecommend}
+        title={`Recommend ${pendingRecommend?.requisition_number}?`}
+        description="This will send the request to the Director for review."
+        confirmLabel="Recommend"
       />
 
       <PurchaseRequestRejectDialog
@@ -225,4 +228,4 @@ export function PurchaseRequestAccountsReviewPage() {
   );
 }
 
-export default PurchaseRequestAccountsReviewPage;
+export default PurchaseRequestGMReviewPage;

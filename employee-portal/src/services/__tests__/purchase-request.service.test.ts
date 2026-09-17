@@ -216,6 +216,48 @@ describe('purchaseRequestService', () => {
     expect(postMock).toHaveBeenCalledWith('/procurement/requests/7/accounts/verify/');
   });
 
+  it('lists the GM review queue via scope=pending-gm (F21)', async () => {
+    getMock.mockResolvedValue({ data: [] });
+
+    await purchaseRequestService.getPendingGMRequests();
+
+    expect(getMock).toHaveBeenCalledWith('/procurement/requests/', {
+      params: { scope: 'pending-gm' },
+    });
+  });
+
+  it('propagates a failed GM queue load (e.g. a 403) rather than swallowing it (F21)', async () => {
+    const error = { response: { status: 403, data: { code: 'PERMISSION_DENIED' } } };
+    getMock.mockRejectedValue(error);
+
+    await expect(purchaseRequestService.getPendingGMRequests()).rejects.toBe(error);
+  });
+
+  it('recommends a request as GM via POST .../gm/recommend/ with no body (F21)', async () => {
+    postMock.mockResolvedValue({ data: { id: 7, status: 'PENDING_DIRECTOR' } });
+
+    await purchaseRequestService.recommendByGM(7);
+
+    expect(postMock).toHaveBeenCalledWith('/procurement/requests/7/gm/recommend/');
+  });
+
+  it('propagates a failed GM recommendation (e.g. a 400 stale-status error) rather than swallowing it (F21)', async () => {
+    const error = { response: { status: 400, data: { error: 'Request is not pending GM review' } } };
+    postMock.mockRejectedValue(error);
+
+    await expect(purchaseRequestService.recommendByGM(7)).rejects.toBe(error);
+  });
+
+  it('rejects a request at the GM stage via the same generic reject endpoint (F21)', async () => {
+    postMock.mockResolvedValue({ data: { id: 7, status: 'REJECTED' } });
+
+    await purchaseRequestService.rejectRequest(7, 'Budget exceeds departmental allocation');
+
+    expect(postMock).toHaveBeenCalledWith('/procurement/requests/7/reject/', {
+      reason: 'Budget exceeds departmental allocation',
+    });
+  });
+
   it('never sends budget_code_id in the update payload shape', async () => {
     patchMock.mockResolvedValue({ data: { id: 7, status: 'DRAFT' } });
 

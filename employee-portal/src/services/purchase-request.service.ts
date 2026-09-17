@@ -56,6 +56,20 @@ export const purchaseRequestService = {
     return response.data;
   },
 
+  /**
+   * F21: requests awaiting GM recommendation. Same shape as Accounts -
+   * organization-wide (authorize_gm_recommendation has no department-scoping
+   * check, unlike department-head approval), gated purely on the
+   * gm_recommend permission. A 403 means the caller holds no GM capability
+   * at all, distinct from a genuinely empty queue.
+   */
+  async getPendingGMRequests(): Promise<PurchaseRequestListItem[]> {
+    const response = await api.get<PurchaseRequestListItem[]>('/procurement/requests/', {
+      params: { scope: 'pending-gm' },
+    });
+    return response.data;
+  },
+
   async getRequest(id: number): Promise<PurchaseRequest> {
     const response = await api.get<PurchaseRequest>(`/procurement/requests/${id}/`);
     return response.data;
@@ -107,6 +121,16 @@ export const purchaseRequestService = {
     const response = await api.post<PurchaseRequest>(
       `/procurement/requests/${id}/accounts/verify/`
     );
+    return response.data;
+  },
+
+  /**
+   * F21: recommend a request currently awaiting GM review. Moves it to
+   * PENDING_DIRECTOR on success (RecommendPurchaseRequestByGM) - no request
+   * body, same full-detail response shape as approve/verify.
+   */
+  async recommendByGM(id: number): Promise<PurchaseRequest> {
+    const response = await api.post<PurchaseRequest>(`/procurement/requests/${id}/gm/recommend/`);
     return response.data;
   },
 

@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { PurchaseRequestApproveDialog } from '../PurchaseRequestApproveDialog';
+import { PurchaseRequestActionDialog } from '../PurchaseRequestActionDialog';
 
-describe('PurchaseRequestApproveDialog', () => {
+describe('PurchaseRequestActionDialog', () => {
   it('is closed when requisitionNumber is null', () => {
     render(
-      <PurchaseRequestApproveDialog
+      <PurchaseRequestActionDialog
         requisitionNumber={null}
-        isApproving={false}
+        isSubmitting={false}
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
       />
@@ -17,11 +17,11 @@ describe('PurchaseRequestApproveDialog', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('names the request and explains what approving will do', () => {
+  it('names the request and explains what approving will do (Department Head default copy)', () => {
     render(
-      <PurchaseRequestApproveDialog
+      <PurchaseRequestActionDialog
         requisitionNumber="PR-0042"
-        isApproving={false}
+        isSubmitting={false}
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
       />
@@ -38,9 +38,9 @@ describe('PurchaseRequestApproveDialog', () => {
     const onCancel = vi.fn();
     const onConfirm = vi.fn();
     render(
-      <PurchaseRequestApproveDialog
+      <PurchaseRequestActionDialog
         requisitionNumber="PR-0042"
-        isApproving={false}
+        isSubmitting={false}
         onConfirm={onConfirm}
         onCancel={onCancel}
       />
@@ -56,9 +56,9 @@ describe('PurchaseRequestApproveDialog', () => {
     const user = userEvent.setup();
     const onConfirm = vi.fn();
     render(
-      <PurchaseRequestApproveDialog
+      <PurchaseRequestActionDialog
         requisitionNumber="PR-0042"
-        isApproving={false}
+        isSubmitting={false}
         onConfirm={onConfirm}
         onCancel={vi.fn()}
       />
@@ -69,11 +69,11 @@ describe('PurchaseRequestApproveDialog', () => {
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
-  it('disables both buttons and shows an approving state while isApproving is true', () => {
+  it('disables both buttons and shows an approving state while isSubmitting is true', () => {
     render(
-      <PurchaseRequestApproveDialog
+      <PurchaseRequestActionDialog
         requisitionNumber="PR-0042"
-        isApproving={true}
+        isSubmitting={true}
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
       />
@@ -87,9 +87,9 @@ describe('PurchaseRequestApproveDialog', () => {
     const user = userEvent.setup();
     const onCancel = vi.fn();
     render(
-      <PurchaseRequestApproveDialog
+      <PurchaseRequestActionDialog
         requisitionNumber="PR-0042"
-        isApproving={false}
+        isSubmitting={false}
         onConfirm={vi.fn()}
         onCancel={onCancel}
       />
@@ -107,12 +107,12 @@ describe('PurchaseRequestApproveDialog', () => {
  * every test above this point passes no such props, proving the Department
  * Head defaults are unchanged (F18 dialog-regression requirement).
  */
-describe('PurchaseRequestApproveDialog - stage-specific copy (F18)', () => {
+describe('PurchaseRequestActionDialog - stage-specific copy (F18 Accounts)', () => {
   it('renders custom title, description and confirm label when provided (Accounts "Verify" copy)', () => {
     render(
-      <PurchaseRequestApproveDialog
+      <PurchaseRequestActionDialog
         requisitionNumber="PR-0042"
-        isApproving={false}
+        isSubmitting={false}
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
         title="Verify PR-0042?"
@@ -133,9 +133,9 @@ describe('PurchaseRequestApproveDialog - stage-specific copy (F18)', () => {
     const user = userEvent.setup();
     const onConfirm = vi.fn();
     render(
-      <PurchaseRequestApproveDialog
+      <PurchaseRequestActionDialog
         requisitionNumber="PR-0042"
-        isApproving={false}
+        isSubmitting={false}
         onConfirm={onConfirm}
         onCancel={vi.fn()}
         title="Verify PR-0042?"
@@ -151,9 +151,9 @@ describe('PurchaseRequestApproveDialog - stage-specific copy (F18)', () => {
 
   it('shows a "Verifying..." in-flight label (not "Approving...") for the Verify confirm label', () => {
     render(
-      <PurchaseRequestApproveDialog
+      <PurchaseRequestActionDialog
         requisitionNumber="PR-0042"
-        isApproving={true}
+        isSubmitting={true}
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
         title="Verify PR-0042?"
@@ -163,6 +163,72 @@ describe('PurchaseRequestApproveDialog - stage-specific copy (F18)', () => {
     );
 
     expect(screen.getByRole('button', { name: /verifying/i })).toBeDisabled();
+    expect(screen.queryByText(/approving/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * F21: the same dialog reused a third time for GM's "Recommend" action -
+ * proving the refactor to a genuinely generic action dialog actually
+ * supports a verb neither Department Head nor Accounts used.
+ */
+describe('PurchaseRequestActionDialog - stage-specific copy (F21 GM)', () => {
+  it('renders custom title, description and confirm label for GM "Recommend" copy', () => {
+    render(
+      <PurchaseRequestActionDialog
+        requisitionNumber="PR-0042"
+        isSubmitting={false}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+        title="Recommend PR-0042?"
+        description="This will send the request to the Director for review."
+        confirmLabel="Recommend"
+      />
+    );
+
+    expect(screen.getByText('Recommend PR-0042?')).toBeInTheDocument();
+    expect(
+      screen.getByText('This will send the request to the Director for review.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/approve/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/verify/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^recommend$/i })).toBeInTheDocument();
+  });
+
+  it('calls onConfirm when the "Recommend" confirm button is clicked', async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+    render(
+      <PurchaseRequestActionDialog
+        requisitionNumber="PR-0042"
+        isSubmitting={false}
+        onConfirm={onConfirm}
+        onCancel={vi.fn()}
+        title="Recommend PR-0042?"
+        description="This will send the request to the Director for review."
+        confirmLabel="Recommend"
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: /^recommend$/i }));
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a "Recommending..." in-flight label (not "Approving...") for the Recommend confirm label', () => {
+    render(
+      <PurchaseRequestActionDialog
+        requisitionNumber="PR-0042"
+        isSubmitting={true}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+        title="Recommend PR-0042?"
+        description="This will send the request to the Director for review."
+        confirmLabel="Recommend"
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /recommending/i })).toBeDisabled();
     expect(screen.queryByText(/approving/i)).not.toBeInTheDocument();
   });
 });

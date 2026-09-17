@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import {
   PurchaseRequestDetail,
   PurchaseRequestReviewList,
-  PurchaseRequestApproveDialog,
+  PurchaseRequestActionDialog,
   PurchaseRequestRejectDialog,
   type ReviewQueueError,
 } from '@/components/purchase-requests';
@@ -224,9 +224,9 @@ export function PurchaseRequestReviewPage() {
         }
       />
 
-      <PurchaseRequestApproveDialog
+      <PurchaseRequestActionDialog
         requisitionNumber={pendingApprove?.requisition_number ?? null}
-        isApproving={isApproving}
+        isSubmitting={isApproving}
         onConfirm={handleConfirmApprove}
         onCancel={handleCancelApprove}
       />
