@@ -12,6 +12,10 @@ class DepartmentResponseSerializer(serializers.Serializer):
     name = serializers.CharField(read_only=True)
     description = serializers.CharField(read_only=True, allow_blank=True)
     employee_count = serializers.IntegerField(read_only=True)
+    # None when the department is between heads. head_name is the employee's
+    # display name only - no other employee fields are exposed here.
+    head_id = serializers.IntegerField(read_only=True, allow_null=True)
+    head_name = serializers.CharField(read_only=True, allow_blank=True)
 
 
 class CreateDepartmentRequestSerializer(serializers.Serializer):
@@ -26,6 +30,11 @@ class UpdateDepartmentRequestSerializer(serializers.Serializer):
 
     name = serializers.CharField(max_length=100, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
+    # The employee accountable for this department (e.g. approves its
+    # Purchase Requests). Optional - omitting it leaves the current head
+    # unchanged; existence of the referenced employee is checked in
+    # DepartmentService.update_department, not here.
+    head_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
 
 
 class PositionResponseSerializer(serializers.Serializer):

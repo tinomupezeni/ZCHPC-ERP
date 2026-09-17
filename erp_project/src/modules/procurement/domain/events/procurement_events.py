@@ -88,11 +88,56 @@ class PurchaseRequestLevel2Approved(DomainEvent):
 
 @dataclass(frozen=True)
 class PurchaseRequestRejected(DomainEvent):
-    """Event raised when a purchase request is rejected."""
+    """
+    Event raised when a purchase request is rejected (Slice 3 notifications).
+
+    Fields were realigned to the current multi-stage-approval PurchaseRequest
+    aggregate (requisition_number, requester_id) - this event was previously
+    defined but never instantiated anywhere, so there was no live usage to
+    preserve compatibility with.
+    """
 
     request_id: int
+    requisition_number: str
+    requester_id: int
     rejector_id: int
-    reason: Optional[str]
+    reason: str
+
+
+@dataclass(frozen=True)
+class PurchaseRequestProcessed(DomainEvent):
+    """Event raised when procurement completes processing a purchase request (Slice 3 notifications)."""
+
+    request_id: int
+    requisition_number: str
+    requester_id: int
+    processed_by: int
+
+
+@dataclass(frozen=True)
+class PurchaseRequestCorrectedAndResubmitted(DomainEvent):
+    """
+    Event raised when a previously rejected purchase request is resubmitted
+    (F19 notifications).
+
+    Raised by PurchaseRequest.submit() itself, not by correct_and_resubmit()
+    - correct_and_resubmit() only ever returns a REJECTED request to DRAFT;
+    it is the following submit() call that actually re-enters the workflow
+    at PENDING_DEPARTMENT_HEAD, so that is the one place that can tell a
+    corrected resubmission apart from a first-time submission (see
+    PurchaseRequest.submit()'s own docstring for how).
+
+    Carries department_id (not a resolved department-head employee id):
+    the aggregate has no way to look up who currently heads that
+    department - resolving that recipient is an infrastructure concern for
+    whichever handler consumes this event, not something the domain layer
+    can or should know.
+    """
+
+    request_id: int
+    requisition_number: str
+    requester_id: int
+    department_id: int
 
 
 @dataclass(frozen=True)

@@ -18,6 +18,10 @@ class Department(AggregateRoot[int]):
         id: Unique identifier
         name: Department name (unique)
         description: Optional description of the department
+        head_id: Employee accountable for this department (e.g. approves its
+            requisitions), or None when the department is between heads.
+            Mirrors the existing hr.Department.head foreign key - the
+            employee record itself is not duplicated here.
         created_at: When the department was created
         updated_at: When the department was last updated
     """
@@ -27,6 +31,7 @@ class Department(AggregateRoot[int]):
         id: int,
         name: str,
         description: str = "",
+        head_id: int | None = None,
         created_at: datetime | None = None,
         updated_at: datetime | None = None,
     ):
@@ -34,6 +39,7 @@ class Department(AggregateRoot[int]):
         super().__init__(id)
         self.name = name
         self.description = description
+        self.head_id = head_id
         self.created_at = created_at or datetime.utcnow()
         self.updated_at = updated_at or datetime.utcnow()
         self._validate()
@@ -79,6 +85,7 @@ class Department(AggregateRoot[int]):
         self,
         name: str | None = None,
         description: str | None = None,
+        head_id: int | None = None,
     ) -> None:
         """
         Update department details.
@@ -86,11 +93,18 @@ class Department(AggregateRoot[int]):
         Args:
             name: New name (optional)
             description: New description (optional)
+            head_id: New department head's employee id (optional). Like
+                `name`, `None` means "leave unchanged" here, not "clear the
+                head" - there is currently no way to unset a recorded head
+                through this method, only to reassign it to a different
+                employee.
         """
         if name is not None:
             self.name = name.strip()
         if description is not None:
             self.description = description.strip()
+        if head_id is not None:
+            self.head_id = head_id
 
         self._validate()
         self.updated_at = datetime.utcnow()

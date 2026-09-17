@@ -598,10 +598,18 @@ def notification_unread_count(request: Request) -> Response:
 @api_view(["PATCH"])
 @permission_classes([IsAuthenticated])
 def notification_mark_read(request: Request, notification_id: int) -> Response:
-    """Mark notification as read."""
+    """
+    Mark notification as read.
+
+    Scoped to the caller's own notifications: an id existing at all is not
+    enough, since ids are sequential across every employee's notifications.
+    A mismatch is reported the same as "not found" so this can't be used to
+    probe which ids belong to someone else.
+    """
+    employee_id = _get_employee_id(request)
     notification = _notification_repo.get_by_id(notification_id)
 
-    if notification is None:
+    if notification is None or notification.employee_id != employee_id:
         return Response(
             {"error": "Notification not found"},
             status=status.HTTP_404_NOT_FOUND

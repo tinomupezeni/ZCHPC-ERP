@@ -4,7 +4,7 @@ URL patterns for the procurement module API.
 
 from django.urls import path
 
-from modules.procurement.api import views
+from modules.procurement.api import purchase_request_views, views
 
 app_name = "procurement_v2"
 
@@ -50,31 +50,63 @@ urlpatterns = [
         name="budget-center-detail"
     ),
 
-    # Purchase Requests
+    # Purchase Request Categories (Slice F11-A - employee-facing lookup)
+    path(
+        "purchase-request-categories/",
+        purchase_request_views.purchase_request_categories_list,
+        name="purchase-request-category-list"
+    ),
+
+    # Purchase Requests (redesigned workflow)
     path(
         "requests/",
-        views.purchase_request_list,
+        purchase_request_views.purchase_request_list,
         name="request-list"
     ),
     path(
         "requests/<int:request_id>/",
-        views.purchase_request_detail,
+        purchase_request_views.purchase_request_detail,
         name="request-detail"
     ),
     path(
-        "requests/<int:request_id>/approve-level1/",
-        views.purchase_request_approve_level1,
-        name="request-approve-level1"
+        "requests/<int:request_id>/submit/",
+        purchase_request_views.purchase_request_submit,
+        name="request-submit"
     ),
     path(
-        "requests/<int:request_id>/approve-level2/",
-        views.purchase_request_approve_level2,
-        name="request-approve-level2"
+        "requests/<int:request_id>/department-head/approve/",
+        purchase_request_views.purchase_request_department_head_approve,
+        name="request-department-head-approve"
+    ),
+    path(
+        "requests/<int:request_id>/accounts/verify/",
+        purchase_request_views.purchase_request_accounts_verify,
+        name="request-accounts-verify"
+    ),
+    path(
+        "requests/<int:request_id>/gm/recommend/",
+        purchase_request_views.purchase_request_gm_recommend,
+        name="request-gm-recommend"
+    ),
+    path(
+        "requests/<int:request_id>/director/approve/",
+        purchase_request_views.purchase_request_director_approve,
+        name="request-director-approve"
     ),
     path(
         "requests/<int:request_id>/reject/",
-        views.purchase_request_reject,
+        purchase_request_views.purchase_request_reject,
         name="request-reject"
+    ),
+    path(
+        "requests/<int:request_id>/correct-and-resubmit/",
+        purchase_request_views.purchase_request_correct_and_resubmit,
+        name="request-correct-and-resubmit"
+    ),
+    path(
+        "requests/<int:request_id>/process/",
+        purchase_request_views.purchase_request_process,
+        name="request-process"
     ),
     path(
         "fuel-requisitions/<int:requisition_id>/approve/",
