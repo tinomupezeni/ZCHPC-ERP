@@ -31,6 +31,7 @@ from modules.procurement.api.purchase_request_serializers import (
 )
 from modules.procurement.application.authorization import (
     PurchaseRequestAuthorizationPolicy,
+    PurchaseRequestPermissions,
 )
 from modules.procurement.application.use_cases import (
     AssignItemBudgetCode,
@@ -111,7 +112,27 @@ def _categories_by_id(items) -> dict:
     return _category_repository.get_by_ids({item.category_id for item in items})
 
 
-def _serialize_request(result) -> dict:
+def _budget_codes_by_id(items) -> dict:
+    """One batched lookup of the assigned budget codes, by each item's own budget_code_id."""
+    return _budget_code_repository.get_by_ids(
+        {item.budget_code_id for item in items if item.budget_code_id is not None}
+    )
+
+
+def _may_see_budget_codes(actor) -> bool:
+    """
+    The one place that decides who receives the Accounts-assigned budget code.
+
+    Finance (accounts_verify) and Procurement (process) only. Every other
+    caller - including the requester of the very request - gets neither
+    budget_code nor budget_code_id.
+    """
+    return actor.has_permission(
+        PurchaseRequestPermissions.ACCOUNTS_VERIFY
+    ) or actor.has_permission(PurchaseRequestPermissions.PROCESS)
+
+
+def _serialize_request(result, request: Request) -> dict:
     """
     The single place a PurchaseRequest becomes a response body, so every
     response - create, detail, submit, every approval stage, reject,
@@ -126,7 +147,15 @@ def _serialize_request(result) -> dict:
     category map must not be the thing that breaks that tolerance.
     """
     items = result.items if result is not None else []
-    context = {"categories_by_id": _categories_by_id(items)}
+    include_budget_code = _may_see_budget_codes(actor_from_request(request))
+    context = {
+        "categories_by_id": _categories_by_id(items),
+        "include_budget_code": include_budget_code,
+        # Only look the codes up when they will actually be returned.
+        "budget_codes_by_id": (
+            _budget_codes_by_id(items) if include_budget_code else {}
+        ),
+    }
     return PurchaseRequestSerializer(result, context=context).data
 
 
@@ -138,7 +167,7 @@ def _workflow_action(request: Request, request_id: int, use_case_cls) -> Respons
     except DomainException as exc:
         return _handle_domain_error(exc)
 
-    return Response(_serialize_request(result))
+    return Response(_serialize_request(result, request))
 
 
 @api_view(["GET", "POST"])
@@ -194,7 +223,7 @@ def purchase_request_list(request: Request) -> Response:
     except DomainException as exc:
         return _handle_domain_error(exc)
 
-    return Response(_serialize_request(result), status=status.HTTP_201_CREATED)
+    return Response(_serialize_request(result, request), status=status.HTTP_201_CREATED)
 
 
 @api_view(["GET"])
@@ -262,7 +291,7 @@ def purchase_request_detail(request: Request, request_id: int) -> Response:
         except DomainException as exc:
             return _handle_domain_error(exc)
 
-        return Response(_serialize_request(result))
+        return Response(_serialize_request(result, request))
 
     use_case = ViewPurchaseRequest(_repository, _policy)
     try:
@@ -270,7 +299,7 @@ def purchase_request_detail(request: Request, request_id: int) -> Response:
     except DomainException as exc:
         return _handle_domain_error(exc)
 
-    return Response(_serialize_request(result))
+    return Response(_serialize_request(result, request))
 
 
 @api_view(["POST"])
@@ -327,7 +356,7 @@ def purchase_request_item_budget_code(
     except DomainException as exc:
         return _handle_domain_error(exc)
 
-    return Response(_serialize_request(result))
+    return Response(_serialize_request(result, request))
 
 
 @api_view(["POST"])
@@ -376,7 +405,7 @@ def purchase_request_process(request: Request, request_id: int) -> Response:
     except DomainException as exc:
         return _handle_domain_error(exc)
 
-    return Response(_serialize_request(result))
+    return Response(_serialize_request(result, request))
 
 
 @api_view(["POST"])
@@ -409,4 +438,4 @@ def purchase_request_reject(request: Request, request_id: int) -> Response:
     except DomainException as exc:
         return _handle_domain_error(exc)
 
-    return Response(_serialize_request(result))
+    return Response(_serialize_request(result, request))

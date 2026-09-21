@@ -71,6 +71,7 @@ function fullRequest(overrides: Partial<PurchaseRequest> = {}): PurchaseRequest 
         estimated_cost: '1200.00',
         category_id: 1,
         budget_code_id: 42,
+        budget_code: null,
         category: { id: 5, name: 'IT Equipment', is_active: true },
       },
     ],
@@ -538,6 +539,7 @@ describe('PurchaseRequestAccountsReviewPage - budget code assignment (F25)', () 
           estimated_cost: '1200.00',
           category_id: 1,
           budget_code_id: first,
+          budget_code: null,
           category: { id: 5, name: 'IT Equipment', is_active: true },
         },
         {
@@ -548,6 +550,7 @@ describe('PurchaseRequestAccountsReviewPage - budget code assignment (F25)', () 
           estimated_cost: '300.00',
           category_id: 2,
           budget_code_id: second,
+          budget_code: null,
           category: { id: 6, name: 'Furniture', is_active: true },
         },
       ],

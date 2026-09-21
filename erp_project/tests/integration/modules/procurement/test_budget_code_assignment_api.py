@@ -407,3 +407,195 @@ class TestVerificationAfterAssignment:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         item.refresh_from_db()
         assert item.budget_code_id == chart["expense"].id
+
+
+class TestBudgetCodeSerialization:
+    """What Accounts sees: the actual assigned AccountChart code."""
+
+    def test_assigned_item_exposes_the_actual_accountchart_code_and_name(
+        self, client_for, api_url, requester, accountant, make_request_record, budget_code
+    ):
+        record = make_request_record(requester, status="PROCESSED")
+
+        response = client_for(accountant).get(f"{api_url}{record.id}/")
+
+        item = response.data["items"][0]
+        assert item["budget_code_id"] == budget_code.id
+        assert item["budget_code"] == {
+            "id": budget_code.id,
+            "code": budget_code.code,
+            "name": budget_code.name,
+        }
+
+    def test_budget_code_is_not_derived_from_the_category(
+        self, client_for, api_url, requester, accountant, make_request_record,
+        category, budget_code,
+    ):
+        """category maps to a different AccountChart than the one Accounts assigned."""
+        record = make_request_record(requester, status="PROCESSED")
+
+        item = client_for(accountant).get(f"{api_url}{record.id}/").data["items"][0]
+
+        assert item["category"]["id"] == category.id
+        assert category.account_chart.code != budget_code.code
+        assert item["budget_code"]["code"] == budget_code.code
+
+    def test_unassigned_item_has_null_budget_code_for_accounts(
+        self, client_for, api_url, requester, accountant, make_request_record, category
+    ):
+        record = make_request_record(requester, status="PENDING_ACCOUNTS")
+        record.items.update(budget_code=None)
+
+        item = client_for(accountant).get(f"{api_url}{record.id}/").data["items"][0]
+
+        assert item["budget_code_id"] is None
+        assert item["budget_code"] is None
+        assert item["category"]["id"] == category.id
+
+    def test_assignment_response_carries_the_new_code(
+        self, client_for, api_url, accountant, chart, pending_accounts_record
+    ):
+        item = pending_accounts_record.items.get()
+
+        response = client_for(accountant).put(
+            _url(api_url, pending_accounts_record, item),
+            {"budget_code_id": chart["revenue"].id},
+            format="json",
+        )
+
+        assert response.data["items"][0]["budget_code"]["code"] == "R-1"
+        assert response.data["items"][0]["budget_code_id"] == chart["revenue"].id
+
+    def test_mixed_items_serialize_each_their_own_code(
+        self, client_for, api_url, requester, accountant, category,
+        make_request_record, chart,
+    ):
+        record = make_request_record(requester, status="PENDING_ACCOUNTS")
+        first = record.items.get()
+        first.budget_code = chart["expense"]
+        first.save()
+        _second_item(record, category)  # unassigned
+
+        items = client_for(accountant).get(f"{api_url}{record.id}/").data["items"]
+
+        by_desc = {i["description"]: i for i in items}
+        assert by_desc["Laptop"]["budget_code"]["code"] == "E-1"
+        assert by_desc["Monitor"]["budget_code"] is None
+
+
+class TestBudgetCodeDisclosure:
+    """F25: budget_code / budget_code_id are Finance and Procurement only."""
+
+    KEYS = ("budget_code", "budget_code_id")
+
+    def _item(self, client_for, api_url, actor, record):
+        response = client_for(actor).get(f"{api_url}{record.id}/")
+        assert response.status_code == status.HTTP_200_OK, response.data
+        return response.data["items"][0]
+
+    def test_requester_receives_neither_key_on_their_own_assigned_request(
+        self, client_for, api_url, requester, make_request_record
+    ):
+        record = make_request_record(requester, status="PROCESSED")  # has a code
+
+        item = self._item(client_for, api_url, requester, record)
+
+        for key in self.KEYS:
+            assert key not in item
+        assert item["category_id"] is not None  # category still served
+
+    def test_ordinary_viewer_receives_neither_key(
+        self, client_for, api_url, requester, make_employee, make_request_record
+    ):
+        from modules.procurement.application.authorization import (
+            PurchaseRequestPermissions as P,
+        )
+
+        viewer = make_employee("Vera Viewer", [P.VIEW])
+        record = make_request_record(requester, status="PROCESSED")
+
+        item = self._item(client_for, api_url, viewer, record)
+
+        for key in self.KEYS:
+            assert key not in item
+
+    def test_gm_and_director_do_not_receive_them(
+        self, client_for, api_url, requester, general_manager, director,
+        make_request_record,
+    ):
+        record = make_request_record(requester, status="PROCESSED")
+
+        for actor in (general_manager, director):
+            item = self._item(client_for, api_url, actor, record)
+            for key in self.KEYS:
+                assert key not in item
+
+    def test_accounts_receives_both(
+        self, client_for, api_url, requester, accountant, make_request_record, budget_code
+    ):
+        record = make_request_record(requester, status="PROCESSED")
+
+        item = self._item(client_for, api_url, accountant, record)
+
+        assert item["budget_code_id"] == budget_code.id
+        assert item["budget_code"]["code"] == budget_code.code
+
+    def test_procurement_receives_both(
+        self, client_for, api_url, requester, procurement_officer,
+        make_request_record, budget_code,
+    ):
+        record = make_request_record(requester, status="PROCESSED")
+
+        item = self._item(client_for, api_url, procurement_officer, record)
+
+        assert item["budget_code_id"] == budget_code.id
+        assert item["budget_code"]["code"] == budget_code.code
+
+    @pytest.mark.parametrize("actor_fixture", ["accountant", "procurement_officer"])
+    def test_unassigned_is_null_for_finance_and_procurement(
+        self, request, client_for, api_url, requester, make_request_record, actor_fixture
+    ):
+        actor = request.getfixturevalue(actor_fixture)
+        record = make_request_record(requester, status="PENDING_ACCOUNTS")
+        record.items.update(budget_code=None)
+
+        item = self._item(client_for, api_url, actor, record)
+
+        assert item["budget_code_id"] is None
+        assert item["budget_code"] is None
+
+    def test_unassigned_omits_the_keys_for_a_requester_rather_than_nulling_them(
+        self, client_for, api_url, requester, make_request_record
+    ):
+        record = make_request_record(requester, status="PENDING_ACCOUNTS")
+        record.items.update(budget_code=None)
+
+        item = self._item(client_for, api_url, requester, record)
+
+        for key in self.KEYS:
+            assert key not in item
+
+    def test_create_response_applies_the_same_rule(
+        self, client_for, api_url, requester, valid_payload
+    ):
+        """Create goes through the same central serializer path."""
+        created = client_for(requester).post(api_url, valid_payload, format="json")
+        assert created.status_code == status.HTTP_201_CREATED, created.data
+
+        for key in self.KEYS:
+            assert key not in created.data["items"][0]
+
+    def test_rule_is_capability_based_not_identity_based(
+        self, client_for, api_url, make_employee, make_request_record, budget_code
+    ):
+        """A requester who also holds process is treated as Procurement."""
+        from modules.procurement.application.authorization import (
+            PurchaseRequestPermissions as P,
+        )
+
+        both = make_employee("Bea Both", [P.CREATE, P.VIEW, P.PROCESS])
+        record = make_request_record(both, status="PROCESSED")
+
+        item = self._item(client_for, api_url, both, record)
+
+        assert item["budget_code"]["code"] == budget_code.code

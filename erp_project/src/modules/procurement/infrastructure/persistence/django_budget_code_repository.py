@@ -30,6 +30,12 @@ class DjangoBudgetCodeRepository(IBudgetCodeRepository):
     def get_assignable(self) -> list[BudgetCode]:
         return [self._to_domain(m) for m in self._queryset().order_by("code")]
 
+    def get_by_ids(self, budget_code_ids: set[int]) -> dict[int, BudgetCode]:
+        if not budget_code_ids:
+            return {}
+        models = AccountChart.objects.filter(pk__in=budget_code_ids)
+        return {m.id: self._to_domain(m) for m in models}
+
     def get_assignable_by_id(self, budget_code_id: int) -> BudgetCode | None:
         model = self._queryset().filter(pk=budget_code_id).first()
         return self._to_domain(model) if model else None

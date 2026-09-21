@@ -50,3 +50,11 @@ class TestPurchaseRequestCategory:
         category._id = 7
 
         assert category.id == 7
+
+
+def test_category_without_an_account_chart_is_valid():
+    """F25: categories are descriptive and need no GL mapping."""
+    category = PurchaseRequestCategory(name="Fuel & Lubricants")
+
+    assert category.account_chart_id is None
+    assert category.is_active is True

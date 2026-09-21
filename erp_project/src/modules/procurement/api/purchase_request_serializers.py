@@ -132,6 +132,14 @@ class PurchaseRequestItemCategorySerializer(serializers.Serializer):
     is_active = serializers.BooleanField(read_only=True)
 
 
+class PurchaseRequestItemBudgetCodeSerializer(serializers.Serializer):
+    """id + code + name of the assigned AccountChart row (for the printed requisition)."""
+
+    id = serializers.IntegerField(read_only=True)
+    code = serializers.CharField(read_only=True)
+    name = serializers.CharField(read_only=True)
+
+
 class PurchaseRequestItemSerializer(serializers.Serializer):
     """A line item in a purchase request response."""
 
@@ -144,7 +152,33 @@ class PurchaseRequestItemSerializer(serializers.Serializer):
     )
     category_id = serializers.IntegerField(read_only=True)
     budget_code_id = serializers.IntegerField(read_only=True, allow_null=True)
+    budget_code = serializers.SerializerMethodField()
     category = serializers.SerializerMethodField()
+
+    def to_representation(self, instance):
+        """
+        budget_code / budget_code_id are Finance/Procurement information. When
+        the view did not grant them (context include_budget_code), the keys are
+        omitted entirely - not nulled, which would read as "unassigned".
+        """
+        data = super().to_representation(instance)
+        if not self.context.get("include_budget_code", False):
+            data.pop("budget_code_id", None)
+            data.pop("budget_code", None)
+        return data
+
+    def get_budget_code(self, obj) -> dict | None:
+        """
+        The Accounts-assigned AccountChart row, looked up by the item's own
+        budget_code_id - never derived from the category. None while
+        unassigned. The view passes budget_codes_by_id (one batched query).
+        """
+        if obj.budget_code_id is None:
+            return None
+        budget_code = self.context.get("budget_codes_by_id", {}).get(obj.budget_code_id)
+        if budget_code is None:
+            return None
+        return PurchaseRequestItemBudgetCodeSerializer(budget_code).data
 
     def get_category(self, obj) -> dict | None:
         """

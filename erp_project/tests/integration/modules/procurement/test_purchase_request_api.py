@@ -436,8 +436,10 @@ class TestUpdatePurchaseRequestItems:
         assert len(response.data["items"]) == 1
         assert response.data["items"][0]["description"] == "Updated item"
         assert response.data["items"][0]["category_id"] == category.id
-        # An employee edit never touches Accounts' budget code.
-        assert response.data["items"][0]["budget_code_id"] == budget_code.id
+        # An employee edit never touches the Accounts budget code (the
+        # requester is not shown it, so check the stored value directly).
+        assert "budget_code_id" not in response.data["items"][0]
+        assert record.items.get().budget_code_id == budget_code.id
 
     def test_response_includes_the_resolved_category(
         self, client_for, api_url, requester, category, make_request_record
@@ -481,7 +483,10 @@ class TestUpdatePurchaseRequestItems:
         response = client_for(requester).get(f"{api_url}{record.id}/")
 
         assert response.status_code == status.HTTP_200_OK, response.data
-        assert response.data["items"][0]["budget_code_id"] is None
+        # Requesters never receive budget-code keys - not even as null, which
+        # would read as "unassigned".
+        assert "budget_code_id" not in response.data["items"][0]
+        assert "budget_code" not in response.data["items"][0]
         assert response.data["items"][0]["category_id"] == category.id
 
     def test_editing_a_rejected_request_returns_it_to_draft(

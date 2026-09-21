@@ -77,8 +77,10 @@ class TestPurchaseRequestCreationWithCategoryId:
             "name": category.name,
             "is_active": True,
         }
-        # The category's mapped AccountChart must NOT become the budget code.
-        assert item["budget_code_id"] is None
+        # Requesters are never shown budget-code keys; the stored value is
+        # checked in test_category_is_persisted_in_the_database.
+        assert "budget_code_id" not in item
+        assert "budget_code" not in item
 
     def test_category_is_persisted_in_the_database(
         self, client_for, api_url, requester, category
@@ -155,7 +157,12 @@ class TestPurchaseRequestCreationWithCategoryId:
         )
 
         assert response.status_code == status.HTTP_201_CREATED, response.data
-        assert response.data["items"][0]["budget_code_id"] is None
+        from modules.procurement.infrastructure.persistence.models import (
+            PurchaseRequestItem,
+        )
+
+        row = PurchaseRequestItem.objects.get(pk=response.data["items"][0]["id"])
+        assert row.budget_code_id is None  # the supplied value was ignored
 
     def test_description_does_not_influence_the_persisted_category(
         self, client_for, api_url, requester, category

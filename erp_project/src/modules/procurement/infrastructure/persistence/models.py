@@ -216,6 +216,12 @@ class PurchaseRequestCategory(models.Model):
     """
     Employee-facing Purchase Request category (Slice F11-A).
 
+    F25: categories are now purely descriptive and never resolve to an
+    account. account_chart is optional legacy data on the original F11-A rows
+    and is not read by any code path - the authoritative accounting code is
+    PurchaseRequestItem.budget_code, assigned by Accounts. The paragraphs
+    below describe the retired F11-A design.
+
     This is the mapping foundation described in the F11 investigation:
     PurchaseRequestCategory -> AccountChart. It exists so an employee can
     pick a plain-language category ("IT Consumables") instead of a raw GL
@@ -244,7 +250,8 @@ class PurchaseRequestCategory(models.Model):
     account_chart = models.OneToOneField(
         'accounts.AccountChart', on_delete=models.PROTECT,
         related_name='purchase_request_category',
-        help_text='The single AccountChart row this category resolves to',
+        null=True, blank=True,
+        help_text='Legacy (F11-A) mapping; unused. New categories have none - Accounts assigns budget codes per item',
     )
     is_active = models.BooleanField(
         default=True,

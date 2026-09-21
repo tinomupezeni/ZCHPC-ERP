@@ -207,7 +207,7 @@ export function PurchaseRequestAccountsReviewPage() {
   const allItemsAssigned =
     !!selectedRequest &&
     selectedRequest.items.length > 0 &&
-    selectedRequest.items.every((item) => item.budget_code_id !== null);
+    selectedRequest.items.every((item) => item.budget_code_id != null);
 
   return (
     <div className="space-y-6">

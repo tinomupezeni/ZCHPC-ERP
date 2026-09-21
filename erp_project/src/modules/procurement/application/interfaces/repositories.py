@@ -260,6 +260,15 @@ class IBudgetCodeRepository(ABC):
         """The row if it exists AND is assignable; None otherwise."""
         ...
 
+    @abstractmethod
+    def get_by_ids(self, budget_code_ids: set[int]) -> dict[int, BudgetCode]:
+        """
+        Display lookup: the AccountChart rows already assigned to items,
+        keyed by id. Deliberately NOT filtered to assignable types - an
+        item's existing code must be shown as it actually is.
+        """
+        ...
+
 
 class IPurchaseOrderRepository(ABC):
     """Interface for purchase order repository."""

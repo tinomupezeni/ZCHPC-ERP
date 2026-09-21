@@ -14,11 +14,11 @@ class PurchaseRequestCategory(AggregateRoot[int]):
     """
     An employee-facing Purchase Request category.
 
-    Maps a plain-language label an employee can choose (e.g. "IT
-    Consumables") onto exactly one AccountChart row via account_chart_id.
-    AccountChart itself is not duplicated here - code, name and
-    external_account_type stay owned by the accounts module; this entity
-    carries only the id needed to resolve a category to a budget_code_id.
+    A plain-language label an employee can choose (e.g. "IT Hardware &
+    Accessories"). F25: purely descriptive - it does not resolve to a GL
+    account. account_chart_id is optional legacy data from F11-A and is None
+    for every newer category; the authoritative accounting code is assigned
+    by Accounts per item.
 
     See modules.procurement.infrastructure.persistence.models
     .PurchaseRequestCategory for the persistence-level rationale (why this
@@ -26,7 +26,7 @@ class PurchaseRequestCategory(AggregateRoot[int]):
     """
 
     name: str
-    account_chart_id: int
+    account_chart_id: int | None = None
     is_active: bool = True
     created_at: datetime | None = None
     updated_at: datetime | None = None

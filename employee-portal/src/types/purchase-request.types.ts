@@ -39,6 +39,13 @@ export interface BudgetCode {
   external_account_type: string;
 }
 
+/** The Accounts-assigned AccountChart row on an item. */
+export interface PurchaseRequestItemBudgetCode {
+  id: number;
+  code: string;
+  name: string;
+}
+
 export interface PurchaseRequestItem {
   id: number;
   description: string;
@@ -47,7 +54,10 @@ export interface PurchaseRequestItem {
   estimated_cost: string;
   category_id: number;
   /** Assigned by Accounts; null until then. */
-  budget_code_id: number | null;
+  /** budget_code_id / budget_code: present only for Accounts/Procurement callers;
+   * omitted entirely for everyone else (null there means genuinely unassigned). */
+  budget_code_id?: number | null;
+  budget_code?: PurchaseRequestItemBudgetCode | null;
   category: PurchaseRequestItemCategory | null;
 }
 

@@ -38,6 +38,7 @@ function processedRequest(overrides: Partial<PurchaseRequest> = {}): PurchaseReq
         estimated_cost: '1200.00',
         category_id: 1,
         budget_code_id: 42,
+        budget_code: { id: 42, code: '20000/01/101/021/300', name: 'Office Consumables' },
         category: { id: 5, name: 'IT Equipment', is_active: true },
       },
     ],
@@ -118,6 +119,7 @@ describe('PurchaseRequestPrintPage', () => {
       estimated_cost: '10.00',
       category_id: 1,
       budget_code_id: 1,
+      budget_code: null,
       category: null,
     }));
     vi.mocked(purchaseRequestService.getRequest).mockResolvedValue(
@@ -132,14 +134,67 @@ describe('PurchaseRequestPrintPage', () => {
     expect(bodyRows.length).toBe(10); // 9 real rows + the Total row, no blank padding
   });
 
-  it('shows the employee-facing category, never a fabricated GL/budget code, in the Budget Code column', async () => {
+  it('prints the Accounts-assigned AccountChart code in the Budget Code column', async () => {
     vi.mocked(purchaseRequestService.getRequest).mockResolvedValue(processedRequest());
     renderAt(43);
 
     await screen.findByText('PR-0043');
-    expect(screen.getByText('IT Equipment')).toBeInTheDocument();
-    // No plausible-looking fabricated GL code format anywhere on the page.
-    expect(screen.queryByText(/\d{5}\/\d{2}\/\d{3}/)).not.toBeInTheDocument();
+    const row = screen.getByText('Laptop').closest('tr')!;
+    const cells = within(row).getAllByRole('cell');
+    // Description | Qty | Delivery | Estimated Cost | Budget Code to be charged
+    expect(cells[4]).toHaveTextContent('20000/01/101/021/300');
+  });
+
+  it('does not confuse the employee category with the budget code', async () => {
+    vi.mocked(purchaseRequestService.getRequest).mockResolvedValue(processedRequest());
+    renderAt(43);
+
+    await screen.findByText('PR-0043');
+    const row = screen.getByText('Laptop').closest('tr')!;
+    // The category is descriptive only and is not printed in the budget-code cell.
+    expect(within(row).queryByText('IT Equipment')).not.toBeInTheDocument();
+    expect(screen.queryByText('IT Equipment')).not.toBeInTheDocument();
+    // The account NAME is not printed either - only the code.
+    expect(screen.queryByText('Office Consumables')).not.toBeInTheDocument();
+  });
+
+  it('prints each item its own assigned code', async () => {
+    const base = processedRequest().items[0];
+    vi.mocked(purchaseRequestService.getRequest).mockResolvedValue(
+      processedRequest({
+        items: [
+          base,
+          {
+            ...base,
+            id: 2,
+            description: 'Chair',
+            budget_code_id: 43,
+            budget_code: { id: 43, code: '30000/02/202', name: 'Furniture' },
+          },
+        ],
+      })
+    );
+    renderAt(43);
+
+    await screen.findByText('PR-0043');
+    const cell = (text: string) =>
+      within(screen.getByText(text).closest('tr')!).getAllByRole('cell')[4];
+    expect(cell('Laptop')).toHaveTextContent('20000/01/101/021/300');
+    expect(cell('Chair')).toHaveTextContent('30000/02/202');
+  });
+
+  it('leaves the Budget Code cell blank when no code is assigned - never falling back to the category', async () => {
+    const base = processedRequest().items[0];
+    vi.mocked(purchaseRequestService.getRequest).mockResolvedValue(
+      processedRequest({ items: [{ ...base, budget_code_id: null, budget_code: null }] })
+    );
+    renderAt(43);
+
+    await screen.findByText('PR-0043');
+    const row = screen.getByText('Laptop').closest('tr')!;
+    expect(within(row).getAllByRole('cell')[4]).toBeEmptyDOMElement();
+    expect(screen.queryByText('IT Equipment')).not.toBeInTheDocument();
+    expect(screen.queryByText(/undefined|null/i)).not.toBeInTheDocument();
   });
 
   it('shows the real Purchase Order number and processed date in Section D', async () => {

@@ -56,7 +56,7 @@ export function PurchaseRequestBudgetCodeAssignment({
           <tbody className="divide-y">
             {request.items.map((item) => {
               const current =
-                item.budget_code_id !== null ? codesById.get(item.budget_code_id) : undefined;
+                item.budget_code_id != null ? codesById.get(item.budget_code_id) : undefined;
               const selectId = `budget-code-${item.id}`;
               return (
                 <tr key={item.id}>
@@ -84,7 +84,7 @@ export function PurchaseRequestBudgetCodeAssignment({
                       </option>
                       {/* An already-assigned code outside the approved list (e.g. legacy
                           data) is still shown, not silently blanked. */}
-                      {item.budget_code_id !== null && !current && (
+                      {item.budget_code_id != null && !current && (
                         <option value={item.budget_code_id}>
                           Assigned code (not in the approved list)
                         </option>
@@ -100,7 +100,7 @@ export function PurchaseRequestBudgetCodeAssignment({
                         Assigned: {current.code} — {current.name}
                       </div>
                     )}
-                    {item.budget_code_id === null && (
+                    {item.budget_code_id == null && (
                       <div className="mt-1 text-xs text-amber-700">Not assigned</div>
                     )}
                   </td>

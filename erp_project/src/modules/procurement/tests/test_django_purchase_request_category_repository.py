@@ -155,3 +155,30 @@ class TestPurchaseRequestCategoryModelConstraints(TestCase):
                 account_chart=self.account_a,  # already mapped above
                 is_active=True,
             )
+
+
+@pytest.mark.django_db
+class TestCategoriesWithoutAnAccountChart(TestCase):
+    """F25: new categories carry no GL mapping."""
+
+    def setUp(self):
+        self.repository = DjangoPurchaseRequestCategoryRepository()
+        self.a = PurchaseRequestCategoryModel.objects.create(name="Fuel & Lubricants")
+        self.b = PurchaseRequestCategoryModel.objects.create(name="Other / Not Listed")
+
+    def test_unmapped_category_round_trips_with_none(self):
+        result = self.repository.get_by_id(self.a.id)
+
+        assert result.account_chart_id is None
+        assert result.is_active is True
+
+    def test_many_unmapped_categories_can_coexist(self):
+        """A nullable OneToOne must allow any number of NULL mappings."""
+        assert PurchaseRequestCategoryModel.objects.filter(account_chart__isnull=True).count() == 2
+
+    def test_get_all_active_and_get_by_ids_include_unmapped_categories(self):
+        assert {c.id for c in self.repository.get_all_active()} == {self.a.id, self.b.id}
+        assert set(self.repository.get_by_ids({self.a.id, self.b.id})) == {self.a.id, self.b.id}
+
+    def test_reverse_account_lookup_ignores_unmapped_categories(self):
+        assert self.repository.get_by_account_chart_ids({999999}) == {}

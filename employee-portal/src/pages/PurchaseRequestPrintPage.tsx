@@ -22,9 +22,11 @@ import { format, parseISO } from 'date-fns';
  *    display name (PurchaseRequestDecisionSerializer) - so each approval
  *    line below prints the recorded decision and date, not a name, leaving
  *    the physical form's signature blank for wet-ink signing/filing.
- *  - The true GL budget code is intentionally never exposed to non-Finance
- *    roles (F11-A); the "Budget Code to be charged" column shows the
- *    employee-facing category name instead, the closest real field available.
+ *
+ * The "Budget Code to be charged" column prints the AccountChart code Accounts
+ * actually assigned to the item (item.budget_code.code, F25) - never the
+ * employee's category, which only describes the need. An item with no
+ * assigned code prints a blank cell rather than any substitute value.
  */
 function formatDate(value: string | null): string {
   if (!value) return '';
@@ -189,7 +191,7 @@ export function PurchaseRequestPrintPage() {
                 <td className="pr-print-num">{item.quantity}</td>
                 <td>{item.expected_delivery_period}</td>
                 <td className="pr-print-num">{formatMoney(lineTotal(item))}</td>
-                <td>{item.category?.name ?? ''}</td>
+                <td>{item.budget_code?.code ?? ''}</td>
               </tr>
             ))}
             {Array.from({ length: Math.max(0, MIN_ITEM_ROWS - request.items.length) }).map(
