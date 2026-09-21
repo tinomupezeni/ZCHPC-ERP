@@ -92,8 +92,13 @@ class TestInvalidTransitions:
     ):
         request_id = create_and_submit(login, org, payload)
 
+        # A well-formed body is supplied so this actually exercises the
+        # domain's PENDING_PROCUREMENT status check, not merely
+        # ProcessPurchaseRequestInputSerializer's shape validation.
         response = login(org["procurement"]).post(
-            f"{REQUESTS_URL}{request_id}/process/"
+            f"{REQUESTS_URL}{request_id}/process/",
+            {"purchase_order_number": "PO-TOO-EARLY"},
+            format="json",
         )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -101,6 +106,7 @@ class TestInvalidTransitions:
         assert record.status == "PENDING_DEPARTMENT_HEAD"
         assert record.processed_by_id is None
         assert record.processed_at is None
+        assert record.purchase_order_number is None
 
 
 # =============================================================================

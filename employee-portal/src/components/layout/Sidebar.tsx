@@ -159,6 +159,14 @@ const DIRECTOR_APPROVAL_ITEM: NavItem = {
   description: 'Approve or reject purchase requests',
 };
 
+/** F23: same pattern - gated on canProcessAsProcurement, not roleGroup. */
+const PROCUREMENT_PROCESSING_ITEM: NavItem = {
+  path: '/portal/purchase-requests/procurement',
+  label: 'Procurement Processing',
+  icon: FileCheck,
+  description: 'Process fully approved purchase requests',
+};
+
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -166,8 +174,13 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { roleGroup } = useRole();
-  const { canReviewAsDepartmentHead, canVerifyAsAccounts, canRecommendAsGM, canApproveAsDirector } =
-    usePurchaseRequestReviewerAccess();
+  const {
+    canReviewAsDepartmentHead,
+    canVerifyAsAccounts,
+    canRecommendAsGM,
+    canApproveAsDirector,
+    canProcessAsProcurement,
+  } = usePurchaseRequestReviewerAccess();
   const purchaseRequestActionCount = usePurchaseRequestActionCount();
 
   const baseNavItems = NAV_ITEMS[roleGroup] ?? NAV_ITEMS.staff;
@@ -176,6 +189,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   if (canVerifyAsAccounts) reviewerItems.push(ACCOUNTS_VERIFICATION_ITEM);
   if (canRecommendAsGM) reviewerItems.push(GM_RECOMMENDATION_ITEM);
   if (canApproveAsDirector) reviewerItems.push(DIRECTOR_APPROVAL_ITEM);
+  if (canProcessAsProcurement) reviewerItems.push(PROCUREMENT_PROCESSING_ITEM);
 
   const navItems = [...baseNavItems];
   if (reviewerItems.length > 0) {

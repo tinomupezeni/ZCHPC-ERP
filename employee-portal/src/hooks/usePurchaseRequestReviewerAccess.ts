@@ -11,6 +11,8 @@ export interface PurchaseRequestReviewerAccess {
   canVerifyAsAccounts: boolean | null;
   canRecommendAsGM: boolean | null;
   canApproveAsDirector: boolean | null;
+  /** F23: whether the caller can reach the Procurement processing queue. */
+  canProcessAsProcurement: boolean | null;
 }
 
 /**
@@ -56,6 +58,7 @@ export function usePurchaseRequestReviewerAccess(): PurchaseRequestReviewerAcces
   const [canVerifyAsAccounts, setCanVerifyAsAccounts] = useState<boolean | null>(null);
   const [canRecommendAsGM, setCanRecommendAsGM] = useState<boolean | null>(null);
   const [canApproveAsDirector, setCanApproveAsDirector] = useState<boolean | null>(null);
+  const [canProcessAsProcurement, setCanProcessAsProcurement] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +99,15 @@ export function usePurchaseRequestReviewerAccess(): PurchaseRequestReviewerAcces
         if (!cancelled) setCanApproveAsDirector(false);
       });
 
+    purchaseRequestService
+      .getPendingProcurementRequests()
+      .then(() => {
+        if (!cancelled) setCanProcessAsProcurement(true);
+      })
+      .catch(() => {
+        if (!cancelled) setCanProcessAsProcurement(false);
+      });
+
     return () => {
       cancelled = true;
     };
@@ -106,6 +118,7 @@ export function usePurchaseRequestReviewerAccess(): PurchaseRequestReviewerAcces
     canVerifyAsAccounts,
     canRecommendAsGM,
     canApproveAsDirector,
+    canProcessAsProcurement,
   };
 }
 

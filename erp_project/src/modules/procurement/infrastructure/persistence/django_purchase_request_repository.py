@@ -88,6 +88,7 @@ class DjangoPurchaseRequestRepository(IPurchaseRequestRepository):
             decisions=decisions,
             processed_by=model.processed_by_id,
             processed_at=model.processed_at,
+            purchase_order_number=model.purchase_order_number,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -111,6 +112,7 @@ class DjangoPurchaseRequestRepository(IPurchaseRequestRepository):
         model.total_estimated_cost = request.total_estimated_cost
         model.processed_by_id = request.processed_by
         model.processed_at = request.processed_at
+        model.purchase_order_number = request.purchase_order_number
         model.save()
 
         # Pull the auto-generated requisition_number back into the domain
@@ -211,6 +213,11 @@ class DjangoPurchaseRequestRepository(IPurchaseRequestRepository):
             .order_by("-created_at")
         )
         return [self._to_domain(m) for m in queryset]
+
+    def exists_by_purchase_order_number(self, purchase_order_number: str) -> bool:
+        return PurchaseRequestModel.objects.filter(
+            purchase_order_number=purchase_order_number
+        ).exists()
 
     def delete(self, request_id: int) -> bool:
         """Delete a request (only if draft)."""

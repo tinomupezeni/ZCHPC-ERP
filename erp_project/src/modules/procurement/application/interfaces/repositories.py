@@ -182,6 +182,18 @@ class IPurchaseRequestRepository(ABC):
         ...
 
     @abstractmethod
+    def exists_by_purchase_order_number(self, purchase_order_number: str) -> bool:
+        """
+        Whether any request already carries this PO number (F23).
+
+        Used by ProcessPurchaseRequestByProcurement to reject a duplicate
+        with a clear error before touching the domain; the database's own
+        unique constraint on this column remains the actual guarantee under
+        concurrent writes.
+        """
+        ...
+
+    @abstractmethod
     def delete(self, request_id: int) -> bool:
         """Delete a request (only if pending/draft)."""
         ...

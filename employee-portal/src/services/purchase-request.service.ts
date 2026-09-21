@@ -84,6 +84,19 @@ export const purchaseRequestService = {
     return response.data;
   },
 
+  /**
+   * F23: requests awaiting Procurement processing, the final workflow stage.
+   * Same shape as GM/Accounts/Director - organization-wide, gated purely on
+   * the process permission. A 403 means the caller holds no Procurement
+   * capability at all, distinct from a genuinely empty queue.
+   */
+  async getPendingProcurementRequests(): Promise<PurchaseRequestListItem[]> {
+    const response = await api.get<PurchaseRequestListItem[]>('/procurement/requests/', {
+      params: { scope: 'pending-procurement' },
+    });
+    return response.data;
+  },
+
   async getRequest(id: number): Promise<PurchaseRequest> {
     const response = await api.get<PurchaseRequest>(`/procurement/requests/${id}/`);
     return response.data;
@@ -158,6 +171,19 @@ export const purchaseRequestService = {
     const response = await api.post<PurchaseRequest>(
       `/procurement/requests/${id}/director/approve/`
     );
+    return response.data;
+  },
+
+  /**
+   * F23: process a request currently awaiting Procurement. Unlike the other
+   * workflow transitions this one takes a body - a manually entered
+   * purchase_order_number, never auto-generated. Moves the request to
+   * PROCESSED, its final state, on success.
+   */
+  async processRequest(id: number, purchaseOrderNumber: string): Promise<PurchaseRequest> {
+    const response = await api.post<PurchaseRequest>(`/procurement/requests/${id}/process/`, {
+      purchase_order_number: purchaseOrderNumber,
+    });
     return response.data;
   },
 

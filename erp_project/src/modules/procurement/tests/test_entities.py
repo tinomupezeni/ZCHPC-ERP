@@ -384,10 +384,47 @@ class TestPurchaseRequest:
         request.verify_by_accounts(3)
         request.recommend_by_gm(4)
         request.approve_by_director(5)
-        request.process_by_procurement(6)
+        request.process_by_procurement(6, "PO-TEST-001")
         assert request.status == RequestStatus.PROCESSED
         assert request.processed_by == 6
         assert request.processed_at is not None
+        assert request.purchase_order_number == "PO-TEST-001"
+
+    def _advance_to_pending_procurement(self, request):
+        request.add_item(self._make_item())
+        request.submit()
+        request.approve_by_department_head(2)
+        request.verify_by_accounts(3)
+        request.recommend_by_gm(4)
+        request.approve_by_director(5)
+        return request
+
+    def test_purchase_order_number_is_none_before_processing(self):
+        """F23: the field stays unset for every stage before PROCESSED."""
+        request = self._advance_to_pending_procurement(self._make_request())
+        assert request.purchase_order_number is None
+
+    def test_process_by_procurement_strips_purchase_order_number(self):
+        """F23: manually entered by a human - leading/trailing whitespace is trimmed, not preserved verbatim."""
+        request = self._advance_to_pending_procurement(self._make_request())
+        request.process_by_procurement(6, "  PO-2026-042  ")
+        assert request.purchase_order_number == "PO-2026-042"
+
+    def test_process_by_procurement_rejects_blank_purchase_order_number(self):
+        """F23: manually entered, not auto-generated - an empty/whitespace-only value is not a real PO number."""
+        from shared.domain.exceptions import ValidationError
+
+        request = self._advance_to_pending_procurement(self._make_request())
+        with pytest.raises(ValidationError):
+            request.process_by_procurement(6, "   ")
+        assert request.status == RequestStatus.PENDING_PROCUREMENT
+        assert request.purchase_order_number is None
+
+    def test_process_by_procurement_requires_purchase_order_number_argument(self):
+        """F23: the parameter is required - there is no legacy no-payload call site left in the domain."""
+        request = self._advance_to_pending_procurement(self._make_request())
+        with pytest.raises(TypeError):
+            request.process_by_procurement(6)
 
     def test_process_by_procurement_appends_a_purchase_request_processed_domain_event(self):
         """Slice 3 notifications: mirrors test_reject_appends_a_purchase_request_rejected_domain_event for the processed path."""
@@ -405,7 +442,7 @@ class TestPurchaseRequest:
 
         assert request.domain_events == []
 
-        request.process_by_procurement(6)
+        request.process_by_procurement(6, "PO-TEST-001")
 
         events = request.domain_events
         assert len(events) == 1
@@ -431,7 +468,7 @@ class TestPurchaseRequest:
         request.recommend_by_gm(4)
         request.approve_by_director(5)
 
-        request.process_by_procurement(6)
+        request.process_by_procurement(6, "PO-TEST-001")
 
         assert request.processed_at.tzinfo is not None
         assert request.processed_at.utcoffset() == timezone.utc.utcoffset(None)
@@ -449,7 +486,7 @@ class TestPurchaseRequest:
         request.recommend_by_gm(4)
         request.approve_by_director(5)
 
-        request.process_by_procurement(6)
+        request.process_by_procurement(6, "PO-TEST-001")
 
         after = datetime.now(timezone.utc)
         assert before <= request.processed_at <= after
@@ -468,7 +505,7 @@ class TestPurchaseRequest:
         request.verify_by_accounts(3)
         request.recommend_by_gm(4)
         request.approve_by_director(5)
-        request.process_by_procurement(6)
+        request.process_by_procurement(6, "PO-TEST-001")
 
         assert request.created_at.tzinfo is not None
         assert request.updated_at.tzinfo is not None
@@ -501,7 +538,7 @@ class TestPurchaseRequest:
 
         # Cannot process from DRAFT
         with pytest.raises(ValidationError):
-            request.process_by_procurement(6)
+            request.process_by_procurement(6, "PO-TEST-001")
 
         # Submit, then try wrong transition
         request.submit()
@@ -688,7 +725,7 @@ class TestPurchaseRequest:
         request.verify_by_accounts(3)
         request.recommend_by_gm(4)
         request.approve_by_director(5)
-        request.process_by_procurement(6)
+        request.process_by_procurement(6, "PO-TEST-001")
         with pytest.raises(ValidationError):
             request.reject(7, "Too late")
 
@@ -778,7 +815,7 @@ class TestPurchaseRequest:
                 r.verify_by_accounts(3),
                 r.recommend_by_gm(4),
                 r.approve_by_director(5),
-                r.process_by_procurement(6),
+                r.process_by_procurement(6, "PO-TEST-001"),
             ),  # PROCESSED
         ]:
             request = self._make_request()

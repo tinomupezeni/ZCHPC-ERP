@@ -63,6 +63,8 @@ export interface PurchaseRequest {
   decisions: PurchaseRequestDecision[];
   processed_by: number | null;
   processed_at: string | null;
+  /** F23: manually entered by Procurement at processing time - null until PROCESSED. */
+  purchase_order_number: string | null;
   created_at: string | null;
   updated_at: string | null;
 }

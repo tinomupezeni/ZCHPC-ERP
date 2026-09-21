@@ -39,6 +39,7 @@ function baseRequest(overrides: Partial<PurchaseRequest> = {}): PurchaseRequest 
     ],
     processed_by: null,
     processed_at: null,
+    purchase_order_number: null,
     created_at: '2025-01-01T00:00:00Z',
     updated_at: '2025-01-02T00:00:00Z',
     ...overrides,
@@ -324,6 +325,34 @@ describe('PurchaseRequestDetail', () => {
     // "Completed" appears twice by design: the status hero, and the
     // Procurement section's own status line.
     expect(screen.getAllByText('Completed').length).toBeGreaterThanOrEqual(2);
+  });
+
+  /**
+   * F23 follow-up: printing is a Procurement action (see
+   * PurchaseRequestProcurementReviewPage's own `actions` slot), never
+   * something this shared, role-agnostic component surfaces itself - it has
+   * no print link/button for any status or viewerRole, including the
+   * default 'requester' view a processed request's own owner would see via
+   * PurchaseRequestsPage. This is what keeps printing from becoming a
+   * prominent requester-facing action.
+   */
+  it('never renders a print action itself, for any status or viewer role - printing is a Procurement-page action, not this shared component', () => {
+    render(
+      <PurchaseRequestDetail
+        request={baseRequest({
+          status: 'PROCESSED',
+          processed_by: 3,
+          processed_at: '2025-01-05T00:00:00Z',
+          purchase_order_number: 'PO-2026-001',
+        })}
+        isOpen
+        onClose={vi.fn()}
+        onEdit={vi.fn()}
+        viewerRole="requester"
+      />
+    );
+    expect(screen.queryByRole('link', { name: /print/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /print/i })).not.toBeInTheDocument();
   });
 });
 

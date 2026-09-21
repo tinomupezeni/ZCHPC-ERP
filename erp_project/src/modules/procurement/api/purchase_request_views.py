@@ -20,6 +20,7 @@ from modules.procurement.api.actors import actor_from_request, requester_identit
 from modules.procurement.api.purchase_request_serializers import (
     CreatePurchaseRequestInputSerializer,
     ListPurchaseRequestsQuerySerializer,
+    ProcessPurchaseRequestInputSerializer,
     PurchaseRequestCategorySerializer,
     PurchaseRequestListSerializer,
     PurchaseRequestSerializer,
@@ -311,8 +312,28 @@ def purchase_request_director_approve(request: Request, request_id: int) -> Resp
 
 @api_view(["POST"])
 def purchase_request_process(request: Request, request_id: int) -> Response:
-    """Procurement processing, the final workflow step."""
-    return _workflow_action(request, request_id, ProcessPurchaseRequestByProcurement)
+    """
+    Procurement processing, the final workflow step (F23).
+
+    Unlike the other workflow transitions this one takes a body: a manually
+    entered purchase_order_number. Not routed through _workflow_action since
+    that helper is only for no-payload transitions.
+    """
+    serializer = ProcessPurchaseRequestInputSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    use_case = ProcessPurchaseRequestByProcurement(_repository, _policy)
+    try:
+        result = use_case.execute(
+            request_id,
+            actor_from_request(request),
+            purchase_order_number=serializer.validated_data["purchase_order_number"],
+        )
+    except DomainException as exc:
+        return _handle_domain_error(exc)
+
+    return Response(_serialize_request(result))
 
 
 @api_view(["POST"])

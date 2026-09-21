@@ -105,6 +105,20 @@ class RejectPurchaseRequestInputSerializer(serializers.Serializer):
     reason = serializers.CharField(max_length=2000, allow_blank=False)
 
 
+class ProcessPurchaseRequestInputSerializer(serializers.Serializer):
+    """
+    Input for Procurement processing (F23).
+
+    purchase_order_number is manually entered by the Procurement Officer -
+    free text, not auto-generated like requisition_number. Shape validation
+    only; required/non-blank and max length here, uniqueness and the
+    PENDING_PROCUREMENT state check belong to
+    ProcessPurchaseRequestByProcurement/the domain, not this serializer.
+    """
+
+    purchase_order_number = serializers.CharField(max_length=50, allow_blank=False)
+
+
 class ListPurchaseRequestsQuerySerializer(serializers.Serializer):
     """Query parameters for the purchase request collection."""
 
@@ -199,6 +213,7 @@ class PurchaseRequestSerializer(serializers.Serializer):
     decisions = PurchaseRequestDecisionSerializer(many=True, read_only=True)
     processed_by = serializers.IntegerField(read_only=True, allow_null=True)
     processed_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    purchase_order_number = serializers.CharField(read_only=True, allow_null=True)
     created_at = serializers.DateTimeField(read_only=True, allow_null=True)
     updated_at = serializers.DateTimeField(read_only=True, allow_null=True)
 

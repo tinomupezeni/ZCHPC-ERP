@@ -10,6 +10,8 @@ import { PurchaseRequestReviewPage } from '@/pages/PurchaseRequestReviewPage';
 import { PurchaseRequestAccountsReviewPage } from '@/pages/PurchaseRequestAccountsReviewPage';
 import { PurchaseRequestGMReviewPage } from '@/pages/PurchaseRequestGMReviewPage';
 import { PurchaseRequestDirectorReviewPage } from '@/pages/PurchaseRequestDirectorReviewPage';
+import { PurchaseRequestProcurementReviewPage } from '@/pages/PurchaseRequestProcurementReviewPage';
+import { PurchaseRequestPrintPage } from '@/pages/PurchaseRequestPrintPage';
 import { FuelRequisitionsPage } from '@/pages/FuelRequisitionsPage';
 import { StoresRequisitionsPage } from '@/pages/StoresRequisitionsPage';
 import { ComparativeSchedulesPage } from '@/pages/ComparativeSchedulesPage';
@@ -28,6 +30,20 @@ function App() {
         <Routes>
           {/* QR Display for office - standalone page without layout */}
           <Route path="/attendance/qr-display" element={<QRDisplayPage />} />
+
+          {/*
+            F23: the final printable Purchase Requisition. Authenticated but
+            deliberately outside MainLayout, like QR Display above - the
+            print output must not include the application's sidebar/nav.
+          */}
+          <Route
+            path="/portal/purchase-requests/:id/print"
+            element={
+              <ProtectedRoute>
+                <PurchaseRequestPrintPage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Public careers routes - default landing page */}
           <Route element={<PublicLayout />}>
@@ -68,6 +84,10 @@ function App() {
             <Route
               path="/portal/purchase-requests/director"
               element={<PurchaseRequestDirectorReviewPage />}
+            />
+            <Route
+              path="/portal/purchase-requests/procurement"
+              element={<PurchaseRequestProcurementReviewPage />}
             />
             <Route path="/portal/fuel-requisitions" element={<FuelRequisitionsPage />} />
             <Route path="/portal/stores-requisitions" element={<StoresRequisitionsPage />} />

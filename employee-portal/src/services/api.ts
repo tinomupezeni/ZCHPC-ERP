@@ -1,6 +1,12 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 
-const API_BASE_URL = 'https://zchpcerp.zchpc.ac.zw/api/v2';
+/**
+ * VITE_API_URL is the backend origin only (no path) - see .env.example and
+ * vite.config.ts's dev-server proxy target, which use it the same way.
+ * Falls back to production when unset, matching vite.config.ts's own
+ * __API_URL__ default.
+ */
+const API_BASE_URL = `${import.meta.env.VITE_API_URL ?? 'https://zchpcerp.zchpc.ac.zw'}/api/v2`;
 
 // Create axios instance
 const api = axios.create({

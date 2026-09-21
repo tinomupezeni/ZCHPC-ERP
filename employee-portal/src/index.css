@@ -315,3 +315,52 @@ html {
 .comparison-signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 26px; margin-top: 20px; font-size: 11px; }
 .comparison-signatures span { display: inline-block; min-width: 90px; border-bottom: 1px solid #555; }
 @media print { .comparative-paper { width: 297mm; min-height: 210mm; padding: 10mm 16mm; } .comparative-paper .stores-header { min-height: 60px; } @page { size: A4 landscape; margin: 0; } }
+
+/* F23: final printable Purchase Requisition - reproduces the physical ZCHPC
+   paper form's structure (Sections A-D) and appearance: a formal
+   institutional form (serif type, thin black rules, restrained spacing),
+   not a modern web document that happens to be printable. A4 portrait,
+   reusing this file's existing fuel/stores print convention for the
+   screen-vs-print mechanics only - the visual language here is deliberately
+   plainer than the rest of the app. */
+.pr-print-status { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; font-family: var(--font-inter); color: #444; }
+.pr-print-page { min-height: 100vh; padding: 24px; background: #eef0ed; color: #000; font-family: 'Times New Roman', Times, serif; }
+.pr-print-actions { max-width: 794px; margin: 0 auto 16px; display: flex; justify-content: flex-end; font-family: var(--font-inter); }
+.pr-print-paper { box-sizing: border-box; width: min(100%, 794px); min-height: 1123px; margin: auto; padding: 52px 58px 64px; background: #fff; border: 1px solid #d2d0c8; box-shadow: 0 5px 20px rgba(0,0,0,.12); line-height: 1.35; }
+.pr-print-letterhead { border-bottom: 1.5px solid #000; padding-bottom: 10px; margin-bottom: 26px; }
+.pr-print-header { position: relative; display: grid; grid-template-columns: 60px 1fr 60px; align-items: center; gap: 12px; }
+.pr-print-crest { width: 58px; height: 58px; object-fit: contain; }
+.pr-print-header img { width: 58px; height: 58px; object-fit: contain; justify-self: end; }
+.pr-print-header h1 { margin: 0; text-align: center; font-size: 18px; font-weight: 700; letter-spacing: 0.03em; }
+.pr-print-no { text-align: right; font-size: 11px; margin-top: 6px; }
+.pr-print-paper h2 { margin: 24px 0 12px; font-size: 14px; font-weight: 700; text-align: center; }
+.pr-print-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; margin-bottom: 10px; font-size: 14px; line-height: 1.5; }
+.pr-print-label { margin-right: 6px; }
+.pr-print-fill { display: inline-block; min-width: 60px; border-bottom: 1px solid #000; padding: 0 4px 2px; }
+.pr-print-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13.5px; margin-top: 8px; }
+.pr-print-table th, .pr-print-table td { border: 1px solid #000; padding: 7px 8px; text-align: left; vertical-align: top; font-weight: 400; height: 30px; }
+.pr-print-table thead th { font-weight: 700; height: auto; padding: 6px 8px; }
+.pr-print-table .pr-print-num { text-align: right; }
+.pr-print-table th:nth-child(1) { width: 32%; }
+.pr-print-table th:nth-child(2) { width: 7%; }
+.pr-print-table th:nth-child(3) { width: 19%; }
+.pr-print-table th:nth-child(4) { width: 17%; }
+.pr-print-table th:nth-child(5) { width: 25%; }
+.pr-print-blank-row td { color: transparent; }
+.pr-print-total-row td { font-weight: 700; }
+.pr-print-note { font-size: 12.5px; font-style: italic; margin: 8px 0 4px; }
+.pr-print-approval-line { font-size: 14px; margin-bottom: 10px; line-height: 1.4; }
+.pr-print-approval-line .pr-print-fill { min-width: 48px; margin-right: 8px; }
+.pr-print-full { grid-column: 1 / -1; }
+@media (max-width: 640px) {
+  .pr-print-page { padding: 8px; }
+  .pr-print-paper { padding: 24px 16px; min-height: 0; }
+  .pr-print-row { grid-template-columns: 1fr; }
+}
+@media print {
+  .pr-print-page { padding: 0; background: white; }
+  .pr-print-actions { display: none; }
+  .pr-print-paper { width: 210mm; min-height: 297mm; margin: 0; padding: 18mm 19mm 16mm; border: 0; box-shadow: none; }
+  .pr-print-table, .pr-print-fill, .pr-print-letterhead { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  @page { size: A4 portrait; margin: 0; }
+}

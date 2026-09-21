@@ -117,6 +117,7 @@ class StubDirectory:
 def repository():
     repo = Mock()
     repo.save.side_effect = lambda x: x
+    repo.exists_by_purchase_order_number.return_value = False
     return repo
 
 
@@ -163,7 +164,6 @@ class TestUnauthenticatedActor:
             (VerifyPurchaseRequestByAccounts, (100,)),
             (RecommendPurchaseRequestByGM, (100,)),
             (ApprovePurchaseRequestByDirector, (100,)),
-            (ProcessPurchaseRequestByProcurement, (100,)),
             (CorrectAndResubmitPurchaseRequest, (100,)),
         ],
     )
@@ -182,6 +182,21 @@ class TestUnauthenticatedActor:
         with pytest.raises(AuthorizationError):
             use_case.execute(100, Actor.anonymous(), "no budget")
 
+        repository.save.assert_not_called()
+
+    def test_anonymous_process_is_denied(self, repository, policy):
+        """
+        F23: ProcessPurchaseRequestByProcurement.execute takes
+        (request_id, actor, purchase_order_number) - actor is not the last
+        positional argument, so (like reject) it needs its own test rather
+        than the generic *args, actor parametrization above.
+        """
+        use_case = ProcessPurchaseRequestByProcurement(repository, policy)
+
+        with pytest.raises(AuthorizationError) as exc:
+            use_case.execute(100, Actor.anonymous(), purchase_order_number="PO-1")
+
+        assert exc.value.code == "UNAUTHENTICATED"
         repository.save.assert_not_called()
 
     def test_anonymous_create_is_denied(self, repository, policy, category_repository):
@@ -563,12 +578,6 @@ class TestWorkflowOfficeAuthorization:
                 P.DIRECTOR_APPROVE,
                 RequestStatus.PENDING_PROCUREMENT,
             ),
-            (
-                ProcessPurchaseRequestByProcurement,
-                RequestStatus.PENDING_PROCUREMENT,
-                P.PROCESS,
-                RequestStatus.PROCESSED,
-            ),
         ],
     )
     def test_permission_governs_each_office(
@@ -592,13 +601,34 @@ class TestWorkflowOfficeAuthorization:
         assert result.status == next_status
         repository.save.assert_called_once()
 
+    def test_permission_governs_procurement_processing(self, repository, policy):
+        """
+        F23: ProcessPurchaseRequestByProcurement.execute takes an extra
+        purchase_order_number argument, so it can't share the generic
+        (request_id, actor) parametrization above.
+        """
+        request = make_request(RequestStatus.PENDING_PROCUREMENT)
+        repository.get_by_id.return_value = request
+        use_case = ProcessPurchaseRequestByProcurement(repository, policy)
+
+        wrong = make_actor(5, [P.VIEW, P.SUBMIT], FINANCE_DEPARTMENT_ID)
+        with pytest.raises(AuthorizationError) as exc:
+            use_case.execute(100, wrong, purchase_order_number="PO-1")
+        assert exc.value.code == "PERMISSION_DENIED"
+        assert request.status == RequestStatus.PENDING_PROCUREMENT
+        repository.save.assert_not_called()
+
+        holder = make_actor(5, [P.PROCESS], FINANCE_DEPARTMENT_ID)
+        result = use_case.execute(100, holder, purchase_order_number="PO-1")
+        assert result.status == RequestStatus.PROCESSED
+        repository.save.assert_called_once()
+
     @pytest.mark.parametrize(
         "use_case_cls,status,permission",
         [
             (VerifyPurchaseRequestByAccounts, RequestStatus.PENDING_ACCOUNTS, P.ACCOUNTS_VERIFY),
             (RecommendPurchaseRequestByGM, RequestStatus.PENDING_GM, P.GM_RECOMMEND),
             (ApprovePurchaseRequestByDirector, RequestStatus.PENDING_DIRECTOR, P.DIRECTOR_APPROVE),
-            (ProcessPurchaseRequestByProcurement, RequestStatus.PENDING_PROCUREMENT, P.PROCESS),
         ],
     )
     def test_requester_cannot_act_on_their_own_request(
@@ -613,6 +643,21 @@ class TestWorkflowOfficeAuthorization:
 
         assert exc.value.code == "SELF_APPROVAL_FORBIDDEN"
         assert request.status == status
+        repository.save.assert_not_called()
+
+    def test_requester_cannot_process_their_own_request(self, repository, policy):
+        """F23 counterpart of test_requester_cannot_act_on_their_own_request for Process."""
+        request = make_request(RequestStatus.PENDING_PROCUREMENT)
+        repository.get_by_id.return_value = request
+        actor = make_actor(REQUESTER_ID, [P.PROCESS], IT_DEPARTMENT_ID)
+
+        with pytest.raises(AuthorizationError) as exc:
+            ProcessPurchaseRequestByProcurement(repository, policy).execute(
+                100, actor, purchase_order_number="PO-1"
+            )
+
+        assert exc.value.code == "SELF_APPROVAL_FORBIDDEN"
+        assert request.status == RequestStatus.PENDING_PROCUREMENT
         repository.save.assert_not_called()
 
     def test_records_the_actors_employee_id_not_a_caller_supplied_id(
@@ -1196,7 +1241,6 @@ class TestSecurityInvariants:
             (VerifyPurchaseRequestByAccounts, RequestStatus.PENDING_ACCOUNTS),
             (RecommendPurchaseRequestByGM, RequestStatus.PENDING_GM),
             (ApprovePurchaseRequestByDirector, RequestStatus.PENDING_DIRECTOR),
-            (ProcessPurchaseRequestByProcurement, RequestStatus.PENDING_PROCUREMENT),
         ],
     )
     def test_workflow_decisions_require_an_employee_profile(
@@ -1220,6 +1264,26 @@ class TestSecurityInvariants:
 
         assert exc.value.code == "NO_EMPLOYEE_PROFILE"
         assert request.status == status
+        repository.save.assert_not_called()
+
+    def test_procurement_processing_requires_an_employee_profile(self, repository, policy):
+        """F23 counterpart of test_workflow_decisions_require_an_employee_profile for Process."""
+        request = make_request(RequestStatus.PENDING_PROCUREMENT)
+        repository.get_by_id.return_value = request
+        faceless_admin = Actor(
+            employee_id=None,
+            permissions=PermissionSet.empty(),
+            role_name="ADMIN",
+            is_superuser=True,
+        )
+
+        with pytest.raises(AuthorizationError) as exc:
+            ProcessPurchaseRequestByProcurement(repository, policy).execute(
+                100, faceless_admin, purchase_order_number="PO-1"
+            )
+
+        assert exc.value.code == "NO_EMPLOYEE_PROFILE"
+        assert request.status == RequestStatus.PENDING_PROCUREMENT
         repository.save.assert_not_called()
 
     def test_module_wildcard_grant_covers_purchase_request_capabilities(

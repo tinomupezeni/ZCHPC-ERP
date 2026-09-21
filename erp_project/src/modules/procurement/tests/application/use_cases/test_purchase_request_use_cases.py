@@ -42,7 +42,7 @@ from modules.procurement.application.use_cases.purchase_request_use_cases import
 )
 from modules.procurement.domain.entities import PurchaseRequest, PurchaseRequestItem
 from modules.procurement.domain.value_objects import RequestStatus
-from shared.domain.exceptions import NotFoundError, ValidationError
+from shared.domain.exceptions import ConflictError, NotFoundError, ValidationError
 
 REQUESTER_ID = 1
 DEPARTMENT_ID = 10
@@ -72,6 +72,9 @@ def authorized_actor(employee_id, department_id=DEPARTMENT_ID):
 def repository():
     repo = Mock()
     repo.save.side_effect = lambda x: x
+    # No PO number collides by default - ProcessPurchaseRequestByProcurement
+    # tests that care about a collision override this explicitly.
+    repo.exists_by_purchase_order_number.return_value = False
     return repo
 
 
@@ -510,29 +513,71 @@ class TestApprovePurchaseRequestByDirector:
 
 
 class TestProcessPurchaseRequestByProcurement:
-    """Tests for the ProcessPurchaseRequestByProcurement use case."""
+    """Tests for the ProcessPurchaseRequestByProcurement use case (F23: purchase_order_number)."""
+
+    def _fully_approved(self, request):
+        request.submit()
+        request.approve_by_department_head(20)
+        request.verify_by_accounts(21)
+        request.recommend_by_gm(22)
+        request.approve_by_director(23)
+        return request
 
     def test_processes_pending_request(self, repository, policy, draft_request_with_item):
-        draft_request_with_item.submit()
-        draft_request_with_item.approve_by_department_head(20)
-        draft_request_with_item.verify_by_accounts(21)
-        draft_request_with_item.recommend_by_gm(22)
-        draft_request_with_item.approve_by_director(23)
+        self._fully_approved(draft_request_with_item)
         repository.get_by_id.return_value = draft_request_with_item
         use_case = ProcessPurchaseRequestByProcurement(repository, policy)
 
-        result = use_case.execute(100, authorized_actor(24))
+        result = use_case.execute(100, authorized_actor(24), purchase_order_number="PO-2026-001")
 
         assert result.status == RequestStatus.PROCESSED
         assert result.processed_by == 24
+        assert result.purchase_order_number == "PO-2026-001"
         repository.save.assert_called_once_with(draft_request_with_item)
+
+    def test_strips_whitespace_from_po_number(
+        self, repository, policy, draft_request_with_item
+    ):
+        self._fully_approved(draft_request_with_item)
+        repository.get_by_id.return_value = draft_request_with_item
+        use_case = ProcessPurchaseRequestByProcurement(repository, policy)
+
+        result = use_case.execute(100, authorized_actor(24), purchase_order_number="  PO-9  ")
+
+        assert result.purchase_order_number == "PO-9"
+
+    def test_blank_po_number_raises_validation_error(
+        self, repository, policy, draft_request_with_item
+    ):
+        self._fully_approved(draft_request_with_item)
+        repository.get_by_id.return_value = draft_request_with_item
+        use_case = ProcessPurchaseRequestByProcurement(repository, policy)
+
+        with pytest.raises(ValidationError):
+            use_case.execute(100, authorized_actor(24), purchase_order_number="   ")
+        repository.save.assert_not_called()
+
+    def test_duplicate_po_number_raises_conflict_error(
+        self, repository, policy, draft_request_with_item
+    ):
+        self._fully_approved(draft_request_with_item)
+        repository.get_by_id.return_value = draft_request_with_item
+        repository.exists_by_purchase_order_number.return_value = True
+        use_case = ProcessPurchaseRequestByProcurement(repository, policy)
+
+        with pytest.raises(ConflictError) as exc:
+            use_case.execute(100, authorized_actor(24), purchase_order_number="PO-2026-001")
+
+        assert exc.value.code == "PO_NUMBER_ALREADY_EXISTS"
+        repository.save.assert_not_called()
+        repository.exists_by_purchase_order_number.assert_called_once_with("PO-2026-001")
 
     def test_not_found_raises(self, repository, policy):
         repository.get_by_id.return_value = None
         use_case = ProcessPurchaseRequestByProcurement(repository, policy)
 
         with pytest.raises(NotFoundError):
-            use_case.execute(999, authorized_actor(24))
+            use_case.execute(999, authorized_actor(24), purchase_order_number="PO-1")
         repository.save.assert_not_called()
 
     def test_publishes_purchase_request_processed_after_save(
@@ -547,16 +592,12 @@ class TestProcessPurchaseRequestByProcurement:
         """
         from modules.procurement.domain.events import PurchaseRequestProcessed
 
-        draft_request_with_item.submit()
-        draft_request_with_item.approve_by_department_head(20)
-        draft_request_with_item.verify_by_accounts(21)
-        draft_request_with_item.recommend_by_gm(22)
-        draft_request_with_item.approve_by_director(23)
+        self._fully_approved(draft_request_with_item)
         repository.get_by_id.return_value = draft_request_with_item
         event_bus = Mock()
         use_case = ProcessPurchaseRequestByProcurement(repository, policy, event_bus=event_bus)
 
-        use_case.execute(100, authorized_actor(24))
+        use_case.execute(100, authorized_actor(24), purchase_order_number="PO-2026-001")
 
         event_bus.publish_all.assert_called_once()
         (published,), _ = event_bus.publish_all.call_args
@@ -576,7 +617,7 @@ class TestProcessPurchaseRequestByProcurement:
         use_case = ProcessPurchaseRequestByProcurement(repository, policy, event_bus=event_bus)
 
         with pytest.raises(ValidationError):
-            use_case.execute(100, authorized_actor(24))
+            use_case.execute(100, authorized_actor(24), purchase_order_number="PO-1")
 
         repository.save.assert_not_called()
         event_bus.publish_all.assert_not_called()

@@ -102,7 +102,11 @@ class TestProcessedNotification:
         request_id = create_and_submit(login, org, payload)
         self._advance_to_procurement(login, org, request_id)
 
-        response = login(org["procurement"]).post(f"{REQUESTS_URL}{request_id}/process/")
+        response = login(org["procurement"]).post(
+            f"{REQUESTS_URL}{request_id}/process/",
+            {"purchase_order_number": "PO-NOTIFY-1"},
+            format="json",
+        )
         assert response.status_code == status.HTTP_200_OK
 
         notifications = list(_notifications_for(org["requester"]))
@@ -120,11 +124,19 @@ class TestProcessedNotification:
         self._advance_to_procurement(login, org, request_id)
         client = login(org["procurement"])
 
-        first = client.post(f"{REQUESTS_URL}{request_id}/process/")
+        first = client.post(
+            f"{REQUESTS_URL}{request_id}/process/",
+            {"purchase_order_number": "PO-NOTIFY-2"},
+            format="json",
+        )
         assert first.status_code == status.HTTP_200_OK
         assert _notifications_for(org["requester"]).count() == 1
 
-        retry = client.post(f"{REQUESTS_URL}{request_id}/process/")
+        retry = client.post(
+            f"{REQUESTS_URL}{request_id}/process/",
+            {"purchase_order_number": "PO-NOTIFY-3"},
+            format="json",
+        )
         assert retry.status_code != status.HTTP_200_OK
         assert _notifications_for(org["requester"]).count() == 1
 

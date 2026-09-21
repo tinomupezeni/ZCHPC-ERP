@@ -29,7 +29,7 @@ from modules.procurement.application.interfaces import (
 )
 from modules.procurement.domain.entities import PurchaseRequest, PurchaseRequestItem
 from modules.procurement.domain.value_objects import RequestStatus
-from shared.domain.exceptions import NotFoundError, ValidationError
+from shared.domain.exceptions import ConflictError, NotFoundError, ValidationError
 from shared.infrastructure import EventBus, get_event_bus
 
 
@@ -381,11 +381,20 @@ class ProcessPurchaseRequestByProcurement(BasePurchaseRequestUseCase):
         super().__init__(repository, policy)
         self._event_bus = event_bus or get_event_bus()
 
-    def execute(self, request_id: int, actor: Actor) -> PurchaseRequest:
+    def execute(
+        self, request_id: int, actor: Actor, purchase_order_number: str
+    ) -> PurchaseRequest:
         request = self._load(request_id, actor)
         self.policy.authorize_processing(actor, request)
 
-        request.process_by_procurement(actor.employee_id)
+        normalized = purchase_order_number.strip()
+        if self.repository.exists_by_purchase_order_number(normalized):
+            raise ConflictError(
+                f"Purchase order number '{normalized}' is already in use",
+                code="PO_NUMBER_ALREADY_EXISTS",
+            )
+
+        request.process_by_procurement(actor.employee_id, normalized)
         saved = self.repository.save(request)
         self._event_bus.publish_all(request.clear_domain_events())
         return saved

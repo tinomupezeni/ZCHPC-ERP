@@ -92,6 +92,7 @@ class PurchaseRequest(AggregateRoot[int]):
     decisions: List[PurchaseRequestDecision] = field(default_factory=list)
     processed_by: Optional[int] = None
     processed_at: Optional[datetime] = None
+    purchase_order_number: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -207,14 +208,27 @@ class PurchaseRequest(AggregateRoot[int]):
         self._append_decision(DecisionStage.DIRECTOR, DecisionType.APPROVED, actor_id)
         self.updated_at = _utc_now()
 
-    def process_by_procurement(self, actor_id: int) -> None:
+    def process_by_procurement(self, actor_id: int, purchase_order_number: str) -> None:
+        """
+        PENDING_PROCUREMENT -> PROCESSED.
+
+        purchase_order_number is manually entered by the Procurement Officer
+        (F23) - never auto-generated, unlike requisition_number. It is
+        recorded exactly once, here, at the same moment the request becomes
+        PROCESSED; nothing else in the aggregate ever assigns or clears it,
+        so once set it is effectively immutable - there is no domain method
+        that transitions a PROCESSED request anywhere else.
+        """
         if self.status != RequestStatus.PENDING_PROCUREMENT:
             raise ValidationError(
                 f"Invalid status for procurement processing: {self.status.value}"
             )
+        if not purchase_order_number or not purchase_order_number.strip():
+            raise ValidationError("Purchase order number is required")
         self.status = RequestStatus.PROCESSED
         self.processed_by = actor_id
         self.processed_at = _utc_now()
+        self.purchase_order_number = purchase_order_number.strip()
         self.updated_at = _utc_now()
         self.add_domain_event(
             PurchaseRequestProcessed(

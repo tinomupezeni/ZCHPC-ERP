@@ -432,6 +432,12 @@ export function PurchaseRequestDetail({
                           value={formatDate(request.processed_at)}
                         />
                       )}
+                      {request.purchase_order_number && (
+                        <DocumentField
+                          label="Purchase Order Number"
+                          value={request.purchase_order_number}
+                        />
+                      )}
                     </DocumentFieldGrid>
                   </DocumentSection>
                 </>

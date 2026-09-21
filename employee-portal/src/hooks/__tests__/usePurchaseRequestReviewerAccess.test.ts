@@ -7,6 +7,7 @@ vi.mock('@/services/purchase-request.service', () => ({
     getPendingAccountsRequests: vi.fn(),
     getPendingGMRequests: vi.fn(),
     getPendingDirectorRequests: vi.fn(),
+    getPendingProcurementRequests: vi.fn(),
   },
 }));
 
@@ -18,6 +19,7 @@ beforeEach(() => {
   vi.mocked(purchaseRequestService.getPendingAccountsRequests).mockReset();
   vi.mocked(purchaseRequestService.getPendingGMRequests).mockReset();
   vi.mocked(purchaseRequestService.getPendingDirectorRequests).mockReset();
+  vi.mocked(purchaseRequestService.getPendingProcurementRequests).mockReset();
 });
 
 function resolveEmpty(...mocks: Array<{ mockResolvedValue: (v: never[]) => void }>) {
@@ -29,7 +31,7 @@ function reject403(...mocks: Array<{ mockRejectedValue: (v: unknown) => void }>)
 }
 
 describe('usePurchaseRequestReviewerAccess', () => {
-  it('starts all four flags at null (still checking) before any request resolves', () => {
+  it('starts all five flags at null (still checking) before any request resolves', () => {
     vi.mocked(purchaseRequestService.getPendingDepartmentHeadRequests).mockReturnValue(
       new Promise(() => {})
     );
@@ -40,6 +42,9 @@ describe('usePurchaseRequestReviewerAccess', () => {
     vi.mocked(purchaseRequestService.getPendingDirectorRequests).mockReturnValue(
       new Promise(() => {})
     );
+    vi.mocked(purchaseRequestService.getPendingProcurementRequests).mockReturnValue(
+      new Promise(() => {})
+    );
 
     const { result } = renderHook(() => usePurchaseRequestReviewerAccess());
 
@@ -47,6 +52,7 @@ describe('usePurchaseRequestReviewerAccess', () => {
     expect(result.current.canVerifyAsAccounts).toBeNull();
     expect(result.current.canRecommendAsGM).toBeNull();
     expect(result.current.canApproveAsDirector).toBeNull();
+    expect(result.current.canProcessAsProcurement).toBeNull();
   });
 
   it('resolves canReviewAsDepartmentHead to true on a successful (even empty) queue response', async () => {
@@ -54,7 +60,8 @@ describe('usePurchaseRequestReviewerAccess', () => {
     reject403(
       vi.mocked(purchaseRequestService.getPendingAccountsRequests),
       vi.mocked(purchaseRequestService.getPendingGMRequests),
-      vi.mocked(purchaseRequestService.getPendingDirectorRequests)
+      vi.mocked(purchaseRequestService.getPendingDirectorRequests),
+      vi.mocked(purchaseRequestService.getPendingProcurementRequests)
     );
 
     const { result } = renderHook(() => usePurchaseRequestReviewerAccess());
@@ -63,6 +70,7 @@ describe('usePurchaseRequestReviewerAccess', () => {
     await waitFor(() => expect(result.current.canVerifyAsAccounts).toBe(false));
     await waitFor(() => expect(result.current.canRecommendAsGM).toBe(false));
     await waitFor(() => expect(result.current.canApproveAsDirector).toBe(false));
+    await waitFor(() => expect(result.current.canProcessAsProcurement).toBe(false));
   });
 
   it('resolves canVerifyAsAccounts to true on a successful (even empty) queue response', async () => {
@@ -70,7 +78,8 @@ describe('usePurchaseRequestReviewerAccess', () => {
     reject403(
       vi.mocked(purchaseRequestService.getPendingDepartmentHeadRequests),
       vi.mocked(purchaseRequestService.getPendingGMRequests),
-      vi.mocked(purchaseRequestService.getPendingDirectorRequests)
+      vi.mocked(purchaseRequestService.getPendingDirectorRequests),
+      vi.mocked(purchaseRequestService.getPendingProcurementRequests)
     );
 
     const { result } = renderHook(() => usePurchaseRequestReviewerAccess());
@@ -79,6 +88,7 @@ describe('usePurchaseRequestReviewerAccess', () => {
     await waitFor(() => expect(result.current.canReviewAsDepartmentHead).toBe(false));
     await waitFor(() => expect(result.current.canRecommendAsGM).toBe(false));
     await waitFor(() => expect(result.current.canApproveAsDirector).toBe(false));
+    await waitFor(() => expect(result.current.canProcessAsProcurement).toBe(false));
   });
 
   it('resolves canRecommendAsGM to true on a successful (even empty) queue response (F21)', async () => {
@@ -86,7 +96,8 @@ describe('usePurchaseRequestReviewerAccess', () => {
     reject403(
       vi.mocked(purchaseRequestService.getPendingDepartmentHeadRequests),
       vi.mocked(purchaseRequestService.getPendingAccountsRequests),
-      vi.mocked(purchaseRequestService.getPendingDirectorRequests)
+      vi.mocked(purchaseRequestService.getPendingDirectorRequests),
+      vi.mocked(purchaseRequestService.getPendingProcurementRequests)
     );
 
     const { result } = renderHook(() => usePurchaseRequestReviewerAccess());
@@ -95,6 +106,7 @@ describe('usePurchaseRequestReviewerAccess', () => {
     await waitFor(() => expect(result.current.canReviewAsDepartmentHead).toBe(false));
     await waitFor(() => expect(result.current.canVerifyAsAccounts).toBe(false));
     await waitFor(() => expect(result.current.canApproveAsDirector).toBe(false));
+    await waitFor(() => expect(result.current.canProcessAsProcurement).toBe(false));
   });
 
   it('resolves canApproveAsDirector to true on a successful (even empty) queue response (F22)', async () => {
@@ -102,7 +114,8 @@ describe('usePurchaseRequestReviewerAccess', () => {
     reject403(
       vi.mocked(purchaseRequestService.getPendingDepartmentHeadRequests),
       vi.mocked(purchaseRequestService.getPendingAccountsRequests),
-      vi.mocked(purchaseRequestService.getPendingGMRequests)
+      vi.mocked(purchaseRequestService.getPendingGMRequests),
+      vi.mocked(purchaseRequestService.getPendingProcurementRequests)
     );
 
     const { result } = renderHook(() => usePurchaseRequestReviewerAccess());
@@ -111,25 +124,11 @@ describe('usePurchaseRequestReviewerAccess', () => {
     await waitFor(() => expect(result.current.canReviewAsDepartmentHead).toBe(false));
     await waitFor(() => expect(result.current.canVerifyAsAccounts).toBe(false));
     await waitFor(() => expect(result.current.canRecommendAsGM).toBe(false));
+    await waitFor(() => expect(result.current.canProcessAsProcurement).toBe(false));
   });
 
-  it('resolves Director access to false when only the other three reviewer permissions are held (F22)', async () => {
-    resolveEmpty(
-      vi.mocked(purchaseRequestService.getPendingDepartmentHeadRequests),
-      vi.mocked(purchaseRequestService.getPendingAccountsRequests),
-      vi.mocked(purchaseRequestService.getPendingGMRequests)
-    );
-    reject403(vi.mocked(purchaseRequestService.getPendingDirectorRequests));
-
-    const { result } = renderHook(() => usePurchaseRequestReviewerAccess());
-
-    await waitFor(() => expect(result.current.canReviewAsDepartmentHead).toBe(true));
-    await waitFor(() => expect(result.current.canVerifyAsAccounts).toBe(true));
-    await waitFor(() => expect(result.current.canRecommendAsGM).toBe(true));
-    await waitFor(() => expect(result.current.canApproveAsDirector).toBe(false));
-  });
-
-  it('resolves all four to false on a 403 from every endpoint', async () => {
+  it('resolves canProcessAsProcurement to true on a successful (even empty) queue response (F23)', async () => {
+    vi.mocked(purchaseRequestService.getPendingProcurementRequests).mockResolvedValue([]);
     reject403(
       vi.mocked(purchaseRequestService.getPendingDepartmentHeadRequests),
       vi.mocked(purchaseRequestService.getPendingAccountsRequests),
@@ -139,18 +138,58 @@ describe('usePurchaseRequestReviewerAccess', () => {
 
     const { result } = renderHook(() => usePurchaseRequestReviewerAccess());
 
+    await waitFor(() => expect(result.current.canProcessAsProcurement).toBe(true));
     await waitFor(() => expect(result.current.canReviewAsDepartmentHead).toBe(false));
     await waitFor(() => expect(result.current.canVerifyAsAccounts).toBe(false));
     await waitFor(() => expect(result.current.canRecommendAsGM).toBe(false));
     await waitFor(() => expect(result.current.canApproveAsDirector).toBe(false));
   });
 
-  it('resolves all four to true when the employee holds every reviewer permission', async () => {
+  it('resolves Director/Procurement access to false when only department head/accounts/GM permissions are held', async () => {
+    resolveEmpty(
+      vi.mocked(purchaseRequestService.getPendingDepartmentHeadRequests),
+      vi.mocked(purchaseRequestService.getPendingAccountsRequests),
+      vi.mocked(purchaseRequestService.getPendingGMRequests)
+    );
+    reject403(
+      vi.mocked(purchaseRequestService.getPendingDirectorRequests),
+      vi.mocked(purchaseRequestService.getPendingProcurementRequests)
+    );
+
+    const { result } = renderHook(() => usePurchaseRequestReviewerAccess());
+
+    await waitFor(() => expect(result.current.canReviewAsDepartmentHead).toBe(true));
+    await waitFor(() => expect(result.current.canVerifyAsAccounts).toBe(true));
+    await waitFor(() => expect(result.current.canRecommendAsGM).toBe(true));
+    await waitFor(() => expect(result.current.canApproveAsDirector).toBe(false));
+    await waitFor(() => expect(result.current.canProcessAsProcurement).toBe(false));
+  });
+
+  it('resolves all five to false on a 403 from every endpoint', async () => {
+    reject403(
+      vi.mocked(purchaseRequestService.getPendingDepartmentHeadRequests),
+      vi.mocked(purchaseRequestService.getPendingAccountsRequests),
+      vi.mocked(purchaseRequestService.getPendingGMRequests),
+      vi.mocked(purchaseRequestService.getPendingDirectorRequests),
+      vi.mocked(purchaseRequestService.getPendingProcurementRequests)
+    );
+
+    const { result } = renderHook(() => usePurchaseRequestReviewerAccess());
+
+    await waitFor(() => expect(result.current.canReviewAsDepartmentHead).toBe(false));
+    await waitFor(() => expect(result.current.canVerifyAsAccounts).toBe(false));
+    await waitFor(() => expect(result.current.canRecommendAsGM).toBe(false));
+    await waitFor(() => expect(result.current.canApproveAsDirector).toBe(false));
+    await waitFor(() => expect(result.current.canProcessAsProcurement).toBe(false));
+  });
+
+  it('resolves all five to true when the employee holds every reviewer permission', async () => {
     resolveEmpty(
       vi.mocked(purchaseRequestService.getPendingDepartmentHeadRequests),
       vi.mocked(purchaseRequestService.getPendingAccountsRequests),
       vi.mocked(purchaseRequestService.getPendingGMRequests),
-      vi.mocked(purchaseRequestService.getPendingDirectorRequests)
+      vi.mocked(purchaseRequestService.getPendingDirectorRequests),
+      vi.mocked(purchaseRequestService.getPendingProcurementRequests)
     );
 
     const { result } = renderHook(() => usePurchaseRequestReviewerAccess());
@@ -159,6 +198,7 @@ describe('usePurchaseRequestReviewerAccess', () => {
     await waitFor(() => expect(result.current.canVerifyAsAccounts).toBe(true));
     await waitFor(() => expect(result.current.canRecommendAsGM).toBe(true));
     await waitFor(() => expect(result.current.canApproveAsDirector).toBe(true));
+    await waitFor(() => expect(result.current.canProcessAsProcurement).toBe(true));
   });
 
   it('fails safely to false (not true) on a non-403 error, same as usePurchaseRequestActionCount', async () => {
@@ -169,6 +209,9 @@ describe('usePurchaseRequestReviewerAccess', () => {
     vi.mocked(purchaseRequestService.getPendingAccountsRequests).mockRejectedValue(networkError);
     vi.mocked(purchaseRequestService.getPendingGMRequests).mockRejectedValue(networkError);
     vi.mocked(purchaseRequestService.getPendingDirectorRequests).mockRejectedValue(networkError);
+    vi.mocked(purchaseRequestService.getPendingProcurementRequests).mockRejectedValue(
+      networkError
+    );
 
     const { result } = renderHook(() => usePurchaseRequestReviewerAccess());
 
@@ -176,5 +219,6 @@ describe('usePurchaseRequestReviewerAccess', () => {
     await waitFor(() => expect(result.current.canVerifyAsAccounts).toBe(false));
     await waitFor(() => expect(result.current.canRecommendAsGM).toBe(false));
     await waitFor(() => expect(result.current.canApproveAsDirector).toBe(false));
+    await waitFor(() => expect(result.current.canProcessAsProcurement).toBe(false));
   });
 });

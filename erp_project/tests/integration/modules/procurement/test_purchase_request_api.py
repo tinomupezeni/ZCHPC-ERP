@@ -254,22 +254,35 @@ class TestWorkflow:
         rid = record.id
 
         steps = [
-            (requester, "submit/", "PENDING_DEPARTMENT_HEAD"),
-            (department_head, "department-head/approve/", "PENDING_ACCOUNTS"),
-            (accountant, "accounts/verify/", "PENDING_GM"),
-            (general_manager, "gm/recommend/", "PENDING_DIRECTOR"),
-            (director, "director/approve/", "PENDING_PROCUREMENT"),
-            (procurement_officer, "process/", "PROCESSED"),
+            (requester, "submit/", "PENDING_DEPARTMENT_HEAD", None),
+            (department_head, "department-head/approve/", "PENDING_ACCOUNTS", None),
+            (accountant, "accounts/verify/", "PENDING_GM", None),
+            (general_manager, "gm/recommend/", "PENDING_DIRECTOR", None),
+            (director, "director/approve/", "PENDING_PROCUREMENT", None),
+            (
+                procurement_officer,
+                "process/",
+                "PROCESSED",
+                {"purchase_order_number": "PO-2026-00042"},
+            ),
         ]
 
-        for actor, path, expected in steps:
-            response = client_for(actor).post(f"{api_url}{rid}/{path}")
+        for actor, path, expected, payload in steps:
+            if payload is None:
+                response = client_for(actor).post(f"{api_url}{rid}/{path}")
+            else:
+                response = client_for(actor).post(
+                    f"{api_url}{rid}/{path}", payload, format="json"
+                )
             assert response.status_code == status.HTTP_200_OK, (path, response.data)
             assert response.data["status"] == expected, path
+
+        assert response.data["purchase_order_number"] == "PO-2026-00042"
 
         record.refresh_from_db()
         assert record.status == "PROCESSED"
         assert record.processed_by_id == procurement_officer.id
+        assert record.purchase_order_number == "PO-2026-00042"
 
     def test_director_approval_does_not_create_a_purchase_order(
         self, client_for, api_url, requester, director, make_request_record
@@ -308,6 +321,86 @@ class TestWorkflow:
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data["status"] == "DRAFT"
+
+
+# =============================================================================
+# Procurement processing - PO number (F23)
+# =============================================================================
+
+
+class TestProcurementProcessing:
+    def test_process_persists_the_purchase_order_number(
+        self, client_for, api_url, requester, procurement_officer, make_request_record
+    ):
+        record = make_request_record(requester, status="PENDING_PROCUREMENT")
+
+        response = client_for(procurement_officer).post(
+            f"{api_url}{record.id}/process/",
+            {"purchase_order_number": "PO-2026-777"},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "PROCESSED"
+        assert response.data["purchase_order_number"] == "PO-2026-777"
+        record.refresh_from_db()
+        assert record.purchase_order_number == "PO-2026-777"
+        assert record.processed_by_id == procurement_officer.id
+
+    def test_process_without_a_purchase_order_number_is_rejected(
+        self, client_for, api_url, requester, procurement_officer, make_request_record
+    ):
+        record = make_request_record(requester, status="PENDING_PROCUREMENT")
+
+        response = client_for(procurement_officer).post(
+            f"{api_url}{record.id}/process/", {}, format="json"
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        record.refresh_from_db()
+        assert record.status == "PENDING_PROCUREMENT"
+        assert record.purchase_order_number is None
+
+    def test_process_with_a_blank_purchase_order_number_is_rejected(
+        self, client_for, api_url, requester, procurement_officer, make_request_record
+    ):
+        record = make_request_record(requester, status="PENDING_PROCUREMENT")
+
+        response = client_for(procurement_officer).post(
+            f"{api_url}{record.id}/process/",
+            {"purchase_order_number": "   "},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        record.refresh_from_db()
+        assert record.status == "PENDING_PROCUREMENT"
+
+    def test_process_with_a_duplicate_purchase_order_number_is_rejected(
+        self,
+        client_for,
+        api_url,
+        requester,
+        procurement_officer,
+        make_request_record,
+    ):
+        already_processed = make_request_record(requester, status="PENDING_PROCUREMENT")
+        already_processed.purchase_order_number = "PO-DUP-1"
+        already_processed.save(update_fields=["purchase_order_number"])
+
+        record = make_request_record(requester, status="PENDING_PROCUREMENT")
+
+        response = client_for(procurement_officer).post(
+            f"{api_url}{record.id}/process/",
+            {"purchase_order_number": "PO-DUP-1"},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert response.data["code"] == "PO_NUMBER_ALREADY_EXISTS"
+        record.refresh_from_db()
+        assert record.status == "PENDING_PROCUREMENT"
+        assert record.purchase_order_number is None
 
 
 # =============================================================================
@@ -784,28 +877,38 @@ class TestDeletePurchaseRequest:
 
 class TestAuthorization:
     @pytest.mark.parametrize(
-        "path,record_status",
+        "path,record_status,payload",
         [
-            ("submit/", "DRAFT"),
-            ("department-head/approve/", "PENDING_DEPARTMENT_HEAD"),
-            ("accounts/verify/", "PENDING_ACCOUNTS"),
-            ("gm/recommend/", "PENDING_GM"),
-            ("director/approve/", "PENDING_DIRECTOR"),
-            ("process/", "PENDING_PROCUREMENT"),
-            ("correct-and-resubmit/", "REJECTED"),
+            ("submit/", "DRAFT", None),
+            ("department-head/approve/", "PENDING_DEPARTMENT_HEAD", None),
+            ("accounts/verify/", "PENDING_ACCOUNTS", None),
+            ("gm/recommend/", "PENDING_GM", None),
+            ("director/approve/", "PENDING_DIRECTOR", None),
+            # A well-formed body is supplied so this actually exercises
+            # authorization (403) rather than shape validation (400) -
+            # ProcessPurchaseRequestInputSerializer runs before
+            # authorize_processing, same ordering as reject's own serializer.
+            ("process/", "PENDING_PROCUREMENT", {"purchase_order_number": "PO-AUTHZ-1"}),
+            ("correct-and-resubmit/", "REJECTED", None),
         ],
     )
     def test_actor_without_capability_gets_403_and_nothing_changes(
         self, client_for, api_url, requester, outsider, make_request_record,
-        path, record_status,
+        path, record_status, payload,
     ):
         record = make_request_record(requester, status=record_status)
 
-        response = client_for(outsider).post(f"{api_url}{record.id}/{path}")
+        if payload is None:
+            response = client_for(outsider).post(f"{api_url}{record.id}/{path}")
+        else:
+            response = client_for(outsider).post(
+                f"{api_url}{record.id}/{path}", payload, format="json"
+            )
 
         assert response.status_code == status.HTTP_403_FORBIDDEN
         record.refresh_from_db()
         assert record.status == record_status
+        assert record.purchase_order_number is None
 
     def test_head_of_another_department_is_refused(
         self,

@@ -11,3 +11,4 @@ export { PurchaseRequestReviewList } from './PurchaseRequestReviewList';
 export type { ReviewQueueError } from './PurchaseRequestReviewList';
 export { PurchaseRequestActionDialog } from './PurchaseRequestActionDialog';
 export { PurchaseRequestRejectDialog } from './PurchaseRequestRejectDialog';
+export { PurchaseRequestProcessDialog } from './PurchaseRequestProcessDialog';

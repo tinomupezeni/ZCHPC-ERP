@@ -115,6 +115,10 @@ class PurchaseRequest(models.Model):
         related_name='processed_purchase_requests',
     )
     processed_at = models.DateTimeField(null=True, blank=True)
+    purchase_order_number = models.CharField(
+        max_length=50, null=True, blank=True, unique=True,
+        help_text='Manually entered by Procurement at processing time (F23) - not auto-generated',
+    )
 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
@@ -129,6 +133,7 @@ class PurchaseRequest(models.Model):
             models.Index(fields=['-created_at'], name='pr_created_at_idx'),
             models.Index(fields=['requester'], name='pr_requester_idx'),
             models.Index(fields=['department'], name='pr_department_idx'),
+            models.Index(fields=['purchase_order_number'], name='pr_po_number_idx'),
         ]
         constraints = [
             models.CheckConstraint(

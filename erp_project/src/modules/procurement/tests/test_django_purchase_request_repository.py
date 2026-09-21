@@ -128,3 +128,67 @@ class TestDjangoPurchaseRequestRepository(TestCase):
         assert len(fetched_req.decisions) == 2
         assert fetched_req.decisions[1].stage == DecisionStage.ACCOUNTS
         assert fetched_req.decisions[1].decision == DecisionType.VERIFIED
+
+    def _fully_approved_request(self):
+        request = PurchaseRequest.create(
+            requester_id=self.employee.id,
+            requester_name="John Doe",
+            department_id=self.department.id,
+            department_name="IT Department",
+            designation="Developer",
+            contact="ext 123",
+        )
+        request.add_item(
+            PurchaseRequestItem(
+                description="Laptop",
+                quantity=2,
+                expected_delivery_period="1 week",
+                estimated_cost=Decimal("2000.00"),
+                budget_code_id=self.account.id,
+            )
+        )
+        request = self.repo.save(request)
+        request.submit()
+        request.approve_by_department_head(self.employee.id)
+        request.verify_by_accounts(self.employee.id)
+        request.recommend_by_gm(self.employee.id)
+        request.approve_by_director(self.employee.id)
+        return self.repo.save(request)
+
+    def test_purchase_order_number_round_trips_through_processing(self):
+        """F23: process_by_procurement's PO number survives save + reload."""
+        request = self._fully_approved_request()
+
+        request.process_by_procurement(self.employee.id, "PO-REPO-001")
+        saved = self.repo.save(request)
+
+        assert saved.purchase_order_number == "PO-REPO-001"
+
+        fetched = self.repo.get_by_id(saved.id)
+        assert fetched.purchase_order_number == "PO-REPO-001"
+        assert fetched.status == RequestStatus.PROCESSED
+
+    def test_exists_by_purchase_order_number(self):
+        """F23: the uniqueness pre-check ProcessPurchaseRequestByProcurement relies on."""
+        assert self.repo.exists_by_purchase_order_number("PO-REPO-002") is False
+
+        request = self._fully_approved_request()
+        request.process_by_procurement(self.employee.id, "PO-REPO-002")
+        self.repo.save(request)
+
+        assert self.repo.exists_by_purchase_order_number("PO-REPO-002") is True
+        assert self.repo.exists_by_purchase_order_number("PO-REPO-999") is False
+
+    def test_unprocessed_requests_have_no_purchase_order_number(self):
+        request = PurchaseRequest.create(
+            requester_id=self.employee.id,
+            requester_name="John Doe",
+            department_id=self.department.id,
+            department_name="IT Department",
+            designation="Developer",
+            contact="ext 123",
+        )
+        saved = self.repo.save(request)
+
+        assert saved.purchase_order_number is None
+        assert self.repo.get_by_id(saved.id).purchase_order_number is None
