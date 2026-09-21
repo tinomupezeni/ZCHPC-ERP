@@ -1,5 +1,6 @@
 import api from './api';
 import type {
+  BudgetCode,
   PurchaseRequest,
   PurchaseRequestCategory,
   PurchaseRequestListItem,
@@ -139,6 +140,29 @@ export const purchaseRequestService = {
   async approveByDepartmentHead(id: number): Promise<PurchaseRequest> {
     const response = await api.post<PurchaseRequest>(
       `/procurement/requests/${id}/department-head/approve/`
+    );
+    return response.data;
+  },
+
+  /**
+   * F25: the AccountChart rows Accounts may assign as a budget code. The
+   * backend already restricts this to the approved external account types
+   * and to callers holding accounts_verify.
+   */
+  async getBudgetCodes(): Promise<BudgetCode[]> {
+    const response = await api.get<BudgetCode[]>('/procurement/budget-codes/');
+    return response.data;
+  },
+
+  /** F25: Accounts assigns one item's budget code (PENDING_ACCOUNTS only). */
+  async assignItemBudgetCode(
+    requestId: number,
+    itemId: number,
+    budgetCodeId: number
+  ): Promise<PurchaseRequest> {
+    const response = await api.put<PurchaseRequest>(
+      `/procurement/requests/${requestId}/items/${itemId}/budget-code/`,
+      { budget_code_id: budgetCodeId }
     );
     return response.data;
   },

@@ -7,6 +7,7 @@ import {
   PurchaseRequestDetail,
   PurchaseRequestReviewList,
   PurchaseRequestActionDialog,
+  PurchaseRequestBudgetCodeAssignment,
   PurchaseRequestRejectDialog,
   type ReviewQueueError,
 } from '@/components/purchase-requests';
@@ -14,7 +15,11 @@ import {
   purchaseRequestService,
   getPurchaseRequestErrorMessage,
 } from '@/services/purchase-request.service';
-import type { PurchaseRequest, PurchaseRequestListItem } from '@/types/purchase-request.types';
+import type {
+  BudgetCode,
+  PurchaseRequest,
+  PurchaseRequestListItem,
+} from '@/types/purchase-request.types';
 
 /**
  * F18: the Accounts review queue. A deliberate copy/adapt of
@@ -32,6 +37,10 @@ export function PurchaseRequestAccountsReviewPage() {
   const [selectedRequest, setSelectedRequest] = useState<PurchaseRequest | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
+
+  const [budgetCodes, setBudgetCodes] = useState<BudgetCode[] | null>(null);
+  const [budgetCodeError, setBudgetCodeError] = useState<string | null>(null);
+  const [savingItemId, setSavingItemId] = useState<number | null>(null);
 
   const [pendingVerify, setPendingVerify] = useState<PurchaseRequest | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -76,6 +85,33 @@ export function PurchaseRequestAccountsReviewPage() {
     loadQueue();
   }, [loadQueue]);
 
+  /** F25: the approved budget codes are fetched once, on first need. */
+  const loadBudgetCodes = useCallback(async () => {
+    setBudgetCodeError(null);
+    try {
+      setBudgetCodes(await purchaseRequestService.getBudgetCodes());
+    } catch (error) {
+      setBudgetCodeError(getPurchaseRequestErrorMessage(error, 'Failed to load budget codes'));
+    }
+  }, []);
+
+  const handleAssignBudgetCode = async (itemId: number, budgetCodeId: number) => {
+    if (!selectedRequest) return;
+    setSavingItemId(itemId);
+    try {
+      const updated = await purchaseRequestService.assignItemBudgetCode(
+        selectedRequest.id,
+        itemId,
+        budgetCodeId
+      );
+      setSelectedRequest(updated);
+    } catch (error) {
+      toast.error(getPurchaseRequestErrorMessage(error, 'Failed to assign budget code'));
+    } finally {
+      setSavingItemId(null);
+    }
+  };
+
   const removeFromQueue = (id: number) => {
     setRequests((prev) => prev.filter((r) => r.id !== id));
   };
@@ -92,6 +128,7 @@ export function PurchaseRequestAccountsReviewPage() {
     try {
       const detail = await purchaseRequestService.getRequest(id);
       setSelectedRequest(detail);
+      if (budgetCodes === null) void loadBudgetCodes();
     } catch (error) {
       setIsDetailOpen(false);
       toast.error(getPurchaseRequestErrorMessage(error, 'Failed to load purchase request'));
@@ -165,6 +202,13 @@ export function PurchaseRequestAccountsReviewPage() {
     }
   };
 
+  // The backend blocks verification until this is true; the button just
+  // mirrors that so Accounts is not offered an action that will be refused.
+  const allItemsAssigned =
+    !!selectedRequest &&
+    selectedRequest.items.length > 0 &&
+    selectedRequest.items.every((item) => item.budget_code_id !== null);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -189,15 +233,29 @@ export function PurchaseRequestAccountsReviewPage() {
         viewerRole="accounts"
         actions={
           selectedRequest?.status === 'PENDING_ACCOUNTS' ? (
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="destructive" onClick={handleOpenReject}>
-                <XCircle className="h-4 w-4 mr-1.5" />
-                Reject
-              </Button>
-              <Button type="button" onClick={handleOpenVerify}>
-                <CheckCircle className="h-4 w-4 mr-1.5" />
-                Verify
-              </Button>
+            <div className="space-y-4">
+              <PurchaseRequestBudgetCodeAssignment
+                request={selectedRequest}
+                budgetCodes={budgetCodeError ? [] : budgetCodes}
+                loadError={budgetCodeError}
+                savingItemId={savingItemId}
+                onAssign={handleAssignBudgetCode}
+              />
+              <div className="flex items-center justify-end gap-2">
+                {!allItemsAssigned && (
+                  <span className="mr-auto text-xs text-muted-foreground">
+                    Assign a budget code to every item to verify.
+                  </span>
+                )}
+                <Button type="button" variant="destructive" onClick={handleOpenReject}>
+                  <XCircle className="h-4 w-4 mr-1.5" />
+                  Reject
+                </Button>
+                <Button type="button" onClick={handleOpenVerify} disabled={!allItemsAssigned}>
+                  <CheckCircle className="h-4 w-4 mr-1.5" />
+                  Verify
+                </Button>
+              </div>
             </div>
           ) : undefined
         }

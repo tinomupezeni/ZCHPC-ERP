@@ -57,6 +57,13 @@ urlpatterns = [
         name="purchase-request-category-list"
     ),
 
+    # Assignable budget codes (F25 - Accounts only)
+    path(
+        "budget-codes/",
+        purchase_request_views.budget_codes_list,
+        name="budget-code-list"
+    ),
+
     # Purchase Requests (redesigned workflow)
     path(
         "requests/",
@@ -82,6 +89,11 @@ urlpatterns = [
         "requests/<int:request_id>/accounts/verify/",
         purchase_request_views.purchase_request_accounts_verify,
         name="request-accounts-verify"
+    ),
+    path(
+        "requests/<int:request_id>/items/<int:item_id>/budget-code/",
+        purchase_request_views.purchase_request_item_budget_code,
+        name="request-item-budget-code"
     ),
     path(
         "requests/<int:request_id>/gm/recommend/",

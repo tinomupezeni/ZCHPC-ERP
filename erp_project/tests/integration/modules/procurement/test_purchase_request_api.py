@@ -421,19 +421,23 @@ class TestUpdatePurchaseRequestItems:
         return {"items": [item]}
 
     def test_requester_can_edit_own_draft(
-        self, client_for, api_url, requester, category, make_request_record
+        self, client_for, api_url, requester, category, budget_code, make_request_record
     ):
         record = make_request_record(requester, status="DRAFT")
 
         response = client_for(requester).patch(
-            f"{api_url}{record.id}/", self._payload(category.id), format="json"
+            f"{api_url}{record.id}/",
+            self._payload(category.id, id=record.items.first().id),
+            format="json",
         )
 
         assert response.status_code == status.HTTP_200_OK, response.data
         assert response.data["status"] == "DRAFT"
         assert len(response.data["items"]) == 1
         assert response.data["items"][0]["description"] == "Updated item"
-        assert response.data["items"][0]["budget_code_id"] == category.account_chart_id
+        assert response.data["items"][0]["category_id"] == category.id
+        # An employee edit never touches Accounts' budget code.
+        assert response.data["items"][0]["budget_code_id"] == budget_code.id
 
     def test_response_includes_the_resolved_category(
         self, client_for, api_url, requester, category, make_request_record
@@ -450,16 +454,35 @@ class TestUpdatePurchaseRequestItems:
             "is_active": True,
         }
 
-    def test_item_with_no_matching_category_reports_category_as_none(
-        self, client_for, api_url, requester, make_request_record
+    def test_item_keeps_reporting_its_category_after_the_category_is_deactivated(
+        self, client_for, api_url, requester, category, make_request_record
     ):
-        """make_request_record's item uses the raw budget_code fixture, which
-        has no PurchaseRequestCategory mapped to it at all."""
+        """The category is persisted, so it is never lost - only flagged inactive."""
         record = make_request_record(requester, status="DRAFT")
+        category.is_active = False
+        category.save(update_fields=["is_active"])
 
         response = client_for(requester).get(f"{api_url}{record.id}/")
 
-        assert response.data["items"][0]["category"] is None
+        item = response.data["items"][0]
+        assert item["category_id"] == category.id
+        assert item["category"] == {
+            "id": category.id,
+            "name": category.name,
+            "is_active": False,
+        }
+
+    def test_item_without_a_budget_code_serializes_it_as_null(
+        self, client_for, api_url, requester, category, make_request_record
+    ):
+        record = make_request_record(requester, status="DRAFT")
+        record.items.update(budget_code=None)
+
+        response = client_for(requester).get(f"{api_url}{record.id}/")
+
+        assert response.status_code == status.HTTP_200_OK, response.data
+        assert response.data["items"][0]["budget_code_id"] is None
+        assert response.data["items"][0]["category_id"] == category.id
 
     def test_editing_a_rejected_request_returns_it_to_draft(
         self, client_for, api_url, requester, category, make_request_record
@@ -719,7 +742,7 @@ class TestUpdatePurchaseRequestItems:
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         record.refresh_from_db()
-        assert record.items.first().budget_code_id == budget_code.id
+        assert record.items.first().budget_code_id == budget_code.id  # unchanged
 
     def test_invalid_item_leaves_the_original_items_completely_unchanged(
         self, client_for, api_url, requester, category, make_request_record
@@ -990,14 +1013,14 @@ class TestErrorMapping:
         "items",
         [
             [{"description": "", "quantity": 1, "expected_delivery_period": "2w",
-              "estimated_cost": "10.00", "budget_code_id": 1}],
+              "estimated_cost": "10.00", "category_id": 1}],
             [{"description": "Laptop", "quantity": 0, "expected_delivery_period": "2w",
-              "estimated_cost": "10.00", "budget_code_id": 1}],
+              "estimated_cost": "10.00", "category_id": 1}],
             [{"description": "Laptop", "quantity": "many",
               "expected_delivery_period": "2w", "estimated_cost": "10.00",
-              "budget_code_id": 1}],
+              "category_id": 1}],
             [{"quantity": 1, "expected_delivery_period": "2w",
-              "estimated_cost": "10.00", "budget_code_id": 1}],
+              "estimated_cost": "10.00", "category_id": 1}],
         ],
     )
     def test_malformed_items_are_400(self, client_for, api_url, requester, items):

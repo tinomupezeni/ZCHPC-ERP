@@ -18,8 +18,7 @@ export interface PurchaseRequestCategory {
 }
 
 /**
- * The category an item's budget_code_id resolves back to (Slice 2), for
- * pre-filling an edit form. Never the GL code itself - id/name are the same
+ * The employee-facing category persisted on an item, for pre-filling an edit form. Never the GL code itself - id/name are the same
  * disclosure boundary as PurchaseRequestCategory; is_active tells the
  * frontend whether this is still a legal fresh choice or historical-only.
  */
@@ -29,13 +28,26 @@ export interface PurchaseRequestItemCategory {
   is_active: boolean;
 }
 
+/**
+ * An assignable AccountChart row, from the Accounts-only budget-codes
+ * endpoint (F25). Never sent to ordinary requesters.
+ */
+export interface BudgetCode {
+  id: number;
+  code: string;
+  name: string;
+  external_account_type: string;
+}
+
 export interface PurchaseRequestItem {
   id: number;
   description: string;
   quantity: number;
   expected_delivery_period: string;
   estimated_cost: string;
-  budget_code_id: number;
+  category_id: number;
+  /** Assigned by Accounts; null until then. */
+  budget_code_id: number | null;
   category: PurchaseRequestItemCategory | null;
 }
 

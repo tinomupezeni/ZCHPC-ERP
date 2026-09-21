@@ -58,6 +58,12 @@ class TestCompleteHappyPath:
         request_id = created.data["id"]
         assert created.data["status"] == "DRAFT"
 
+        # Accounts owns the budget code; employees never supply one. Stand-in
+        # for the Accounts assignment step (a later F25 slice).
+        PurchaseRequestItem.objects.filter(purchase_request_id=request_id).update(
+            budget_code=org["budget_code"]
+        )
+
         stages = [
             ("requester", "submit/", "PENDING_DEPARTMENT_HEAD", None),
             ("department_head", "department-head/approve/", "PENDING_ACCOUNTS", None),
@@ -88,6 +94,26 @@ class TestCompleteHappyPath:
             assert record.status == expected_status, path
 
         assert record.purchase_order_number == "PO-E2E-HAPPY-PATH"
+
+    def test_accounts_cannot_verify_while_a_budget_code_is_unassigned(
+        self, login, org, payload
+    ):
+        client = login(org["requester"])
+        request_id = client.post(REQUESTS_URL, payload, format="json").data["id"]
+        client.post(f"{REQUESTS_URL}{request_id}/submit/")
+        login(org["department_head"]).post(
+            f"{REQUESTS_URL}{request_id}/department-head/approve/"
+        )
+
+        response = login(org["accounts"]).post(
+            f"{REQUESTS_URL}{request_id}/accounts/verify/"
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["code"] == "BUDGET_CODE_NOT_ASSIGNED"
+        record = PurchaseRequestModel.objects.get(pk=request_id)
+        assert record.status == "PENDING_ACCOUNTS"
+        assert not record.decisions.filter(stage="ACCOUNTS").exists()
 
     def test_persisted_request_matches_what_was_submitted(self, login, org, payload):
         request_id = create_and_submit(login, org, payload)
@@ -122,9 +148,11 @@ class TestCompleteHappyPath:
         assert laptop.quantity == 2
         assert laptop.expected_delivery_period == "3 weeks"
         assert laptop.estimated_cost == Decimal("3000.00")
+        assert laptop.category_id == org["category"].id
         assert laptop.budget_code_id == org["budget_code"].id
         assert dock.description == "Docking stations"
         assert dock.estimated_cost == Decimal("450.50")
+        assert dock.category_id == org["category"].id
         assert dock.budget_code_id == org["budget_code"].id
 
     def test_decision_history_records_every_approving_stage(

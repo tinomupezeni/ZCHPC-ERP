@@ -39,6 +39,7 @@ class DjangoPurchaseRequestRepository(IPurchaseRequestRepository):
             quantity=model.quantity,
             expected_delivery_period=model.expected_delivery_period,
             estimated_cost=Decimal(str(model.estimated_cost)),
+            category_id=model.category_id,
             budget_code_id=model.budget_code_id,
         )
         item._id = model.id
@@ -135,6 +136,7 @@ class DjangoPurchaseRequestRepository(IPurchaseRequestRepository):
                 item_model.quantity = item.quantity
                 item_model.expected_delivery_period = item.expected_delivery_period
                 item_model.estimated_cost = item.estimated_cost
+                item_model.category_id = item.category_id
                 item_model.budget_code_id = item.budget_code_id
                 item_model.save()
             else:
@@ -144,6 +146,7 @@ class DjangoPurchaseRequestRepository(IPurchaseRequestRepository):
                     quantity=item.quantity,
                     expected_delivery_period=item.expected_delivery_period,
                     estimated_cost=item.estimated_cost,
+                    category_id=item.category_id,
                     budget_code_id=item.budget_code_id,
                 )
                 item._id = item_model.id

@@ -32,6 +32,7 @@ from modules.procurement.application.authorization import (
 )
 from modules.procurement.infrastructure.persistence.models import (
     PurchaseRequest as PurchaseRequestModel,
+    PurchaseRequestCategory,
     PurchaseRequestItem,
 )
 
@@ -102,6 +103,9 @@ class TestDepartmentManagerReachesTheApi:
             quantity=1,
             expected_delivery_period="1 week",
             estimated_cost=Decimal("500.00"),
+            category=PurchaseRequestCategory.objects.create(
+                name="Hardware", account_chart=budget_code
+            ),
             budget_code=budget_code,
         )
 
@@ -311,6 +315,9 @@ class TestMigratedPermissionsReachTheLiveApi:
         budget_code = AccountChart.objects.create(
             code="4001", name="Hardware", account_type="regular"
         )
+        category = PurchaseRequestCategory.objects.create(
+            name="Hardware", account_chart=budget_code
+        )
         client, requester = self._seeded_client(
             "staff2@zchpc.test", "REGULAR_STAFF", it, "EMP8001"
         )
@@ -330,7 +337,7 @@ class TestMigratedPermissionsReachTheLiveApi:
                         "quantity": 1,
                         "expected_delivery_period": "2 weeks",
                         "estimated_cost": "500.00",
-                        "budget_code_id": budget_code.id,
+                        "category_id": category.id,
                     }
                 ]
             },
@@ -391,6 +398,9 @@ class TestEmployeeDepartmentHeadAccountsChainViaMigratedPermissions:
         budget_code = AccountChart.objects.create(
             code="4002", name="Hardware", account_type="regular"
         )
+        category = PurchaseRequestCategory.objects.create(
+            name="Hardware", account_chart=budget_code
+        )
 
         staff_client, requester = employee_client(
             "staff3@zchpc.test", "REGULAR_STAFF", [], it, "EMP9001"
@@ -420,7 +430,7 @@ class TestEmployeeDepartmentHeadAccountsChainViaMigratedPermissions:
                         "quantity": 1,
                         "expected_delivery_period": "3 weeks",
                         "estimated_cost": "2500.00",
-                        "budget_code_id": budget_code.id,
+                        "category_id": category.id,
                     }
                 ]
             },
@@ -441,6 +451,11 @@ class TestEmployeeDepartmentHeadAccountsChainViaMigratedPermissions:
             approve_response.status_code == status.HTTP_200_OK
         ), approve_response.data
         assert approve_response.data["status"] == "PENDING_ACCOUNTS"
+
+        # Stand-in for Accounts assigning the budget code (a later F25 slice).
+        PurchaseRequestItem.objects.filter(purchase_request_id=request_id).update(
+            budget_code=budget_code
+        )
 
         verify_response = accounts_client.post(
             f"{REQUESTS_URL}{request_id}/accounts/verify/"

@@ -154,6 +154,21 @@ class PurchaseRequestAuthorizationPolicy:
         self._require_employee_identity(actor)
         self._require_not_requester(actor, request)
 
+    def authorize_list_budget_codes(self, actor: Actor | None) -> None:
+        """Only Accounts (the holder of accounts_verify) may see assignable budget codes."""
+        self.require_authenticated(actor)
+        self._require_permission(actor, PurchaseRequestPermissions.ACCOUNTS_VERIFY)
+
+    def authorize_budget_code_assignment(
+        self, actor: Actor | None, request: PurchaseRequest
+    ) -> None:
+        """
+        Assigning budget codes is an Accounts act, on the same footing as
+        verifying: same capability, and the requester cannot do it to their
+        own request.
+        """
+        self.authorize_accounts_verification(actor, request)
+
     def authorize_gm_recommendation(
         self, actor: Actor | None, request: PurchaseRequest
     ) -> None:

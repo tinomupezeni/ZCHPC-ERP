@@ -89,6 +89,7 @@ def make_request(status=RequestStatus.DRAFT, requester_id=REQUESTER_ID):
             quantity=1,
             expected_delivery_period="2 weeks",
             estimated_cost=Decimal("1500.00"),
+            category_id=1,
             budget_code_id=5,
         )
     )
@@ -255,7 +256,7 @@ class TestCreateAuthorization:
                     quantity=1,
                     expected_delivery_period="2 weeks",
                     estimated_cost=Decimal("1500.00"),
-                    budget_code_id=5,
+                    category_id=1,
                 )
             ],
         )

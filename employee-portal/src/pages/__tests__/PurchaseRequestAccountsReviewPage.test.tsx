@@ -3,7 +3,11 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { toast } from 'sonner';
-import type { PurchaseRequest, PurchaseRequestListItem } from '@/types/purchase-request.types';
+import type {
+  BudgetCode,
+  PurchaseRequest,
+  PurchaseRequestListItem,
+} from '@/types/purchase-request.types';
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -17,6 +21,8 @@ vi.mock('@/services/purchase-request.service', async (importOriginal) => {
     purchaseRequestService: {
       getPendingAccountsRequests: vi.fn(),
       getRequest: vi.fn(),
+      getBudgetCodes: vi.fn(),
+      assignItemBudgetCode: vi.fn(),
       verifyByAccounts: vi.fn(),
       rejectRequest: vi.fn(),
     },
@@ -63,6 +69,7 @@ function fullRequest(overrides: Partial<PurchaseRequest> = {}): PurchaseRequest 
         quantity: 2,
         expected_delivery_period: '2 weeks',
         estimated_cost: '1200.00',
+        category_id: 1,
         budget_code_id: 42,
         category: { id: 5, name: 'IT Equipment', is_active: true },
       },
@@ -94,8 +101,15 @@ function renderPage() {
   );
 }
 
+const BUDGET_CODES: BudgetCode[] = [
+  { id: 42, code: 'E-100', name: 'Office Supplies', external_account_type: 'Other Expense' },
+  { id: 43, code: 'R-200', name: 'Service Revenue', external_account_type: 'Revenue' },
+  { id: 44, code: 'I-300', name: 'Interest Received', external_account_type: 'Other Income' },
+];
+
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(purchaseRequestService.getBudgetCodes).mockResolvedValue(BUDGET_CODES);
 });
 
 /**
@@ -223,7 +237,12 @@ describe('PurchaseRequestAccountsReviewPage - detail', () => {
     expect(within(dialog).getByText('Riley Requester')).toBeInTheDocument();
     expect(within(dialog).getAllByText('IT Department').length).toBeGreaterThan(0);
     expect(within(dialog).getAllByText('PR-0042').length).toBeGreaterThan(0);
-    const itemRow = within(dialog).getByText('Laptop').closest('tr')!;
+    // "Laptop" now also appears in the F25 budget-code section, so pick the
+    // row of the read-only detail table (the one carrying delivery info).
+    const itemRow = within(dialog)
+      .getAllByText('Laptop')
+      .map((el) => el.closest('tr')!)
+      .find((row) => within(row).queryByText('Delivery: 2 weeks'))!;
     expect(within(itemRow).getByText('Delivery: 2 weeks')).toBeInTheDocument();
     expect(within(itemRow).getByText('IT Equipment')).toBeInTheDocument();
     const cells = within(itemRow).getAllByRole('cell');
@@ -504,5 +523,180 @@ describe('PurchaseRequestAccountsReviewPage - reject', () => {
     expect(cardHeadingStillInQueue()).toBe(true);
     expect(screen.getByLabelText(/reason/i)).toHaveValue('Category needs revisiting');
     expect(screen.getByRole('button', { name: /^reject$/i })).toBeEnabled();
+  });
+});
+
+describe('PurchaseRequestAccountsReviewPage - budget code assignment (F25)', () => {
+  const twoItems = (first: number | null, second: number | null): PurchaseRequest =>
+    fullRequest({
+      items: [
+        {
+          id: 1,
+          description: 'Laptop',
+          quantity: 2,
+          expected_delivery_period: '2 weeks',
+          estimated_cost: '1200.00',
+          category_id: 1,
+          budget_code_id: first,
+          category: { id: 5, name: 'IT Equipment', is_active: true },
+        },
+        {
+          id: 2,
+          description: 'Monitor',
+          quantity: 1,
+          expected_delivery_period: '1 week',
+          estimated_cost: '300.00',
+          category_id: 2,
+          budget_code_id: second,
+          category: { id: 6, name: 'Furniture', is_active: true },
+        },
+      ],
+    });
+
+  async function openDetail(request: PurchaseRequest) {
+    vi.mocked(purchaseRequestService.getPendingAccountsRequests).mockResolvedValue([
+      queueItem(),
+    ]);
+    vi.mocked(purchaseRequestService.getRequest).mockResolvedValue(request);
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByText('PR-0042'));
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByTestId('budget-code-assignment');
+    return { user, dialog };
+  }
+
+  it('shows each item with description, quantity, employee category and a selector', async () => {
+    const { dialog } = await openDetail(twoItems(null, null));
+    const section = within(within(dialog).getByTestId('budget-code-assignment'));
+
+    expect(section.getByText('Laptop')).toBeInTheDocument();
+    expect(section.getByText('Monitor')).toBeInTheDocument();
+    expect(section.getByText('IT Equipment')).toBeInTheDocument();
+    expect(section.getByText('Furniture')).toBeInTheDocument();
+    expect(section.getByLabelText('Budget code for Laptop')).toBeInTheDocument();
+    expect(section.getByLabelText('Budget code for Monitor')).toBeInTheDocument();
+  });
+
+  it('offers exactly the codes the backend returned, and no others', async () => {
+    const { dialog } = await openDetail(twoItems(null, null));
+    const select = within(dialog).getByLabelText('Budget code for Laptop');
+
+    const options = within(select).getAllByRole('option').map((o) => o.textContent);
+    expect(options).toEqual([
+      'Select budget code',
+      'E-100 — Office Supplies',
+      'R-200 — Service Revenue',
+      'I-300 — Interest Received',
+    ]);
+  });
+
+  it('shows the current assignment for an assigned item and "Not assigned" for the other', async () => {
+    const { dialog } = await openDetail(twoItems(43, null));
+    const section = within(within(dialog).getByTestId('budget-code-assignment'));
+
+    expect(section.getByText('Assigned: R-200 — Service Revenue')).toBeInTheDocument();
+    expect(section.getByLabelText('Budget code for Laptop')).toHaveValue('43');
+    expect(section.getAllByText('Not assigned')).toHaveLength(1);
+  });
+
+  it('assigns a code to one item via the service and reflects the response', async () => {
+    const { user, dialog } = await openDetail(twoItems(null, null));
+    vi.mocked(purchaseRequestService.assignItemBudgetCode).mockResolvedValue(
+      twoItems(42, null)
+    );
+
+    await user.selectOptions(
+      within(dialog).getByLabelText('Budget code for Laptop'),
+      '42'
+    );
+
+    expect(purchaseRequestService.assignItemBudgetCode).toHaveBeenCalledWith(1, 1, 42);
+    expect(
+      await within(dialog).findByText('Assigned: E-100 — Office Supplies')
+    ).toBeInTheDocument();
+    expect(within(dialog).getAllByText('Not assigned')).toHaveLength(1);
+  });
+
+  it('assigns each item independently', async () => {
+    const { user, dialog } = await openDetail(twoItems(42, null));
+    vi.mocked(purchaseRequestService.assignItemBudgetCode).mockResolvedValue(
+      twoItems(42, 44)
+    );
+
+    await user.selectOptions(
+      within(dialog).getByLabelText('Budget code for Monitor'),
+      '44'
+    );
+
+    expect(purchaseRequestService.assignItemBudgetCode).toHaveBeenCalledWith(1, 2, 44);
+  });
+
+  it('shows the mapped server error and keeps the item unassigned when assignment fails', async () => {
+    const { user, dialog } = await openDetail(twoItems(null, null));
+    vi.mocked(purchaseRequestService.assignItemBudgetCode).mockRejectedValue({
+      response: { data: { error: 'Budget code 9 is not an assignable account' } },
+    });
+
+    await user.selectOptions(
+      within(dialog).getByLabelText('Budget code for Laptop'),
+      '42'
+    );
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('Budget code 9 is not an assignable account')
+    );
+    expect(within(dialog).getAllByText('Not assigned')).toHaveLength(2);
+  });
+
+  it('disables Verify until every item has a budget code, and says why', async () => {
+    const { dialog } = await openDetail(twoItems(42, null));
+
+    expect(within(dialog).getByRole('button', { name: /^verify$/i })).toBeDisabled();
+    expect(
+      within(dialog).getByText('Assign a budget code to every item to verify.')
+    ).toBeInTheDocument();
+  });
+
+  it('enables Verify once every item is assigned, and verification still works', async () => {
+    const { user, dialog } = await openDetail(twoItems(42, 43));
+    vi.mocked(purchaseRequestService.verifyByAccounts).mockResolvedValue(
+      fullRequest({ status: 'PENDING_GM' })
+    );
+
+    const verify = within(dialog).getByRole('button', { name: /^verify$/i });
+    expect(verify).toBeEnabled();
+    await user.click(verify);
+    const dialogs = await screen.findAllByRole('dialog');
+    const confirm = dialogs.find((d) => within(d).queryByText('Verify PR-0042?'));
+    await user.click(within(confirm!).getByRole('button', { name: /^verify$/i }));
+
+    await waitFor(() => expect(purchaseRequestService.verifyByAccounts).toHaveBeenCalledWith(1));
+  });
+
+  it('does not show the assignment section when the request is no longer PENDING_ACCOUNTS', async () => {
+    vi.mocked(purchaseRequestService.getPendingAccountsRequests).mockResolvedValue([
+      queueItem(),
+    ]);
+    vi.mocked(purchaseRequestService.getRequest).mockResolvedValue(
+      fullRequest({ status: 'PENDING_GM' })
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByText('PR-0042'));
+    await screen.findByRole('dialog');
+
+    expect(screen.queryByTestId('budget-code-assignment')).not.toBeInTheDocument();
+  });
+
+  it('shows a load error and offers no codes when the budget-code list cannot be loaded', async () => {
+    vi.mocked(purchaseRequestService.getBudgetCodes).mockRejectedValue({
+      response: { status: 403, data: { error: 'Forbidden' } },
+    });
+    const { dialog } = await openDetail(twoItems(null, null));
+
+    expect(await within(dialog).findByRole('alert')).toBeInTheDocument();
+    const select = within(dialog).getByLabelText('Budget code for Laptop');
+    expect(within(select).getAllByRole('option')).toHaveLength(1);
   });
 });

@@ -18,6 +18,7 @@ from modules.procurement.infrastructure.persistence.django_purchase_request_repo
 )
 from modules.procurement.infrastructure.persistence.models import (
     PurchaseRequest as PurchaseRequestModel,
+    PurchaseRequestCategory,
 )
 from modules.hr.infrastructure.persistence.models import Employees, Department
 from django.contrib.auth import get_user_model
@@ -44,6 +45,10 @@ class TestDjangoPurchaseRequestRepository(TestCase):
             code="1001", name="Hardware", account_type="EXPENSE"
         )
 
+        self.category = PurchaseRequestCategory.objects.create(
+            name="Hardware", account_chart=self.account
+        )
+
         self.repo = DjangoPurchaseRequestRepository()
 
     def test_save_and_get_purchase_request(self):
@@ -62,6 +67,7 @@ class TestDjangoPurchaseRequestRepository(TestCase):
                 quantity=2,
                 expected_delivery_period="1 week",
                 estimated_cost=Decimal("2000.00"),
+                category_id=self.category.id,
                 budget_code_id=self.account.id,
             )
         )
@@ -104,6 +110,7 @@ class TestDjangoPurchaseRequestRepository(TestCase):
                 quantity=2,
                 expected_delivery_period="1 week",
                 estimated_cost=Decimal("2000.00"),
+                category_id=self.category.id,
                 budget_code_id=self.account.id,
             )
         )
@@ -129,6 +136,68 @@ class TestDjangoPurchaseRequestRepository(TestCase):
         assert fetched_req.decisions[1].stage == DecisionStage.ACCOUNTS
         assert fetched_req.decisions[1].decision == DecisionType.VERIFIED
 
+    def test_category_and_unassigned_budget_code_round_trip(self):
+        """F25: category persists; a NULL budget code is stored and read back as None."""
+        request = PurchaseRequest.create(
+            requester_id=self.employee.id,
+            requester_name="John Doe",
+            department_id=self.department.id,
+            department_name="IT Department",
+            designation="Developer",
+            contact="ext 123",
+        )
+        request.add_item(
+            PurchaseRequestItem(
+                description="Laptop",
+                quantity=1,
+                expected_delivery_period="1 week",
+                estimated_cost=Decimal("10.00"),
+                category_id=self.category.id,
+            )
+        )
+        saved = self.repo.save(request)
+
+        fetched = self.repo.get_by_id(saved.id)
+        assert fetched.items[0].category_id == self.category.id
+        assert fetched.items[0].budget_code_id is None
+
+        # Accounts later assigns a code; the category is untouched.
+        fetched.items[0].budget_code_id = self.account.id
+        refetched = self.repo.get_by_id(self.repo.save(fetched).id)
+        assert refetched.items[0].category_id == self.category.id
+        assert refetched.items[0].budget_code_id == self.account.id
+
+    def test_accounts_verification_blocked_while_budget_code_unassigned(self):
+        """F25: a NULL budget code cannot be verified through to GM, even via persistence."""
+        from shared.domain.exceptions import ValidationError
+
+        request = PurchaseRequest.create(
+            requester_id=self.employee.id,
+            requester_name="John Doe",
+            department_id=self.department.id,
+            department_name="IT Department",
+            designation="Developer",
+            contact="ext 123",
+        )
+        request.add_item(
+            PurchaseRequestItem(
+                description="Laptop",
+                quantity=1,
+                expected_delivery_period="1 week",
+                estimated_cost=Decimal("10.00"),
+                category_id=self.category.id,
+            )
+        )
+        request = self.repo.save(request)
+        request.submit()
+        request.approve_by_department_head(self.employee.id)
+        request = self.repo.save(request)
+
+        with pytest.raises(ValidationError) as exc:
+            request.verify_by_accounts(self.employee.id)
+        assert exc.value.code == "BUDGET_CODE_NOT_ASSIGNED"
+        assert request.status == RequestStatus.PENDING_ACCOUNTS
+
     def _fully_approved_request(self):
         request = PurchaseRequest.create(
             requester_id=self.employee.id,
@@ -144,6 +213,7 @@ class TestDjangoPurchaseRequestRepository(TestCase):
                 quantity=2,
                 expected_delivery_period="1 week",
                 estimated_cost=Decimal("2000.00"),
+                category_id=self.category.id,
                 budget_code_id=self.account.id,
             )
         )

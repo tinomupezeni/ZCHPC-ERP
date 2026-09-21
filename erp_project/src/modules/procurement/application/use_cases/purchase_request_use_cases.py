@@ -33,51 +33,30 @@ from shared.domain.exceptions import ConflictError, NotFoundError, ValidationErr
 from shared.infrastructure import EventBus, get_event_bus
 
 
-def resolve_budget_code_id(
+def validate_category_id(
     category_repository: IPurchaseRequestCategoryRepository,
-    category_id: int | None,
-    budget_code_id: int | None,
+    category_id: int,
 ) -> int:
     """
-    Resolve one item's budget_code_id from either an employee-facing
-    category_id or a direct budget_code_id.
+    Check that an employee-selected category exists and is currently active,
+    and return its id.
 
-    category_id always wins when present, even if budget_code_id was also
-    somehow supplied: the employee-facing category path must be the one
-    actually in control of the resulting GL account. This is the enforcement
-    point for "an ordinary employee must not be able to choose an arbitrary
-    AccountChart ID" - not the serializer, which is just the first line of
-    defence.
-
-    Shared by CreatePurchaseRequest and UpdatePurchaseRequestItems (Slice 2)
-    so this security-critical rule lives in exactly one place rather than two
-    copies that could silently drift apart. No keyword matching, no
-    description-based inference, no AccountChart code-prefix or account_type
-    logic - PurchaseRequestCategory is the sole, Finance-curated source of
-    truth (see the F11 investigation for why those alternatives were
-    rejected).
+    The category is a descriptive aid only. It is persisted on the item as-is
+    and is never translated into a budget code - Accounts alone assigns
+    PurchaseRequestItem.budget_code_id.
     """
-    if category_id is not None:
-        category = category_repository.get_by_id(category_id)
-        if category is None:
-            raise ValidationError(
-                f"Purchase request category {category_id} does not exist",
-                code="CATEGORY_NOT_FOUND",
-            )
-        if not category.is_active:
-            raise ValidationError(
-                f"Purchase request category {category_id} is not active",
-                code="CATEGORY_INACTIVE",
-            )
-        return category.account_chart_id
-
-    if budget_code_id is not None:
-        return budget_code_id
-
-    raise ValidationError(
-        "Each item requires either category_id or budget_code_id",
-        code="MISSING_BUDGET_CLASSIFICATION",
-    )
+    category = category_repository.get_by_id(category_id)
+    if category is None:
+        raise ValidationError(
+            f"Purchase request category {category_id} does not exist",
+            code="CATEGORY_NOT_FOUND",
+        )
+    if not category.is_active:
+        raise ValidationError(
+            f"Purchase request category {category_id} is not active",
+            code="CATEGORY_INACTIVE",
+        )
+    return category_id
 
 
 @dataclass
@@ -85,22 +64,16 @@ class PurchaseRequestItemDTO:
     """
     DTO for creating a purchase request item.
 
-    Exactly one of category_id/budget_code_id must be supplied per item -
-    CreatePurchaseRequest resolves category_id to a budget_code_id itself
-    (Slice F11-A); neither field is meant to be optional in the sense of
-    "may be left out entirely". budget_code_id stays direct-FK, unchanged
-    from before this slice, for callers that already know the exact
-    AccountChart row (e.g. back-office/admin use) - see
-    CreatePurchaseRequest._resolve_budget_code_id for exactly how the two
-    inputs are reconciled and which one wins if both are somehow present.
+    category_id is the employee-facing category and is required. There is
+    deliberately no budget_code_id: the authoritative accounting code is
+    owned and assigned by Accounts, never supplied at creation.
     """
 
     description: str
     quantity: int
     expected_delivery_period: str
     estimated_cost: Decimal
-    budget_code_id: int | None = None
-    category_id: int | None = None
+    category_id: int
 
 
 @dataclass
@@ -151,11 +124,9 @@ class CreatePurchaseRequest(BasePurchaseRequestUseCase):
     """
     Creates a draft purchase request.
 
-    category_repository is what makes Slice F11-A's employee-facing category
-    selection possible: each item's category_id (if supplied) is resolved to
-    a concrete budget_code_id here, before the domain entity is ever built.
-    PurchaseRequestItem itself is unchanged - it still only ever receives a
-    plain budget_code_id int, exactly as before this slice.
+    Each item's category_id is validated (exists, active) and persisted as
+    the employee's descriptive category. budget_code_id starts NULL - Accounts
+    assigns it later.
     """
 
     def __init__(
@@ -185,17 +156,13 @@ class CreatePurchaseRequest(BasePurchaseRequestUseCase):
                 quantity=item_dto.quantity,
                 expected_delivery_period=item_dto.expected_delivery_period,
                 estimated_cost=item_dto.estimated_cost,
-                budget_code_id=self._resolve_budget_code_id(item_dto),
+                category_id=validate_category_id(
+                    self.category_repository, item_dto.category_id
+                ),
             )
             request.add_item(item)
 
         return self.repository.save(request)
-
-    def _resolve_budget_code_id(self, item_dto: "PurchaseRequestItemDTO") -> int:
-        """See resolve_budget_code_id - this is a thin instance-method wrapper."""
-        return resolve_budget_code_id(
-            self.category_repository, item_dto.category_id, item_dto.budget_code_id
-        )
 
 
 class ViewPurchaseRequest(BasePurchaseRequestUseCase):
@@ -436,10 +403,8 @@ class UpdatePurchaseRequestItemDTO:
     """
     DTO for one item in a Slice 2 item-collection replacement.
 
-    Unlike PurchaseRequestItemDTO, there is no budget_code_id field at all -
-    this use case is exclusively the employee-facing edit path, so the
-    direct-GL escape hatch CreatePurchaseRequest keeps for back-office
-    callers has no reason to exist here. `id` identifies an existing item on
+    There is no budget_code_id field: this is the employee-facing edit path
+    and Accounts owns the budget code. `id` identifies an existing item on
     the request to update; leave it None for a new item.
     """
 
@@ -487,7 +452,8 @@ class UpdatePurchaseRequestItems(BasePurchaseRequestUseCase):
         request = self._load(request_id, actor)
         self.policy.authorize_edit(actor, request)
 
-        existing_ids = {item.id for item in request.items}
+        existing_by_id = {item.id: item for item in request.items}
+        existing_ids = set(existing_by_id)
         seen_ids: set[int] = set()
         new_items: list[PurchaseRequestItem] = []
 
@@ -509,8 +475,15 @@ class UpdatePurchaseRequestItems(BasePurchaseRequestUseCase):
                 quantity=item_dto.quantity,
                 expected_delivery_period=item_dto.expected_delivery_period,
                 estimated_cost=item_dto.estimated_cost,
-                budget_code_id=resolve_budget_code_id(
-                    self.category_repository, item_dto.category_id, None
+                category_id=validate_category_id(
+                    self.category_repository, item_dto.category_id
+                ),
+                # Accounts owns the budget code: an edit never changes or
+                # clears one already assigned; new items start unassigned.
+                budget_code_id=(
+                    existing_by_id[item_dto.id].budget_code_id
+                    if item_dto.id is not None
+                    else None
                 ),
             )
             if item_dto.id is not None:

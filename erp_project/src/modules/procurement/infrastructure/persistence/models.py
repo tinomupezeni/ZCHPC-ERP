@@ -178,9 +178,15 @@ class PurchaseRequestItem(models.Model):
         max_digits=12, decimal_places=2,
         help_text='Total estimated cost for this line (not unit cost)',
     )
+    category = models.ForeignKey(
+        'procurement.PurchaseRequestCategory', on_delete=models.PROTECT,
+        related_name='items',
+        help_text='Employee-facing category chosen by the requester (descriptive only)',
+    )
     budget_code = models.ForeignKey(
         'accounts.AccountChart', on_delete=models.PROTECT,
-        help_text='Chart of Accounts entry to charge',
+        null=True, blank=True,
+        help_text='Authoritative Chart of Accounts entry; assigned by Accounts, NULL until then',
     )
 
     # Timestamps

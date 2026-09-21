@@ -18,6 +18,8 @@ from rest_framework.response import Response
 
 from modules.procurement.api.actors import actor_from_request, requester_identity
 from modules.procurement.api.purchase_request_serializers import (
+    AssignBudgetCodeInputSerializer,
+    BudgetCodeSerializer,
     CreatePurchaseRequestInputSerializer,
     ListPurchaseRequestsQuerySerializer,
     ProcessPurchaseRequestInputSerializer,
@@ -31,6 +33,8 @@ from modules.procurement.application.authorization import (
     PurchaseRequestAuthorizationPolicy,
 )
 from modules.procurement.application.use_cases import (
+    AssignItemBudgetCode,
+    ListAssignableBudgetCodes,
     ApprovePurchaseRequestByDepartmentHead,
     ApprovePurchaseRequestByDirector,
     CorrectAndResubmitPurchaseRequest,
@@ -52,6 +56,9 @@ from modules.procurement.application.use_cases import (
 from modules.procurement.infrastructure.persistence.django_organizational_directory import (
     DjangoOrganizationalDirectory,
 )
+from modules.procurement.infrastructure.persistence.django_budget_code_repository import (
+    DjangoBudgetCodeRepository,
+)
 from modules.procurement.infrastructure.persistence.django_purchase_request_category_repository import (
     DjangoPurchaseRequestCategoryRepository,
 )
@@ -72,6 +79,7 @@ _repository = DjangoPurchaseRequestRepository()
 _directory = DjangoOrganizationalDirectory()
 _policy = PurchaseRequestAuthorizationPolicy(directory=_directory)
 _category_repository = DjangoPurchaseRequestCategoryRepository()
+_budget_code_repository = DjangoBudgetCodeRepository()
 
 
 def _handle_domain_error(exc: DomainException) -> Response:
@@ -98,10 +106,9 @@ def _handle_domain_error(exc: DomainException) -> Response:
     return Response({"error": exc.message, "code": exc.code}, status=http_status)
 
 
-def _categories_by_account_chart_id(items) -> dict:
-    """One batched lookup per response instead of one query per item (Slice 2)."""
-    account_chart_ids = {item.budget_code_id for item in items}
-    return _category_repository.get_by_account_chart_ids(account_chart_ids)
+def _categories_by_id(items) -> dict:
+    """One batched lookup per response instead of one query per item."""
+    return _category_repository.get_by_ids({item.category_id for item in items})
 
 
 def _serialize_request(result) -> dict:
@@ -119,7 +126,7 @@ def _serialize_request(result) -> dict:
     category map must not be the thing that breaks that tolerance.
     """
     items = result.items if result is not None else []
-    context = {"categories_by_account_chart_id": _categories_by_account_chart_id(items)}
+    context = {"categories_by_id": _categories_by_id(items)}
     return PurchaseRequestSerializer(result, context=context).data
 
 
@@ -174,12 +181,7 @@ def purchase_request_list(request: Request) -> Response:
                 quantity=item["quantity"],
                 expected_delivery_period=item["expected_delivery_period"],
                 estimated_cost=Decimal(item["estimated_cost"]),
-                # Exactly one of these is present per item - enforced by
-                # PurchaseRequestItemInputSerializer.validate() above, both
-                # optional here since a plain dict lookup would otherwise
-                # KeyError on whichever one the employee didn't supply.
-                budget_code_id=item.get("budget_code_id"),
-                category_id=item.get("category_id"),
+                category_id=item["category_id"],
             )
             for item in serializer.validated_data["items"]
         ],
@@ -285,6 +287,47 @@ def purchase_request_department_head_approve(
     return _workflow_action(
         request, request_id, ApprovePurchaseRequestByDepartmentHead
     )
+
+
+@api_view(["GET"])
+def budget_codes_list(request: Request) -> Response:
+    """
+    List the AccountChart rows Accounts may assign as a budget code (F25).
+
+    Accounts-only (accounts_verify). Procurement-scoped rather than reusing
+    /api/v2/accounts/*, which ordinary Accountants are not granted and whose
+    serializers do not expose external_account_type.
+    """
+    use_case = ListAssignableBudgetCodes(_budget_code_repository, _policy)
+    try:
+        results = use_case.execute(actor_from_request(request))
+    except DomainException as exc:
+        return _handle_domain_error(exc)
+
+    return Response(BudgetCodeSerializer(results, many=True).data)
+
+
+@api_view(["PUT"])
+def purchase_request_item_budget_code(
+    request: Request, request_id: int, item_id: int
+) -> Response:
+    """Accounts assigns one item's budget code while the request is PENDING_ACCOUNTS."""
+    serializer = AssignBudgetCodeInputSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    use_case = AssignItemBudgetCode(_repository, _policy, _budget_code_repository)
+    try:
+        result = use_case.execute(
+            request_id,
+            item_id,
+            serializer.validated_data["budget_code_id"],
+            actor_from_request(request),
+        )
+    except DomainException as exc:
+        return _handle_domain_error(exc)
+
+    return Response(_serialize_request(result))
 
 
 @api_view(["POST"])

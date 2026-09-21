@@ -64,6 +64,18 @@ class TestSupplier:
 class TestInventoryItem:
     """Tests for InventoryItem entity."""
 
+    def test_item_budget_code_is_optional_and_category_is_kept(self):
+        """F25: Accounts owns the budget code, so a new item has none."""
+        item = PurchaseRequestItem(
+            description="Widget",
+            quantity=1,
+            expected_delivery_period="2 weeks",
+            estimated_cost=Decimal("10.00"),
+            category_id=7,
+        )
+        assert item.category_id == 7
+        assert item.budget_code_id is None
+
     def test_create_item(self):
         item = InventoryItem.create(
             name="Widget", sku="WDG-001", quantity=100, price_per_unit=Decimal("9.99")
@@ -177,6 +189,7 @@ class TestPurchaseRequestItem:
             quantity=10,
             expected_delivery_period="2 weeks",
             estimated_cost=Decimal("100.00"),
+            category_id=1,
             budget_code_id=1,
         )
         assert item.description == "Widget"
@@ -194,6 +207,7 @@ class TestPurchaseRequestItem:
                 quantity=0,
                 expected_delivery_period="2 weeks",
                 estimated_cost=Decimal("100.00"),
+                category_id=1,
                 budget_code_id=1,
             )
 
@@ -207,6 +221,7 @@ class TestPurchaseRequestItem:
                 quantity=1,
                 expected_delivery_period="2 weeks",
                 estimated_cost=Decimal("-10.00"),
+                category_id=1,
                 budget_code_id=1,
             )
 
@@ -220,6 +235,7 @@ class TestPurchaseRequestItem:
                 quantity=1,
                 expected_delivery_period="2 weeks",
                 estimated_cost=Decimal("10.00"),
+                category_id=1,
                 budget_code_id=1,
             )
 
@@ -233,6 +249,7 @@ class TestPurchaseRequestItem:
                 quantity=1,
                 expected_delivery_period="2 weeks",
                 estimated_cost=Decimal("10.00"),
+                category_id=1,
                 budget_code_id=1,
             )
 
@@ -257,6 +274,7 @@ class TestPurchaseRequest:
             quantity=qty,
             expected_delivery_period="1 week",
             estimated_cost=Decimal(cost),
+            category_id=1,
             budget_code_id=1,
         )
 
@@ -349,6 +367,43 @@ class TestPurchaseRequest:
         assert request.status == RequestStatus.PENDING_GM
         assert request.decisions[-1].stage == DecisionStage.ACCOUNTS
         assert request.decisions[-1].decision == DecisionType.VERIFIED
+
+    def test_accounts_verification_blocked_when_any_budget_code_unassigned(self):
+        """F25: Accounts cannot verify (and so GM never sees) an unclassified request."""
+        from shared.domain.exceptions import ValidationError
+
+        request = self._make_request()
+        request.add_item(self._make_item())
+        request.add_item(
+            PurchaseRequestItem(
+                description="Unclassified",
+                quantity=1,
+                expected_delivery_period="1 week",
+                estimated_cost=Decimal("5.00"),
+                category_id=1,
+            )
+        )
+        request.submit()
+        request.approve_by_department_head(2)
+
+        with pytest.raises(ValidationError) as exc:
+            request.verify_by_accounts(3)
+
+        assert exc.value.code == "BUDGET_CODE_NOT_ASSIGNED"
+        assert request.status == RequestStatus.PENDING_ACCOUNTS
+        assert len(request.decisions) == 1  # no VERIFIED decision recorded
+
+    def test_accounts_verification_allowed_once_every_budget_code_assigned(self):
+        request = self._make_request()
+        request.add_item(self._make_item())
+        request.items[0].budget_code_id = None
+        request.submit()
+        request.approve_by_department_head(2)
+        request.items[0].budget_code_id = 9
+
+        request.verify_by_accounts(3)
+
+        assert request.status == RequestStatus.PENDING_GM
 
     def test_gm_recommendation_to_pending_director(self):
         """Spec #10: GM recommendation -> PENDING_DIRECTOR."""

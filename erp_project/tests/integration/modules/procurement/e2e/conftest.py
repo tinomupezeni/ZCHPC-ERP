@@ -25,6 +25,10 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from modules.accounts.infrastructure.persistence.models import AccountChart
+from modules.procurement.infrastructure.persistence.models import (
+    PurchaseRequestCategory,
+    PurchaseRequestItem,
+)
 from modules.hr.infrastructure.persistence.models import (
     Department,
     Employees,
@@ -136,10 +140,18 @@ def org(db):
     finance.head = people["accounts"]
     finance.save(update_fields=["head"])
 
+    category_account = AccountChart.objects.create(
+        code="2001", name="IT Consumables", account_type="regular"
+    )
+    category = PurchaseRequestCategory.objects.create(
+        name="IT Consumables", account_chart=category_account
+    )
+
     return {
         "it": it,
         "finance": finance,
         "budget_code": budget_code,
+        "category": category,
         **people,
     }
 
@@ -175,14 +187,14 @@ def payload(org):
                 "quantity": 2,
                 "expected_delivery_period": "3 weeks",
                 "estimated_cost": "3000.00",
-                "budget_code_id": org["budget_code"].id,
+                "category_id": org["category"].id,
             },
             {
                 "description": "Docking stations",
                 "quantity": 2,
                 "expected_delivery_period": "3 weeks",
                 "estimated_cost": "450.50",
-                "budget_code_id": org["budget_code"].id,
+                "category_id": org["category"].id,
             },
         ]
     }
@@ -194,6 +206,12 @@ def create_and_submit(login, org, payload):
     created = client.post(REQUESTS_URL, payload, format="json")
     assert created.status_code == status.HTTP_201_CREATED, created.data
     request_id = created.data["id"]
+
+    # Stand-in for Accounts assigning the budget code (a later F25 slice):
+    # employees never supply one, and Accounts verification requires it.
+    PurchaseRequestItem.objects.filter(purchase_request_id=request_id).update(
+        budget_code=org["budget_code"]
+    )
 
     submitted = client.post(f"{REQUESTS_URL}{request_id}/submit/")
     assert submitted.status_code == status.HTTP_200_OK, submitted.data

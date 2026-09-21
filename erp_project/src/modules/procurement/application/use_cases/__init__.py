@@ -2,6 +2,10 @@
 Use cases for purchase requests.
 """
 
+from .purchase_request_budget_code_use_cases import (
+    AssignItemBudgetCode,
+    ListAssignableBudgetCodes,
+)
 from .purchase_request_category_use_cases import ListActivePurchaseRequestCategories
 from .purchase_request_use_cases import (
     ApprovePurchaseRequestByDepartmentHead,
@@ -42,4 +46,6 @@ __all__ = [
     "UpdatePurchaseRequestItems",
     "DeletePurchaseRequest",
     "ListActivePurchaseRequestCategories",
+    "AssignItemBudgetCode",
+    "ListAssignableBudgetCodes",
 ]

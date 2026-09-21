@@ -218,8 +218,13 @@ def outsider(make_employee):
 
 
 @pytest.fixture
-def make_request_record(db, departments, budget_code):
-    """Create a persisted purchase request directly, in a given status."""
+def make_request_record(db, departments, budget_code, category):
+    """
+    Create a persisted purchase request directly, in a given status.
+
+    The item carries both an employee category and an Accounts-assigned
+    budget code, i.e. a request Accounts has already classified.
+    """
 
     def _make(requester_employee, status="DRAFT", department="it"):
         record = PurchaseRequestModel.objects.create(
@@ -236,6 +241,7 @@ def make_request_record(db, departments, budget_code):
             quantity=1,
             expected_delivery_period="2 weeks",
             estimated_cost=Decimal("1500.00"),
+            category=category,
             budget_code=budget_code,
         )
         return record
@@ -244,7 +250,7 @@ def make_request_record(db, departments, budget_code):
 
 
 @pytest.fixture
-def valid_payload(budget_code):
+def valid_payload(category):
     """A well-formed create-request body."""
     return {
         "items": [
@@ -253,7 +259,22 @@ def valid_payload(budget_code):
                 "quantity": 1,
                 "expected_delivery_period": "2 weeks",
                 "estimated_cost": "1500.00",
-                "budget_code_id": budget_code.id,
+                "category_id": category.id,
             }
         ]
     }
+
+
+@pytest.fixture
+def assign_budget_codes(budget_code):
+    """
+    Stand-in for Accounts assigning budget codes (a later F25 slice): give
+    every item on the request the fixture budget code so it can be verified.
+    """
+
+    def _assign(request_id):
+        PurchaseRequestItemModel.objects.filter(
+            purchase_request_id=request_id
+        ).update(budget_code=budget_code)
+
+    return _assign

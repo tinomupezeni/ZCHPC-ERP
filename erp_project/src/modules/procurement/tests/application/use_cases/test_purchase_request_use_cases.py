@@ -128,6 +128,7 @@ def draft_request_with_item():
         quantity=1,
         expected_delivery_period="2 weeks",
         estimated_cost=Decimal("1500.00"),
+        category_id=1,
         budget_code_id=5,
     )
     req.add_item(item)
@@ -152,7 +153,7 @@ class TestCreatePurchaseRequest:
                     quantity=2,
                     expected_delivery_period="1 week",
                     estimated_cost=Decimal("500.00"),
-                    budget_code_id=10,
+                    category_id=1,
                 )
             ],
         )
@@ -164,7 +165,8 @@ class TestCreatePurchaseRequest:
         assert result.designation == "Manager"
         assert len(result.items) == 1
         assert result.items[0].description == "Desk"
-        assert result.items[0].budget_code_id == 10
+        assert result.items[0].category_id == 1
+        assert result.items[0].budget_code_id is None
         assert result.status == RequestStatus.DRAFT
         repository.save.assert_called_once()
 
@@ -186,12 +188,10 @@ class TestCreatePurchaseRequest:
         repository.save.assert_called_once()
 
 
-class TestCreatePurchaseRequestCategoryResolution:
+class TestCreatePurchaseRequestCategoryPersistence:
     """
-    Slice F11-A: category_id -> budget_code_id resolution, entirely inside
-    CreatePurchaseRequest._resolve_budget_code_id. No keyword matching, no
-    description-based inference is exercised or possible here - the stub
-    category_repository only ever answers by category_id.
+    F25: the employee's category_id is validated and persisted on the item.
+    It is never translated into a budget code - Accounts owns that.
     """
 
     def _item(self, **overrides):
@@ -200,6 +200,7 @@ class TestCreatePurchaseRequestCategoryResolution:
             "quantity": 1,
             "expected_delivery_period": "2 weeks",
             "estimated_cost": Decimal("50.00"),
+            "category_id": 1,
         }
         defaults.update(overrides)
         return PurchaseRequestItemDTO(**defaults)
@@ -215,25 +216,33 @@ class TestCreatePurchaseRequestCategoryResolution:
             items=[item],
         )
 
-    def test_active_category_resolves_to_its_account_chart_id(
+    def test_active_category_is_persisted_on_the_item(
         self, repository, policy, category_repository, requester
     ):
         use_case = CreatePurchaseRequest(repository, policy, category_repository)
-        dto = self._dto(self._item(category_id=1))
 
-        result = use_case.execute(dto, requester)
+        result = use_case.execute(self._dto(self._item(category_id=1)), requester)
 
-        assert result.items[0].budget_code_id == 77
+        assert result.items[0].category_id == 1
         category_repository.get_by_id.assert_called_once_with(1)
+
+    def test_category_never_sets_the_budget_code(
+        self, repository, policy, category_repository, requester
+    ):
+        """Category #1 maps to AccountChart #77; that must not leak into the item."""
+        use_case = CreatePurchaseRequest(repository, policy, category_repository)
+
+        result = use_case.execute(self._dto(self._item(category_id=1)), requester)
+
+        assert result.items[0].budget_code_id is None
 
     def test_unknown_category_raises_validation_error(
         self, repository, policy, category_repository, requester
     ):
         use_case = CreatePurchaseRequest(repository, policy, category_repository)
-        dto = self._dto(self._item(category_id=999))
 
         with pytest.raises(ValidationError) as exc:
-            use_case.execute(dto, requester)
+            use_case.execute(self._dto(self._item(category_id=999)), requester)
 
         assert exc.value.code == "CATEGORY_NOT_FOUND"
         repository.save.assert_not_called()
@@ -242,59 +251,17 @@ class TestCreatePurchaseRequestCategoryResolution:
         self, repository, policy, category_repository, requester
     ):
         use_case = CreatePurchaseRequest(repository, policy, category_repository)
-        dto = self._dto(self._item(category_id=2))
 
         with pytest.raises(ValidationError) as exc:
-            use_case.execute(dto, requester)
+            use_case.execute(self._dto(self._item(category_id=2)), requester)
 
         assert exc.value.code == "CATEGORY_INACTIVE"
         repository.save.assert_not_called()
 
-    def test_neither_category_nor_budget_code_raises_validation_error(
-        self, repository, policy, category_repository, requester
-    ):
-        use_case = CreatePurchaseRequest(repository, policy, category_repository)
-        dto = self._dto(self._item())
-
-        with pytest.raises(ValidationError) as exc:
-            use_case.execute(dto, requester)
-
-        assert exc.value.code == "MISSING_BUDGET_CLASSIFICATION"
-        repository.save.assert_not_called()
-
-    def test_category_id_wins_even_if_budget_code_id_is_also_supplied(
-        self, repository, policy, category_repository, requester
-    ):
-        """
-        The employee must not be able to control the resulting GL account by
-        also supplying budget_code_id - category_id, when present, is
-        authoritative regardless. (The API serializer separately rejects
-        this combination outright; this pins the use case's own guarantee
-        for any caller that reaches it directly.)
-        """
-        use_case = CreatePurchaseRequest(repository, policy, category_repository)
-        dto = self._dto(self._item(category_id=1, budget_code_id=999999))
-
-        result = use_case.execute(dto, requester)
-
-        assert result.items[0].budget_code_id == 77
-
-    def test_description_never_influences_resolution(
-        self, repository, policy, category_repository, requester
-    ):
-        """
-        No keyword/description-based classification exists anywhere in this
-        path - the exact same category_id resolves identically regardless
-        of what the item's free-text description says.
-        """
-        use_case = CreatePurchaseRequest(repository, policy, category_repository)
-        dto = self._dto(
-            self._item(category_id=1, description="Completely unrelated text about fuel and travel")
-        )
-
-        result = use_case.execute(dto, requester)
-
-        assert result.items[0].budget_code_id == 77
+    def test_item_dto_has_no_budget_code_field(self):
+        """Employees cannot supply an accounting code at creation."""
+        with pytest.raises(TypeError):
+            self._item(budget_code_id=5)
 
 
 class TestViewPurchaseRequest:
@@ -771,8 +738,43 @@ class TestUpdatePurchaseRequestItems:
         assert result.items[0].id == existing_id
         assert result.items[0].description == "Updated Laptop"
         assert result.items[0].quantity == 2
-        assert result.items[0].budget_code_id == 77  # category #1 -> account 77
+        assert result.items[0].category_id == 1
+        # Accounts' existing code (5) is untouched by an employee edit.
+        assert result.items[0].budget_code_id == 5
         repository.save.assert_called_once_with(draft_request_with_item)
+
+    def test_changing_category_does_not_change_the_budget_code(
+        self, repository, policy, category_repository, requester, draft_request_with_item
+    ):
+        from types import SimpleNamespace as _NS
+
+        repository.get_by_id.return_value = draft_request_with_item
+        draft_request_with_item.items[0]._id = 42
+        original_get = category_repository.get_by_id.side_effect
+        category_repository.get_by_id.side_effect = lambda cid: (
+            _NS(id=4, name="Other", account_chart_id=99, is_active=True)
+            if cid == 4
+            else original_get(cid)
+        )
+
+        result = self._use_case(repository, policy, category_repository).execute(
+            100, [self._item(id=42, category_id=4)], requester
+        )
+
+        assert result.items[0].category_id == 4
+        assert result.items[0].budget_code_id == 5
+
+    def test_new_item_on_an_edit_starts_without_a_budget_code(
+        self, repository, policy, category_repository, requester, draft_request_with_item
+    ):
+        repository.get_by_id.return_value = draft_request_with_item
+
+        result = self._use_case(repository, policy, category_repository).execute(
+            100, [self._item(description="Brand new")], requester
+        )
+
+        assert result.items[0].category_id == 1
+        assert result.items[0].budget_code_id is None
 
     def test_adds_a_new_item_alongside_the_existing_one(
         self, repository, policy, category_repository, requester, draft_request_with_item
@@ -929,7 +931,7 @@ class TestUpdatePurchaseRequestItems:
         assert draft_request_with_item.items[0].description == original_description
         repository.save.assert_not_called()
 
-    def test_description_does_not_influence_category_resolution(
+    def test_description_does_not_influence_the_persisted_category(
         self, repository, policy, category_repository, requester, draft_request_with_item
     ):
         repository.get_by_id.return_value = draft_request_with_item
@@ -940,7 +942,7 @@ class TestUpdatePurchaseRequestItems:
             requester,
         )
 
-        assert result.items[0].budget_code_id == 77
+        assert result.items[0].category_id == 1
 
 
 class TestDeletePurchaseRequest:

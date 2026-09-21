@@ -59,7 +59,8 @@ class PurchaseRequestItem(Entity[int]):
     quantity: int
     expected_delivery_period: str
     estimated_cost: Decimal
-    budget_code_id: int
+    category_id: int
+    budget_code_id: Optional[int] = None
     request_id: Optional[int] = None
 
     def __post_init__(self) -> None:
@@ -186,8 +187,38 @@ class PurchaseRequest(AggregateRoot[int]):
             raise ValidationError(
                 f"Invalid status for accounts verification: {self.status.value}"
             )
+        if any(item.budget_code_id is None for item in self.items):
+            raise ValidationError(
+                "Every item needs a budget code before Accounts can verify",
+                code="BUDGET_CODE_NOT_ASSIGNED",
+            )
         self.status = RequestStatus.PENDING_GM
         self._append_decision(DecisionStage.ACCOUNTS, DecisionType.VERIFIED, actor_id)
+        self.updated_at = _utc_now()
+
+    def assign_budget_code(self, item_id: int, budget_code_id: int) -> None:
+        """
+        Accounts assigns (or changes) one item's authoritative budget code.
+
+        Only while PENDING_ACCOUNTS - before that the employee still owns the
+        request, after that Accounts has already verified it. Whether
+        budget_code_id is an *allowed* AccountChart is checked by the
+        application layer, which can see the chart; this method owns the
+        state and membership rules.
+        """
+        if self.status != RequestStatus.PENDING_ACCOUNTS:
+            raise ValidationError(
+                f"Budget codes can only be assigned while {RequestStatus.PENDING_ACCOUNTS.value}; "
+                f"current status: {self.status.value}",
+                code="BUDGET_CODE_NOT_ASSIGNABLE",
+            )
+        item = next((i for i in self.items if i.id == item_id), None)
+        if item is None:
+            raise ValidationError(
+                f"Item {item_id} does not belong to this request",
+                code="ITEM_NOT_FOUND",
+            )
+        item.budget_code_id = budget_code_id
         self.updated_at = _utc_now()
 
     def recommend_by_gm(self, actor_id: int) -> None:

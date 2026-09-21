@@ -18,17 +18,11 @@ class PurchaseRequestItemInputSerializer(serializers.Serializer):
     """
     A line item on a new purchase request.
 
-    Slice F11-A: an item supplies exactly one of category_id or
-    budget_code_id - never both, never neither. category_id is the
-    employee-facing path (a plain-language Purchase Request category;
-    see modules.procurement.infrastructure.persistence.models
-    .PurchaseRequestCategory); budget_code_id is the pre-existing direct
-    AccountChart reference, unchanged, for callers that already know the
-    exact account (e.g. back-office/admin use - see F11-A's implementation
-    report for why this was kept rather than removed). This is shape
-    validation only; category existence/active-state is checked in
-    CreatePurchaseRequest, which is also the sole place category_id is
-    actually resolved into a budget_code_id.
+    category_id is the employee-facing category and is required. There is no
+    budget_code_id: the authoritative accounting code is assigned by Accounts,
+    and unknown fields are ignored, so an employee cannot supply one. This is
+    shape validation only; category existence/active-state is checked in
+    CreatePurchaseRequest.
     """
 
     description = serializers.CharField(max_length=2000)
@@ -37,21 +31,7 @@ class PurchaseRequestItemInputSerializer(serializers.Serializer):
     estimated_cost = serializers.DecimalField(
         max_digits=12, decimal_places=2, min_value=0
     )
-    budget_code_id = serializers.IntegerField(min_value=1, required=False)
-    category_id = serializers.IntegerField(min_value=1, required=False)
-
-    def validate(self, attrs):
-        has_category = "category_id" in attrs
-        has_budget_code = "budget_code_id" in attrs
-        if has_category and has_budget_code:
-            raise serializers.ValidationError(
-                "Provide either category_id or budget_code_id, not both"
-            )
-        if not has_category and not has_budget_code:
-            raise serializers.ValidationError(
-                "Either category_id or budget_code_id is required"
-            )
-        return attrs
+    category_id = serializers.IntegerField(min_value=1)
 
 
 class CreatePurchaseRequestInputSerializer(serializers.Serializer):
@@ -162,22 +142,18 @@ class PurchaseRequestItemSerializer(serializers.Serializer):
     estimated_cost = serializers.DecimalField(
         max_digits=12, decimal_places=2, read_only=True
     )
-    budget_code_id = serializers.IntegerField(read_only=True)
+    category_id = serializers.IntegerField(read_only=True)
+    budget_code_id = serializers.IntegerField(read_only=True, allow_null=True)
     category = serializers.SerializerMethodField()
 
     def get_category(self, obj) -> dict | None:
         """
-        Reverse-resolved from context, not the item itself: the item entity
-        only ever carries budget_code_id (see F11-A) - the view builds a
-        {account_chart_id: PurchaseRequestCategory} map once per request
-        (avoiding an N+1 lookup per item) and passes it in as
-        categories_by_account_chart_id. None when no category maps to this
-        item's budget_code_id at all (e.g. a raw-budget_code_id item).
+        The item's persisted employee-facing category. The view builds a
+        {category_id: PurchaseRequestCategory} map once per response (avoiding
+        an N+1 lookup per item) and passes it in as categories_by_id.
         """
-        categories_by_account_chart_id = self.context.get(
-            "categories_by_account_chart_id", {}
-        )
-        category = categories_by_account_chart_id.get(obj.budget_code_id)
+        categories_by_id = self.context.get("categories_by_id", {})
+        category = categories_by_id.get(obj.category_id)
         if category is None:
             return None
         return PurchaseRequestItemCategorySerializer(category).data
@@ -216,6 +192,21 @@ class PurchaseRequestSerializer(serializers.Serializer):
     purchase_order_number = serializers.CharField(read_only=True, allow_null=True)
     created_at = serializers.DateTimeField(read_only=True, allow_null=True)
     updated_at = serializers.DateTimeField(read_only=True, allow_null=True)
+
+
+class AssignBudgetCodeInputSerializer(serializers.Serializer):
+    """Input for Accounts assigning one item's budget code."""
+
+    budget_code_id = serializers.IntegerField(min_value=1)
+
+
+class BudgetCodeSerializer(serializers.Serializer):
+    """An assignable AccountChart row, shown to Accounts only."""
+
+    id = serializers.IntegerField(read_only=True)
+    code = serializers.CharField(read_only=True)
+    name = serializers.CharField(read_only=True)
+    external_account_type = serializers.CharField(read_only=True)
 
 
 class PurchaseRequestCategorySerializer(serializers.Serializer):

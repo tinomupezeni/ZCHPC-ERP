@@ -321,6 +321,13 @@ class TestDepartmentHeadReceivesTheCorrectedNotificationThroughTheRealApi:
             budget_code = AccountChart.objects.create(
                 code="TEST-1", name="Test Account", account_type="regular"
             )
+        from modules.procurement.infrastructure.persistence.models import (
+            PurchaseRequestCategory,
+        )
+
+        category = PurchaseRequestCategory.objects.create(
+            name="Seed Test Category", account_chart=budget_code
+        )
 
         riley_client = self._login(riley.employee_id)
         created = riley_client.post(
@@ -332,7 +339,7 @@ class TestDepartmentHeadReceivesTheCorrectedNotificationThroughTheRealApi:
                         "quantity": 1,
                         "expected_delivery_period": "2 weeks",
                         "estimated_cost": "500.00",
-                        "budget_code_id": budget_code.id,
+                        "category_id": category.id,
                     }
                 ]
             },

@@ -62,6 +62,7 @@ function fullRequest(overrides: Partial<PurchaseRequest> = {}): PurchaseRequest 
         quantity: 2,
         expected_delivery_period: '2 weeks',
         estimated_cost: '1200.00',
+        category_id: 1,
         budget_code_id: 42,
         category: { id: 5, name: 'IT Equipment', is_active: true },
       },

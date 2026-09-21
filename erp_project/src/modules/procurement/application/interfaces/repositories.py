@@ -5,6 +5,7 @@ Repository interfaces for the procurement module.
 from abc import ABC, abstractmethod
 from decimal import Decimal
 
+from modules.procurement.domain.budget_code_rules import BudgetCode
 from modules.procurement.domain.entities import (
     BudgetCenter,
     InventoryItem,
@@ -218,6 +219,14 @@ class IPurchaseRequestCategoryRepository(ABC):
         ...
 
     @abstractmethod
+    def get_by_ids(self, category_ids: set[int]) -> dict[int, PurchaseRequestCategory]:
+        """
+        Categories keyed by their own id, for the given ids. Returns active
+        and inactive categories - an item keeps its historical category.
+        """
+        ...
+
+    @abstractmethod
     def get_by_account_chart_ids(self, account_chart_ids: set[int]) -> dict[int, PurchaseRequestCategory]:
         """
         Categories keyed by the AccountChart id they map to, for the given
@@ -230,6 +239,25 @@ class IPurchaseRequestCategoryRepository(ABC):
         the result, not an error. Returns both active and inactive
         categories - callers decide what an inactive match means for them.
         """
+        ...
+
+
+class IBudgetCodeRepository(ABC):
+    """
+    Read-only lookup of AccountChart rows Accounts may assign as a budget code.
+
+    Implementations must only ever return rows whose external_account_type is
+    in ALLOWED_BUDGET_CODE_EXTERNAL_TYPES.
+    """
+
+    @abstractmethod
+    def get_assignable(self) -> list[BudgetCode]:
+        """Every assignable budget code, ordered by code."""
+        ...
+
+    @abstractmethod
+    def get_assignable_by_id(self, budget_code_id: int) -> BudgetCode | None:
+        """The row if it exists AND is assignable; None otherwise."""
         ...
 
 

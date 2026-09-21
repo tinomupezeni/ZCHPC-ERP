@@ -60,7 +60,7 @@ class TestCategoryListEndpoint:
 
 
 class TestPurchaseRequestCreationWithCategoryId:
-    def test_category_resolves_to_the_correct_budget_code_id(
+    def test_category_is_persisted_and_budget_code_is_unassigned(
         self, client_for, api_url, requester, category
     ):
         response = client_for(requester).post(
@@ -70,7 +70,32 @@ class TestPurchaseRequestCreationWithCategoryId:
         )
 
         assert response.status_code == status.HTTP_201_CREATED, response.data
-        assert response.data["items"][0]["budget_code_id"] == category.account_chart_id
+        item = response.data["items"][0]
+        assert item["category_id"] == category.id
+        assert item["category"] == {
+            "id": category.id,
+            "name": category.name,
+            "is_active": True,
+        }
+        # The category's mapped AccountChart must NOT become the budget code.
+        assert item["budget_code_id"] is None
+
+    def test_category_is_persisted_in_the_database(
+        self, client_for, api_url, requester, category
+    ):
+        from modules.procurement.infrastructure.persistence.models import (
+            PurchaseRequestItem,
+        )
+
+        response = client_for(requester).post(
+            api_url,
+            {"items": [_item(category_id=category.id)]},
+            format="json",
+        )
+
+        row = PurchaseRequestItem.objects.get(pk=response.data["items"][0]["id"])
+        assert row.category_id == category.id
+        assert row.budget_code_id is None
 
     def test_unknown_category_is_400(self, client_for, api_url, requester):
         response = client_for(requester).post(
@@ -94,25 +119,31 @@ class TestPurchaseRequestCreationWithCategoryId:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data.get("code") == "CATEGORY_INACTIVE"
 
-    def test_missing_category_and_budget_code_is_400(
-        self, client_for, api_url, requester
-    ):
+    def test_missing_category_is_400(self, client_for, api_url, requester):
         response = client_for(requester).post(
             api_url,
-            {"items": [_item()]},  # neither category_id nor budget_code_id
+            {"items": [_item()]},
             format="json",
         )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_supplying_both_category_id_and_budget_code_id_is_400(
+    def test_budget_code_id_alone_is_no_longer_accepted(
+        self, client_for, api_url, requester, budget_code
+    ):
+        """Employees do not own the accounting code, so it is not a valid input."""
+        response = client_for(requester).post(
+            api_url,
+            {"items": [_item(budget_code_id=budget_code.id)]},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_supplied_budget_code_id_is_ignored(
         self, client_for, api_url, requester, category, budget_code
     ):
-        """
-        The employee must not be able to choose an arbitrary AccountChart ID
-        by also supplying budget_code_id alongside a category_id - this is
-        rejected outright rather than silently picking a winner.
-        """
+        """An employee cannot smuggle a budget code in next to a category."""
         response = client_for(requester).post(
             api_url,
             {
@@ -123,29 +154,12 @@ class TestPurchaseRequestCreationWithCategoryId:
             format="json",
         )
 
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-
-    def test_raw_budget_code_id_still_works_unchanged(
-        self, client_for, api_url, requester, budget_code
-    ):
-        """Backward compatibility: the pre-existing direct path is untouched."""
-        response = client_for(requester).post(
-            api_url,
-            {"items": [_item(budget_code_id=budget_code.id)]},
-            format="json",
-        )
-
         assert response.status_code == status.HTTP_201_CREATED, response.data
-        assert response.data["items"][0]["budget_code_id"] == budget_code.id
+        assert response.data["items"][0]["budget_code_id"] is None
 
-    def test_description_does_not_influence_which_account_is_used(
+    def test_description_does_not_influence_the_persisted_category(
         self, client_for, api_url, requester, category
     ):
-        """
-        No keyword/description-based classification exists - the same
-        category_id resolves identically no matter what the free-text
-        description says.
-        """
         response = client_for(requester).post(
             api_url,
             {
@@ -160,4 +174,4 @@ class TestPurchaseRequestCreationWithCategoryId:
         )
 
         assert response.status_code == status.HTTP_201_CREATED, response.data
-        assert response.data["items"][0]["budget_code_id"] == category.account_chart_id
+        assert response.data["items"][0]["category_id"] == category.id
