@@ -64,6 +64,24 @@ class RBACMiddleware:
         "/__reload__/",  # Dev tool
     ]
 
+    # Path families that are a personal resource, not a module capability -
+    # every authenticated user needs their own, regardless of role or which
+    # business modules (procurement, accounts, hr, ...) their role grants
+    # anything in. Gated on ``portal.*``-style permissions the coarse check
+    # below requires, an ordinary employee/accounts/GM/director/procurement
+    # actor holding only procurement.purchase_request.* permissions (the
+    # normal case) could never reach their own notifications at all - only
+    # an actor who happened to also be granted some portal permission could
+    # (see F27's "notification visibility" fix). Handled the same way
+    # /media/ already is below: authentication is still required, but the
+    # per-module RBAC check is bypassed - the view itself (and the
+    # notification repository underneath it) already scopes strictly to the
+    # caller's own employee_id, so nothing here widens who can read whose
+    # notifications.
+    PERSONAL_RESOURCE_PATHS = [
+        "/api/v2/portal/notifications",
+    ]
+
     def __init__(self, get_response):
         self.get_response = get_response
 
@@ -89,6 +107,19 @@ class RBACMiddleware:
         if path.startswith("/media/"):
             if not request.user.is_authenticated:
                 return JsonResponse({"detail": "Authentication required."}, status=401)
+            return self.get_response(request)
+
+        # 2b. Personal resources (e.g. notifications): same "require auth,
+        # bypass the coarse per-module RBAC check" treatment as /media/ above,
+        # and for the same reason - these are the caller's own data, not a
+        # business-module capability, so no role/permission is the "right"
+        # one to gate them on.
+        if any(path.startswith(p) for p in self.PERSONAL_RESOURCE_PATHS):
+            if not request.user.is_authenticated:
+                return JsonResponse(
+                    {"detail": "Authentication credentials were not provided."},
+                    status=401,
+                )
             return self.get_response(request)
 
         # 3. FAIL-CLOSED: For all other API paths, enforce authentication immediately

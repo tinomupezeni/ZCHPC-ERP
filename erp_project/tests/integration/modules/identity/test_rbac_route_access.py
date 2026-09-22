@@ -33,6 +33,9 @@ pytestmark = pytest.mark.django_db
 PROCUREMENT_URL = "/api/v2/procurement/requests/"
 HR_URL = "/api/v2/hr/employees/"
 PAYROLL_URL = "/api/v2/payroll/payslips/"
+NOTIFICATIONS_URL = "/api/v2/portal/notifications/"
+NOTIFICATIONS_UNREAD_COUNT_URL = "/api/v2/portal/notifications/unread-count/"
+PORTAL_DASHBOARD_URL = "/api/v2/portal/dashboard/"
 
 User = get_user_model()
 
@@ -293,3 +296,79 @@ class TestRouteAccessIsNotOperationAuthorization:
         assert response.data["code"] == "DEPARTMENT_CONTEXT_DENIED"
         record.refresh_from_db()
         assert record.status == "PENDING_DEPARTMENT_HEAD"
+
+
+# =============================================================================
+# Notifications are a personal resource, not a module capability (F27 follow-up)
+# =============================================================================
+
+
+class TestNotificationsAreAPersonalResourceNotAModuleCapability:
+    """
+    Root cause of the F27 follow-up bug: the coarse route gate treated
+    /api/v2/portal/notifications/* like any other business-module route
+    family, requiring some portal.*-prefixed permission to reach it at all.
+    Every Purchase Request test actor (employee, accounts, GM, director,
+    procurement) holds only procurement.purchase_request.* permissions and
+    no portal grant, so all of them got 403 - a Department Manager only
+    ever "worked" in manual testing because of a narrow, one-off
+    portal.notification.view grant given to that single seeded test role
+    (see seed_pr_test_data.py), not because the underlying route was
+    actually open to every authenticated user as intended.
+
+    RBACMiddleware now exempts this path family from the per-module check
+    entirely (same "require auth, skip RBAC" treatment /media/ already
+    gets) - these tests pin that down without needing any portal.* grant.
+    """
+
+    @pytest.mark.parametrize(
+        "role_name,permissions",
+        [
+            ("REGULAR_STAFF", [P.CREATE, P.VIEW, P.SUBMIT]),
+            ("ACCOUNTANT", [P.ACCOUNTS_VERIFY]),
+            ("DEPARTMENT_MANAGER", [P.DEPARTMENT_HEAD_APPROVE]),
+            ("GENERAL_MANAGER", [P.GM_RECOMMEND]),
+            ("DIRECTOR", [P.DIRECTOR_APPROVE]),
+            ("PROCUREMENT_OFFICER", [P.PROCESS]),
+            ("INTERN", []),  # holds nothing anywhere - still a personal resource
+        ],
+    )
+    def test_every_role_reaches_notifications_with_no_portal_permission_at_all(
+        self, make_user, role_name, permissions
+    ):
+        client, _ = make_user(role_name, permissions)
+
+        list_response = client.get(NOTIFICATIONS_URL)
+        count_response = client.get(NOTIFICATIONS_UNREAD_COUNT_URL)
+
+        assert list_response.status_code == status.HTTP_200_OK
+        assert count_response.status_code == status.HTTP_200_OK
+
+    def test_unauthenticated_request_is_still_rejected(self):
+        """The exemption is from module-capability RBAC, not from authentication."""
+        assert (
+            APIClient().get(NOTIFICATIONS_URL).status_code
+            == status.HTTP_401_UNAUTHORIZED
+        )
+        assert (
+            APIClient().get(NOTIFICATIONS_UNREAD_COUNT_URL).status_code
+            == status.HTTP_401_UNAUTHORIZED
+        )
+
+    def test_the_exemption_does_not_widen_to_other_portal_routes(self, make_user):
+        """
+        Only the notifications path family is exempt - a genuinely
+        module-gated portal route (dashboard) must still require some
+        portal.*-prefixed permission, exactly as before.
+        """
+        client, _ = make_user("INTERN", [])
+
+        assert client.get(PORTAL_DASHBOARD_URL).status_code == status.HTTP_403_FORBIDDEN
+
+    def test_the_exemption_does_not_widen_to_other_modules(self, make_user):
+        """Reaching notifications must not imply reaching procurement or anywhere else."""
+        client, _ = make_user("INTERN", [])
+
+        assert client.get(NOTIFICATIONS_URL).status_code == status.HTTP_200_OK
+        assert client.get(PROCUREMENT_URL).status_code == status.HTTP_403_FORBIDDEN
+        assert client.get(HR_URL).status_code == status.HTTP_403_FORBIDDEN

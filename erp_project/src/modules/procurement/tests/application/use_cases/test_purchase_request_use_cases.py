@@ -315,17 +315,34 @@ class TestSubmitPurchaseRequest:
             use_case.execute(100, requester)
         repository.save.assert_not_called()
 
-    def test_does_not_publish_on_a_first_time_submission(
+    def test_publishes_awaiting_review_not_corrected_on_a_first_time_submission(
         self, repository, policy, requester, draft_request_with_item
     ):
-        """F19: a fresh submission must not fire the corrected-and-resubmitted notification."""
+        """
+        F19: a fresh submission must not fire the corrected-and-resubmitted
+        notification. F27: it must instead fire PurchaseRequestAwaitingReview
+        so the department head is told a fresh request needs them - so this
+        no longer asserts an empty publish, just the specific absence.
+        """
+        from modules.procurement.domain.events import (
+            PurchaseRequestAwaitingReview,
+            PurchaseRequestCorrectedAndResubmitted,
+        )
+
         repository.get_by_id.return_value = draft_request_with_item
         event_bus = Mock()
         use_case = SubmitPurchaseRequest(repository, policy, event_bus=event_bus)
 
         use_case.execute(100, requester)
 
-        event_bus.publish_all.assert_called_once_with([])
+        event_bus.publish_all.assert_called_once()
+        (published,), _ = event_bus.publish_all.call_args
+        assert len(published) == 1
+        assert isinstance(published[0], PurchaseRequestAwaitingReview)
+        assert published[0].new_status == RequestStatus.PENDING_DEPARTMENT_HEAD.value
+        assert not any(
+            isinstance(e, PurchaseRequestCorrectedAndResubmitted) for e in published
+        )
 
     def test_publishes_corrected_and_resubmitted_after_a_rejection(
         self, repository, policy, requester, draft_request_with_item
@@ -406,6 +423,62 @@ class TestApprovePurchaseRequestByDepartmentHead:
             use_case.execute(100, authorized_actor(DEPARTMENT_HEAD_ID))
         repository.save.assert_not_called()
 
+    def test_publishes_awaiting_review_naming_pending_accounts(
+        self, repository, policy, draft_request_with_item
+    ):
+        """F27: Accounts must be told this request now needs them."""
+        from modules.procurement.domain.events import PurchaseRequestAwaitingReview
+
+        draft_request_with_item.submit()
+        draft_request_with_item.clear_domain_events()  # as submit's own publish would have
+        repository.get_by_id.return_value = draft_request_with_item
+        event_bus = Mock()
+        use_case = ApprovePurchaseRequestByDepartmentHead(
+            repository, policy, event_bus=event_bus
+        )
+
+        use_case.execute(100, authorized_actor(DEPARTMENT_HEAD_ID))
+
+        event_bus.publish_all.assert_called_once()
+        (published,), _ = event_bus.publish_all.call_args
+        assert len(published) == 1
+        assert isinstance(published[0], PurchaseRequestAwaitingReview)
+        assert published[0].new_status == RequestStatus.PENDING_ACCOUNTS.value
+        assert draft_request_with_item.domain_events == []
+
+    def test_does_not_publish_when_the_transition_fails(
+        self, repository, policy, draft_request_with_item
+    ):
+        """No save, no persisted state change - so no notification either."""
+        repository.get_by_id.return_value = draft_request_with_item  # still DRAFT
+        event_bus = Mock()
+        use_case = ApprovePurchaseRequestByDepartmentHead(
+            repository, policy, event_bus=event_bus
+        )
+
+        with pytest.raises(ValidationError):
+            use_case.execute(100, authorized_actor(DEPARTMENT_HEAD_ID))
+
+        repository.save.assert_not_called()
+        event_bus.publish_all.assert_not_called()
+
+    def test_does_not_publish_before_the_repository_save_succeeds(
+        self, repository, policy, draft_request_with_item
+    ):
+        """F27: save-then-publish ordering - a failed persist must not notify anyone."""
+        draft_request_with_item.submit()
+        repository.get_by_id.return_value = draft_request_with_item
+        repository.save.side_effect = RuntimeError("database is unavailable")
+        event_bus = Mock()
+        use_case = ApprovePurchaseRequestByDepartmentHead(
+            repository, policy, event_bus=event_bus
+        )
+
+        with pytest.raises(RuntimeError):
+            use_case.execute(100, authorized_actor(DEPARTMENT_HEAD_ID))
+
+        event_bus.publish_all.assert_not_called()
+
 
 class TestVerifyPurchaseRequestByAccounts:
     """Tests for the VerifyPurchaseRequestByAccounts use case."""
@@ -428,6 +501,44 @@ class TestVerifyPurchaseRequestByAccounts:
         with pytest.raises(NotFoundError):
             use_case.execute(999, authorized_actor(21))
         repository.save.assert_not_called()
+
+    def test_publishes_awaiting_review_naming_pending_gm(
+        self, repository, policy, draft_request_with_item
+    ):
+        from modules.procurement.domain.events import PurchaseRequestAwaitingReview
+
+        draft_request_with_item.submit()
+        draft_request_with_item.approve_by_department_head(20)
+        draft_request_with_item.clear_domain_events()
+        repository.get_by_id.return_value = draft_request_with_item
+        event_bus = Mock()
+        use_case = VerifyPurchaseRequestByAccounts(repository, policy, event_bus=event_bus)
+
+        use_case.execute(100, authorized_actor(21))
+
+        event_bus.publish_all.assert_called_once()
+        (published,), _ = event_bus.publish_all.call_args
+        assert len(published) == 1
+        assert isinstance(published[0], PurchaseRequestAwaitingReview)
+        assert published[0].new_status == RequestStatus.PENDING_GM.value
+
+    def test_does_not_publish_when_a_budget_code_is_unassigned(
+        self, repository, policy, draft_request_with_item
+    ):
+        """F25's guard still blocks the transition - and so still blocks F27's notification."""
+        draft_request_with_item.submit()
+        draft_request_with_item.approve_by_department_head(20)
+        draft_request_with_item.items[0].budget_code_id = None
+        draft_request_with_item.clear_domain_events()
+        repository.get_by_id.return_value = draft_request_with_item
+        event_bus = Mock()
+        use_case = VerifyPurchaseRequestByAccounts(repository, policy, event_bus=event_bus)
+
+        with pytest.raises(ValidationError):
+            use_case.execute(100, authorized_actor(21))
+
+        repository.save.assert_not_called()
+        event_bus.publish_all.assert_not_called()
 
 
 class TestRecommendPurchaseRequestByGM:
@@ -453,6 +564,27 @@ class TestRecommendPurchaseRequestByGM:
             use_case.execute(999, authorized_actor(22))
         repository.save.assert_not_called()
 
+    def test_publishes_awaiting_review_naming_pending_director(
+        self, repository, policy, draft_request_with_item
+    ):
+        from modules.procurement.domain.events import PurchaseRequestAwaitingReview
+
+        draft_request_with_item.submit()
+        draft_request_with_item.approve_by_department_head(20)
+        draft_request_with_item.verify_by_accounts(21)
+        draft_request_with_item.clear_domain_events()
+        repository.get_by_id.return_value = draft_request_with_item
+        event_bus = Mock()
+        use_case = RecommendPurchaseRequestByGM(repository, policy, event_bus=event_bus)
+
+        use_case.execute(100, authorized_actor(22))
+
+        event_bus.publish_all.assert_called_once()
+        (published,), _ = event_bus.publish_all.call_args
+        assert len(published) == 1
+        assert isinstance(published[0], PurchaseRequestAwaitingReview)
+        assert published[0].new_status == RequestStatus.PENDING_DIRECTOR.value
+
 
 class TestApprovePurchaseRequestByDirector:
     """Tests for the ApprovePurchaseRequestByDirector use case."""
@@ -477,6 +609,28 @@ class TestApprovePurchaseRequestByDirector:
         with pytest.raises(NotFoundError):
             use_case.execute(999, authorized_actor(23))
         repository.save.assert_not_called()
+
+    def test_publishes_awaiting_review_naming_pending_procurement(
+        self, repository, policy, draft_request_with_item
+    ):
+        from modules.procurement.domain.events import PurchaseRequestAwaitingReview
+
+        draft_request_with_item.submit()
+        draft_request_with_item.approve_by_department_head(20)
+        draft_request_with_item.verify_by_accounts(21)
+        draft_request_with_item.recommend_by_gm(22)
+        draft_request_with_item.clear_domain_events()
+        repository.get_by_id.return_value = draft_request_with_item
+        event_bus = Mock()
+        use_case = ApprovePurchaseRequestByDirector(repository, policy, event_bus=event_bus)
+
+        use_case.execute(100, authorized_actor(23))
+
+        event_bus.publish_all.assert_called_once()
+        (published,), _ = event_bus.publish_all.call_args
+        assert len(published) == 1
+        assert isinstance(published[0], PurchaseRequestAwaitingReview)
+        assert published[0].new_status == RequestStatus.PENDING_PROCUREMENT.value
 
 
 class TestProcessPurchaseRequestByProcurement:
@@ -560,6 +714,11 @@ class TestProcessPurchaseRequestByProcurement:
         from modules.procurement.domain.events import PurchaseRequestProcessed
 
         self._fully_approved(draft_request_with_item)
+        # F27: each approval step above now appends its own
+        # PurchaseRequestAwaitingReview event; clear them (as the real use
+        # cases' own publish would have) so this test only ever inspects
+        # process_by_procurement's own event.
+        draft_request_with_item.clear_domain_events()
         repository.get_by_id.return_value = draft_request_with_item
         event_bus = Mock()
         use_case = ProcessPurchaseRequestByProcurement(repository, policy, event_bus=event_bus)
@@ -639,6 +798,10 @@ class TestRejectPurchaseRequest:
         from modules.procurement.domain.events import PurchaseRequestRejected
 
         draft_request_with_item.submit()
+        # F27: submit() now appends its own PurchaseRequestAwaitingReview
+        # event; clear it (as the real use case's own publish would have) so
+        # this test only ever inspects reject()'s own event.
+        draft_request_with_item.clear_domain_events()
         repository.get_by_id.return_value = draft_request_with_item
         event_bus = Mock()
         use_case = RejectPurchaseRequest(repository, policy, event_bus=event_bus)

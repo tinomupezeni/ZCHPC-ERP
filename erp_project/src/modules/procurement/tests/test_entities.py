@@ -494,8 +494,10 @@ class TestPurchaseRequest:
         request.verify_by_accounts(3)
         request.recommend_by_gm(4)
         request.approve_by_director(5)
-
-        assert request.domain_events == []
+        # F27: each step above now appends its own PurchaseRequestAwaitingReview
+        # event; clear them (as the real use cases' own publish would have)
+        # so this test only ever inspects process_by_procurement's own event.
+        request.clear_domain_events()
 
         request.process_by_procurement(6, "PO-TEST-001")
 
@@ -631,8 +633,10 @@ class TestPurchaseRequest:
         request.requisition_number = "PR-00042"
         request.add_item(self._make_item())
         request.submit()
-
-        assert request.domain_events == []
+        # F27: submit() now appends its own PurchaseRequestAwaitingReview
+        # event; clear it (as the real use case's own publish would have) so
+        # this test only ever inspects reject()'s own event.
+        request.clear_domain_events()
 
         request.reject(9, "Budget constraints")
 
@@ -672,14 +676,66 @@ class TestPurchaseRequest:
         request.submit()
         assert request.status == RequestStatus.PENDING_DEPARTMENT_HEAD
 
-    def test_submit_does_not_append_a_domain_event_on_a_first_time_submission(self):
-        """F19: a fresh submission is not a correction - no event, no notification."""
+    def test_submit_does_not_append_a_corrected_and_resubmitted_event_on_a_first_time_submission(
+        self,
+    ):
+        """
+        F19: a fresh submission is not a correction - the corrected notification
+        must never fire for it. F27 gives a first-time submission its own event
+        (PurchaseRequestAwaitingReview, see the next test) instead of firing
+        nothing at all, so this now asserts the specific absence, not silence.
+        """
+        from modules.procurement.domain.events import PurchaseRequestCorrectedAndResubmitted
+
         request = self._make_request()
         request.add_item(self._make_item())
 
         request.submit()
 
-        assert request.domain_events == []
+        assert not any(
+            isinstance(e, PurchaseRequestCorrectedAndResubmitted)
+            for e in request.domain_events
+        )
+
+    def test_submit_appends_an_awaiting_review_event_on_a_first_time_submission(self):
+        """F27: the department head must be told a fresh request needs them."""
+        from modules.procurement.domain.events import PurchaseRequestAwaitingReview
+
+        request = self._make_request()
+        request._id = 55
+        request.requisition_number = "PR-00055"
+        request.add_item(self._make_item())
+
+        request.submit()
+
+        events = request.domain_events
+        assert len(events) == 1
+        event = events[0]
+        assert isinstance(event, PurchaseRequestAwaitingReview)
+        assert event.request_id == 55
+        assert event.requisition_number == "PR-00055"
+        assert event.new_status == RequestStatus.PENDING_DEPARTMENT_HEAD.value
+        assert event.department_id == request.department_id
+
+    def test_submit_after_correction_does_not_also_append_an_awaiting_review_event(self):
+        """
+        F27 must not double-notify the department head for one transition:
+        a corrected resubmission gets only its own, more specific event.
+        """
+        from modules.procurement.domain.events import PurchaseRequestAwaitingReview
+
+        request = self._make_request()
+        request.add_item(self._make_item())
+        request.submit()
+        request.reject(2, "Wrong items")
+        request.clear_domain_events()
+        request.correct_and_resubmit()
+
+        request.submit()
+
+        assert not any(
+            isinstance(e, PurchaseRequestAwaitingReview) for e in request.domain_events
+        )
 
     def test_submit_after_correction_appends_a_purchase_request_corrected_and_resubmitted_domain_event(
         self,
@@ -922,6 +978,129 @@ class TestPurchaseRequest:
         assert request.status == RequestStatus.PENDING_DEPARTMENT_HEAD
         # The original rejection decision is preserved throughout.
         assert any(d.decision == DecisionType.REJECTED for d in request.decisions)
+
+
+class TestPurchaseRequestAwaitingReviewEvent:
+    """
+    F27: every forward transition (except the corrected-resubmission path,
+    covered in TestPurchaseRequest above) must append exactly one
+    PurchaseRequestAwaitingReview event naming the status it just reached,
+    so a reviewer at that stage can be notified.
+    """
+
+    def _make_request(self):
+        return PurchaseRequest.create(
+            requester_id=1,
+            requester_name="John Doe",
+            department_id=42,
+            department_name="IT",
+            designation="Developer",
+            contact="ext 123",
+        )
+
+    def _make_item(self):
+        return PurchaseRequestItem(
+            description="Widget",
+            quantity=1,
+            expected_delivery_period="1 week",
+            estimated_cost=Decimal("10.00"),
+            category_id=1,
+            budget_code_id=1,
+        )
+
+    def _only_event(self, request):
+        from modules.procurement.domain.events import PurchaseRequestAwaitingReview
+
+        events = request.domain_events
+        assert len(events) == 1
+        assert isinstance(events[0], PurchaseRequestAwaitingReview)
+        return events[0]
+
+    def test_department_head_approval_appends_an_event_naming_pending_accounts(self):
+        request = self._make_request()
+        request._id = 10
+        request.requisition_number = "PR-00010"
+        request.add_item(self._make_item())
+        request.submit()
+        request.clear_domain_events()
+
+        request.approve_by_department_head(2)
+
+        event = self._only_event(request)
+        assert event.request_id == 10
+        assert event.requisition_number == "PR-00010"
+        assert event.new_status == RequestStatus.PENDING_ACCOUNTS.value
+        assert event.department_id == 42
+
+    def test_accounts_verification_appends_an_event_naming_pending_gm(self):
+        request = self._make_request()
+        request.add_item(self._make_item())
+        request.submit()
+        request.approve_by_department_head(2)
+        request.clear_domain_events()
+
+        request.verify_by_accounts(3)
+
+        event = self._only_event(request)
+        assert event.new_status == RequestStatus.PENDING_GM.value
+
+    def test_verification_blocked_by_an_unassigned_budget_code_appends_no_event(self):
+        """A failed transition must not fire the "awaiting review" event either."""
+        from shared.domain.exceptions import ValidationError
+
+        request = self._make_request()
+        request.add_item(self._make_item())
+        request.items[0].budget_code_id = None
+        request.submit()
+        request.approve_by_department_head(2)
+        request.clear_domain_events()
+
+        with pytest.raises(ValidationError):
+            request.verify_by_accounts(3)
+
+        assert request.domain_events == []
+
+    def test_gm_recommendation_appends_an_event_naming_pending_director(self):
+        request = self._make_request()
+        request.add_item(self._make_item())
+        request.submit()
+        request.approve_by_department_head(2)
+        request.verify_by_accounts(3)
+        request.clear_domain_events()
+
+        request.recommend_by_gm(4)
+
+        event = self._only_event(request)
+        assert event.new_status == RequestStatus.PENDING_DIRECTOR.value
+
+    def test_director_approval_appends_an_event_naming_pending_procurement(self):
+        request = self._make_request()
+        request.add_item(self._make_item())
+        request.submit()
+        request.approve_by_department_head(2)
+        request.verify_by_accounts(3)
+        request.recommend_by_gm(4)
+        request.clear_domain_events()
+
+        request.approve_by_director(5)
+
+        event = self._only_event(request)
+        assert event.new_status == RequestStatus.PENDING_PROCUREMENT.value
+
+    def test_a_rejected_transition_appends_no_awaiting_review_event(self):
+        """Rejecting is not a forward transition - no reviewer needs telling "it's their turn"."""
+        request = self._make_request()
+        request.add_item(self._make_item())
+        request.submit()
+        request.clear_domain_events()
+
+        request.reject(2, "Not needed")
+
+        from modules.procurement.domain.events import PurchaseRequestAwaitingReview
+
+        assert not any(
+            isinstance(e, PurchaseRequestAwaitingReview) for e in request.domain_events
+        )
 
 
 class TestPurchaseOrder:

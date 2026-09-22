@@ -11,7 +11,15 @@ export type NotificationType =
   | 'system'
   | 'purchase_request_rejected'
   | 'purchase_request_processed'
-  | 'purchase_request_corrected';
+  | 'purchase_request_corrected'
+  // F27: one per reviewing stage - each opens a different role-scoped
+  // review page, so (unlike rejected/processed) a single shared type
+  // would not be enough to route correctly. See notificationNavigation.ts.
+  | 'purchase_request_awaiting_department_head'
+  | 'purchase_request_awaiting_accounts'
+  | 'purchase_request_awaiting_gm'
+  | 'purchase_request_awaiting_director'
+  | 'purchase_request_awaiting_procurement';
 
 export interface Notification {
   id: number;

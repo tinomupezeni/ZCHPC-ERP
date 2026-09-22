@@ -232,6 +232,40 @@ class Notification(Entity[int]):
         )
 
     @classmethod
+    def purchase_request_awaiting_review(
+        cls,
+        employee_id: int,
+        request_id: int,
+        requisition_number: str,
+        notification_type: NotificationType,
+        stage_label: str,
+    ) -> "Notification":
+        """
+        Create a "this purchase request now needs your review" notification
+        (F27), for whichever stage's reviewer the caller has already
+        resolved.
+
+        One factory shared by every forward-workflow stage rather than five
+        near-identical ones: notification_type and stage_label are supplied
+        by modules.portal.event_handlers.handle_purchase_request_awaiting_review,
+        which is the one place that maps a PurchaseRequestAwaitingReview
+        event's new_status to a concrete recipient, notification_type and
+        stage label. Like every other purchase_request_* notification here,
+        this never carries GL/budget code data - only the requisition number.
+        """
+        return cls.create(
+            employee_id=employee_id,
+            notification_type=notification_type,
+            title=f"Purchase Request Awaiting {stage_label} Review",
+            message=(
+                f"Purchase requisition {requisition_number} is now awaiting "
+                f"{stage_label} review."
+            ),
+            related_object_type="purchase_request",
+            related_object_id=request_id,
+        )
+
+    @classmethod
     def purchase_request_corrected(
         cls,
         employee_id: int,

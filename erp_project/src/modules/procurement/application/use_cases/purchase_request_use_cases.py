@@ -268,39 +268,91 @@ class SubmitPurchaseRequest(BasePurchaseRequestUseCase):
 
 
 class ApprovePurchaseRequestByDepartmentHead(BasePurchaseRequestUseCase):
+    """F27: publishes PurchaseRequestAwaitingReview after a successful save - see SubmitPurchaseRequest's docstring for the event_bus injection pattern this follows."""
+
+    def __init__(
+        self,
+        repository: IPurchaseRequestRepository,
+        policy: PurchaseRequestAuthorizationPolicy,
+        event_bus: EventBus | None = None,
+    ) -> None:
+        super().__init__(repository, policy)
+        self._event_bus = event_bus or get_event_bus()
+
     def execute(self, request_id: int, actor: Actor) -> PurchaseRequest:
         request = self._load(request_id, actor)
         self.policy.authorize_department_head_approval(actor, request)
 
         request.approve_by_department_head(actor.employee_id)
-        return self.repository.save(request)
+        saved = self.repository.save(request)
+        self._event_bus.publish_all(request.clear_domain_events())
+        return saved
 
 
 class VerifyPurchaseRequestByAccounts(BasePurchaseRequestUseCase):
+    """F27: publishes PurchaseRequestAwaitingReview after a successful save - see SubmitPurchaseRequest's docstring for the event_bus injection pattern this follows."""
+
+    def __init__(
+        self,
+        repository: IPurchaseRequestRepository,
+        policy: PurchaseRequestAuthorizationPolicy,
+        event_bus: EventBus | None = None,
+    ) -> None:
+        super().__init__(repository, policy)
+        self._event_bus = event_bus or get_event_bus()
+
     def execute(self, request_id: int, actor: Actor) -> PurchaseRequest:
         request = self._load(request_id, actor)
         self.policy.authorize_accounts_verification(actor, request)
 
         request.verify_by_accounts(actor.employee_id)
-        return self.repository.save(request)
+        saved = self.repository.save(request)
+        self._event_bus.publish_all(request.clear_domain_events())
+        return saved
 
 
 class RecommendPurchaseRequestByGM(BasePurchaseRequestUseCase):
+    """F27: publishes PurchaseRequestAwaitingReview after a successful save - see SubmitPurchaseRequest's docstring for the event_bus injection pattern this follows."""
+
+    def __init__(
+        self,
+        repository: IPurchaseRequestRepository,
+        policy: PurchaseRequestAuthorizationPolicy,
+        event_bus: EventBus | None = None,
+    ) -> None:
+        super().__init__(repository, policy)
+        self._event_bus = event_bus or get_event_bus()
+
     def execute(self, request_id: int, actor: Actor) -> PurchaseRequest:
         request = self._load(request_id, actor)
         self.policy.authorize_gm_recommendation(actor, request)
 
         request.recommend_by_gm(actor.employee_id)
-        return self.repository.save(request)
+        saved = self.repository.save(request)
+        self._event_bus.publish_all(request.clear_domain_events())
+        return saved
 
 
 class ApprovePurchaseRequestByDirector(BasePurchaseRequestUseCase):
+    """F27: publishes PurchaseRequestAwaitingReview after a successful save - see SubmitPurchaseRequest's docstring for the event_bus injection pattern this follows."""
+
+    def __init__(
+        self,
+        repository: IPurchaseRequestRepository,
+        policy: PurchaseRequestAuthorizationPolicy,
+        event_bus: EventBus | None = None,
+    ) -> None:
+        super().__init__(repository, policy)
+        self._event_bus = event_bus or get_event_bus()
+
     def execute(self, request_id: int, actor: Actor) -> PurchaseRequest:
         request = self._load(request_id, actor)
         self.policy.authorize_director_approval(actor, request)
 
         request.approve_by_director(actor.employee_id)
-        return self.repository.save(request)
+        saved = self.repository.save(request)
+        self._event_bus.publish_all(request.clear_domain_events())
+        return saved
 
 
 class ProcessPurchaseRequestByProcurement(BasePurchaseRequestUseCase):

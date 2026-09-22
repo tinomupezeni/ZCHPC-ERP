@@ -50,8 +50,15 @@ class TestRejectionNotification:
         assert "Specification is incomplete" in notification.message
 
     def test_rejector_is_not_the_one_notified(self, login, org, payload):
-        """The department head who rejected gets nothing - only the requester does."""
+        """
+        The department head who rejected gets no notification *from that
+        rejection* - only the requester does. create_and_submit already
+        leaves the department head with one unrelated notification (F27's
+        "you have a fresh submission" notice from submit()), so this checks
+        that rejecting adds nothing further for them, not a blanket zero.
+        """
         request_id = create_and_submit(login, org, payload)
+        department_head_count_before = _notifications_for(org["department_head"]).count()
 
         login(org["department_head"]).post(
             f"{REQUESTS_URL}{request_id}/reject/",
@@ -59,7 +66,10 @@ class TestRejectionNotification:
             format="json",
         )
 
-        assert _notifications_for(org["department_head"]).count() == 0
+        assert (
+            _notifications_for(org["department_head"]).count()
+            == department_head_count_before
+        )
         assert _notifications_for(org["requester"]).count() == 1
 
     def test_retrying_a_rejection_does_not_duplicate_the_notification(
@@ -196,7 +206,14 @@ class TestCorrectedAndResubmittedNotification:
         )
 
         assert resubmitted.data["status"] == "PENDING_DEPARTMENT_HEAD"
-        notifications = list(_notifications_for(org["department_head"]))
+        # The department head also has an earlier, unrelated notification
+        # from the original submit() (F27's "fresh submission" notice) - so
+        # this checks the *corrected* one specifically, not a blanket count.
+        notifications = list(
+            _notifications_for(org["department_head"]).filter(
+                notification_type="purchase_request_corrected"
+            )
+        )
         assert len(notifications) == 1
         notification = notifications[0]
         assert notification.notification_type == "purchase_request_corrected"
@@ -224,7 +241,14 @@ class TestCorrectedAndResubmittedNotification:
         )
 
         assert resubmitted.data["status"] == "PENDING_DEPARTMENT_HEAD"
-        notifications = list(_notifications_for(org["department_head"]))
+        # See the equivalent note in the department-head-rejection test above:
+        # an earlier, unrelated F27 notification from the original submit()
+        # is expected here too, so this filters to the corrected one.
+        notifications = list(
+            _notifications_for(org["department_head"]).filter(
+                notification_type="purchase_request_corrected"
+            )
+        )
         assert len(notifications) == 1
         assert notifications[0].notification_type == "purchase_request_corrected"
 
@@ -270,9 +294,19 @@ class TestCorrectedAndResubmittedNotification:
     def test_a_normal_first_time_submission_does_not_produce_a_corrected_notification(
         self, login, org, payload
     ):
+        """
+        F27 gives a first-time submission its own "awaiting review" notice
+        for the department head now, so this only checks the specific thing
+        it's named for: the *corrected* notification must never be it.
+        """
         create_and_submit(login, org, payload)
 
-        assert _notifications_for(org["department_head"]).count() == 0
+        assert (
+            _notifications_for(org["department_head"])
+            .filter(notification_type="purchase_request_corrected")
+            .count()
+            == 0
+        )
 
     def test_department_with_no_recorded_head_still_lets_the_resubmission_succeed(
         self, login, org, payload

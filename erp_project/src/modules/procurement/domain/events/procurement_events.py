@@ -141,6 +141,35 @@ class PurchaseRequestCorrectedAndResubmitted(DomainEvent):
 
 
 @dataclass(frozen=True)
+class PurchaseRequestAwaitingReview(DomainEvent):
+    """
+    Event raised whenever a purchase request advances to a new pending stage
+    and that stage's reviewer needs to act on it (F27 notification coverage).
+
+    One generic event covers every forward transition - submit ->
+    PENDING_DEPARTMENT_HEAD, department head approval -> PENDING_ACCOUNTS,
+    accounts verification -> PENDING_GM, GM recommendation ->
+    PENDING_DIRECTOR, director approval -> PENDING_PROCUREMENT - rather than
+    one event per stage, since the shape is identical and only the resulting
+    status differs. Who actually gets notified for a given new_status
+    (the recorded department head, or everyone currently holding that
+    stage's permission) is deliberately NOT decided here - see
+    modules.portal.event_handlers.handle_purchase_request_awaiting_review.
+
+    Not raised for a corrected resubmission back to PENDING_DEPARTMENT_HEAD:
+    that case already has its own, more specific
+    PurchaseRequestCorrectedAndResubmitted event and notification, and this
+    event firing too would double-notify the department head for one
+    transition (see PurchaseRequest.submit()).
+    """
+
+    request_id: int
+    requisition_number: str
+    new_status: str
+    department_id: int
+
+
+@dataclass(frozen=True)
 class PurchaseOrderCreated(DomainEvent):
     """Event raised when a purchase order is created."""
 

@@ -42,9 +42,15 @@ def make_employee(db):
             first_name=name.split()[0],
             last_name=name.split()[-1],
         )
-        # RBACMiddleware fail-closes any route family the caller holds no
-        # permission in - "portal.*" is what every seeded role gets for
-        # employee-portal routes (see hr/migrations/0017_seed_role_permissions.py).
+        # "portal.*" here is only the real production convention (see
+        # hr/migrations/0017_seed_role_permissions.py), not a requirement:
+        # RBACMiddleware exempts /api/v2/portal/notifications/* from its
+        # per-module check entirely (F27 follow-up - notifications are a
+        # personal resource, not a module capability), so any authenticated
+        # role would reach these endpoints just as well - see
+        # tests/integration/modules/identity/test_rbac_route_access.py and
+        # test_notification_access.py for that with a realistic, portal-less
+        # Purchase Request permission set.
         role = Role.objects.create(
             name=f"STAFF_{counter['n']}",
             display_name="Staff",

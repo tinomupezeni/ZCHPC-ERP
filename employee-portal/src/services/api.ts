@@ -6,8 +6,7 @@ import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
  * Falls back to production when unset, matching vite.config.ts's own
  * __API_URL__ default.
  */
-const API_BASE_URL = `${import.meta.env.VITE_API_URL ?? 'https://zchpcerp.zchpc.ac.zw'}/api/v2`;
-
+export const API_BASE_URL = (typeof __API_URL__ !== "undefined" ? __API_URL__ : "") + "/api/v2/";
 // Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,

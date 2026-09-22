@@ -10,6 +10,7 @@ from typing import List, Optional
 from shared.domain.base import AggregateRoot, Entity
 from shared.domain.exceptions import ValidationError
 from modules.procurement.domain.events import (
+    PurchaseRequestAwaitingReview,
     PurchaseRequestCorrectedAndResubmitted,
     PurchaseRequestProcessed,
     PurchaseRequestRejected,
@@ -121,6 +122,23 @@ class PurchaseRequest(AggregateRoot[int]):
         if self.total_estimated_cost < 0:
             raise ValidationError("Total estimated cost must be non-negative")
 
+    def _add_awaiting_review_event(self) -> None:
+        """
+        Record the F27 "your review is needed" event for the status this
+        transition just landed on. Shared by every forward transition method
+        below so the event's shape can't drift between call sites - see
+        PurchaseRequestAwaitingReview's own docstring for the one deliberate
+        exception (submit()'s first-time-submission path).
+        """
+        self.add_domain_event(
+            PurchaseRequestAwaitingReview(
+                request_id=self.id,
+                requisition_number=self.requisition_number,
+                new_status=self.status.value,
+                department_id=self.department_id,
+            )
+        )
+
     def _append_decision(
         self,
         stage: DecisionStage,
@@ -151,9 +169,13 @@ class PurchaseRequest(AggregateRoot[int]):
         which can run while DRAFT - so a non-empty `decisions` here can only
         mean this DRAFT came from a correction, regardless of which stage
         rejected it or how many times. That is what distinguishes a
-        first-time submission (no event) from a corrected resubmission
-        (PurchaseRequestCorrectedAndResubmitted), without hard-coding any
-        particular stage.
+        first-time submission from a corrected resubmission, so each raises
+        the one event actually meant for it: a first-time submission raises
+        PurchaseRequestAwaitingReview (F27) telling the department head a
+        fresh request needs them; a corrected resubmission raises only
+        PurchaseRequestCorrectedAndResubmitted (F19), a more specific "this
+        was rejected and is back" notice to the same recipient - never both,
+        which would double-notify the department head for one transition.
         """
         if self.status != RequestStatus.DRAFT:
             raise ValidationError(f"Cannot submit from status {self.status.value}")
@@ -170,6 +192,8 @@ class PurchaseRequest(AggregateRoot[int]):
                     department_id=self.department_id,
                 )
             )
+        else:
+            self._add_awaiting_review_event()
 
     def approve_by_department_head(self, actor_id: int) -> None:
         if self.status != RequestStatus.PENDING_DEPARTMENT_HEAD:
@@ -181,6 +205,7 @@ class PurchaseRequest(AggregateRoot[int]):
             DecisionStage.DEPARTMENT_HEAD, DecisionType.APPROVED, actor_id
         )
         self.updated_at = _utc_now()
+        self._add_awaiting_review_event()
 
     def verify_by_accounts(self, actor_id: int) -> None:
         if self.status != RequestStatus.PENDING_ACCOUNTS:
@@ -195,6 +220,7 @@ class PurchaseRequest(AggregateRoot[int]):
         self.status = RequestStatus.PENDING_GM
         self._append_decision(DecisionStage.ACCOUNTS, DecisionType.VERIFIED, actor_id)
         self.updated_at = _utc_now()
+        self._add_awaiting_review_event()
 
     def assign_budget_code(self, item_id: int, budget_code_id: int) -> None:
         """
@@ -229,6 +255,7 @@ class PurchaseRequest(AggregateRoot[int]):
         self.status = RequestStatus.PENDING_DIRECTOR
         self._append_decision(DecisionStage.GM, DecisionType.RECOMMENDED, actor_id)
         self.updated_at = _utc_now()
+        self._add_awaiting_review_event()
 
     def approve_by_director(self, actor_id: int) -> None:
         if self.status != RequestStatus.PENDING_DIRECTOR:
@@ -238,6 +265,7 @@ class PurchaseRequest(AggregateRoot[int]):
         self.status = RequestStatus.PENDING_PROCUREMENT
         self._append_decision(DecisionStage.DIRECTOR, DecisionType.APPROVED, actor_id)
         self.updated_at = _utc_now()
+        self._add_awaiting_review_event()
 
     def process_by_procurement(self, actor_id: int, purchase_order_number: str) -> None:
         """
