@@ -8,6 +8,54 @@
   --radius-sm: calc(0.75rem - 4px);
 }
 
+/*
+ * Tailwind v4 only generates a `bg-x`/`text-x`/`border-x`/`ring-x` utility
+ * for a name if `--color-x` exists in an `@theme`. The shadcn tokens below
+ * (--background, --popover, --primary, ...) were only ever defined as bare
+ * "H S% L%" triples on :root/.dark for the `hsl(var(--x))` v3 convention -
+ * nothing mapped them into Tailwind's v4 color namespace, so bg-background,
+ * bg-popover, bg-card, bg-primary etc. were never valid utilities at all
+ * (confirmed empirically: absent from the built CSS). Every element using
+ * them - DialogContent and SelectContent among them - got no background
+ * color from Tailwind, so the dark overlay/page behind showed straight
+ * through. `inline` keeps these as live var() references rather than
+ * baking in a value, so the .dark class swap below still works at runtime.
+ */
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+  --color-sidebar-background: hsl(var(--sidebar-background));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+}
+
 :root {
   --font-inter: "Inter", system-ui, -apple-system, sans-serif;
 
@@ -267,3 +315,52 @@ html {
 .comparison-signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 26px; margin-top: 20px; font-size: 11px; }
 .comparison-signatures span { display: inline-block; min-width: 90px; border-bottom: 1px solid #555; }
 @media print { .comparative-paper { width: 297mm; min-height: 210mm; padding: 10mm 16mm; } .comparative-paper .stores-header { min-height: 60px; } @page { size: A4 landscape; margin: 0; } }
+
+/* F23: final printable Purchase Requisition - reproduces the physical ZCHPC
+   paper form's structure (Sections A-D) and appearance: a formal
+   institutional form (serif type, thin black rules, restrained spacing),
+   not a modern web document that happens to be printable. A4 portrait,
+   reusing this file's existing fuel/stores print convention for the
+   screen-vs-print mechanics only - the visual language here is deliberately
+   plainer than the rest of the app. */
+.pr-print-status { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; font-family: var(--font-inter); color: #444; }
+.pr-print-page { min-height: 100vh; padding: 24px; background: #eef0ed; color: #000; font-family: 'Times New Roman', Times, serif; }
+.pr-print-actions { max-width: 794px; margin: 0 auto 16px; display: flex; justify-content: flex-end; font-family: var(--font-inter); }
+.pr-print-paper { box-sizing: border-box; width: min(100%, 794px); min-height: 1123px; margin: auto; padding: 52px 58px 64px; background: #fff; border: 1px solid #d2d0c8; box-shadow: 0 5px 20px rgba(0,0,0,.12); line-height: 1.35; }
+.pr-print-letterhead { border-bottom: 1.5px solid #000; padding-bottom: 10px; margin-bottom: 26px; }
+.pr-print-header { position: relative; display: grid; grid-template-columns: 60px 1fr 60px; align-items: center; gap: 12px; }
+.pr-print-crest { width: 58px; height: 58px; object-fit: contain; }
+.pr-print-header img { width: 58px; height: 58px; object-fit: contain; justify-self: end; }
+.pr-print-header h1 { margin: 0; text-align: center; font-size: 18px; font-weight: 700; letter-spacing: 0.03em; }
+.pr-print-no { text-align: right; font-size: 11px; margin-top: 6px; }
+.pr-print-paper h2 { margin: 24px 0 12px; font-size: 14px; font-weight: 700; text-align: center; }
+.pr-print-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; margin-bottom: 10px; font-size: 14px; line-height: 1.5; }
+.pr-print-label { margin-right: 6px; }
+.pr-print-fill { display: inline-block; min-width: 60px; border-bottom: 1px solid #000; padding: 0 4px 2px; }
+.pr-print-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13.5px; margin-top: 8px; }
+.pr-print-table th, .pr-print-table td { border: 1px solid #000; padding: 7px 8px; text-align: left; vertical-align: top; font-weight: 400; height: 30px; }
+.pr-print-table thead th { font-weight: 700; height: auto; padding: 6px 8px; }
+.pr-print-table .pr-print-num { text-align: right; }
+.pr-print-table th:nth-child(1) { width: 32%; }
+.pr-print-table th:nth-child(2) { width: 7%; }
+.pr-print-table th:nth-child(3) { width: 19%; }
+.pr-print-table th:nth-child(4) { width: 17%; }
+.pr-print-table th:nth-child(5) { width: 25%; }
+.pr-print-blank-row td { color: transparent; }
+.pr-print-total-row td { font-weight: 700; }
+.pr-print-note { font-size: 12.5px; font-style: italic; margin: 8px 0 4px; }
+.pr-print-approval-line { font-size: 14px; margin-bottom: 10px; line-height: 1.4; }
+.pr-print-approval-line .pr-print-fill { min-width: 48px; margin-right: 8px; }
+.pr-print-full { grid-column: 1 / -1; }
+@media (max-width: 640px) {
+  .pr-print-page { padding: 8px; }
+  .pr-print-paper { padding: 24px 16px; min-height: 0; }
+  .pr-print-row { grid-template-columns: 1fr; }
+}
+@media print {
+  .pr-print-page { padding: 0; background: white; }
+  .pr-print-actions { display: none; }
+  .pr-print-paper { width: 210mm; min-height: 297mm; margin: 0; padding: 18mm 19mm 16mm; border: 0; box-shadow: none; }
+  .pr-print-table, .pr-print-fill, .pr-print-letterhead { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  @page { size: A4 portrait; margin: 0; }
+}

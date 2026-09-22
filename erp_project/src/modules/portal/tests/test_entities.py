@@ -203,6 +203,36 @@ class TestNotification:
         assert notification.notification_type == NotificationType.PAYSLIP_AVAILABLE
         assert "January 2024" in notification.message
 
+    def test_purchase_request_rejected_notification(self):
+        """Slice 3: must carry the requisition number and reason, and link back to the request."""
+        notification = Notification.purchase_request_rejected(
+            employee_id=1,
+            request_id=42,
+            requisition_number="PR-00042",
+            reason="Budget constraints",
+        )
+        assert notification.notification_type == NotificationType.PURCHASE_REQUEST_REJECTED
+        assert notification.employee_id == 1
+        assert "PR-00042" in notification.message
+        assert "Budget constraints" in notification.message
+        assert notification.related_object_type == "purchase_request"
+        assert notification.related_object_id == 42
+        assert notification.is_read is False
+
+    def test_purchase_request_processed_notification(self):
+        """Slice 3: a positive completion notice, not just an absence of rejection."""
+        notification = Notification.purchase_request_processed(
+            employee_id=1,
+            request_id=42,
+            requisition_number="PR-00042",
+        )
+        assert notification.notification_type == NotificationType.PURCHASE_REQUEST_PROCESSED
+        assert notification.employee_id == 1
+        assert "PR-00042" in notification.message
+        assert "processed" in notification.message.lower()
+        assert notification.related_object_type == "purchase_request"
+        assert notification.related_object_id == 42
+
 
 class TestDocument:
     """Tests for Document entity."""

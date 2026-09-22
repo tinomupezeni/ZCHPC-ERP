@@ -121,6 +121,18 @@ class NotificationType(str, Enum):
     PAYSLIP_AVAILABLE = "payslip_available"
     ANNOUNCEMENT = "announcement"
     SYSTEM = "system"
+    PURCHASE_REQUEST_REJECTED = "purchase_request_rejected"
+    PURCHASE_REQUEST_PROCESSED = "purchase_request_processed"
+    PURCHASE_REQUEST_CORRECTED = "purchase_request_corrected"
+    # F27: one per reviewing stage, not one shared type - each opens a
+    # different role-scoped review page (see notificationNavigation.ts on
+    # the frontend), matching how PURCHASE_REQUEST_CORRECTED above is
+    # already distinct from REJECTED/PROCESSED for the same reason.
+    PURCHASE_REQUEST_AWAITING_DEPARTMENT_HEAD = "purchase_request_awaiting_department_head"
+    PURCHASE_REQUEST_AWAITING_ACCOUNTS = "purchase_request_awaiting_accounts"
+    PURCHASE_REQUEST_AWAITING_GM = "purchase_request_awaiting_gm"
+    PURCHASE_REQUEST_AWAITING_DIRECTOR = "purchase_request_awaiting_director"
+    PURCHASE_REQUEST_AWAITING_PROCUREMENT = "purchase_request_awaiting_procurement"
 
 
 class DocumentVisibility(str, Enum):

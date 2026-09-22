@@ -9,6 +9,9 @@ from modules.procurement.infrastructure.persistence.models import (
     InventoryItem,
     PurchaseOrder,
     PurchaseRequest,
+    PurchaseRequestAttachment,
+    PurchaseRequestCategory,
+    PurchaseRequestDecision,
     PurchaseRequestItem,
     Vendor,
 )
@@ -19,5 +22,8 @@ __all__ = [
     "InventoryItem",
     "PurchaseRequest",
     "PurchaseRequestItem",
+    "PurchaseRequestCategory",
+    "PurchaseRequestAttachment",
+    "PurchaseRequestDecision",
     "PurchaseOrder",
 ]

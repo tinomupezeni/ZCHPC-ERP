@@ -13,45 +13,32 @@ from shared.domain.base import ValueObject
 class RequestStatus(str, Enum):
     """Status of a purchase request."""
 
-    PENDING = "Pending"
-    LEVEL1_APPROVED = "Level1Approved"
-    LEVEL2_APPROVED = "Level2Approved"
-    REJECTED = "Rejected"
-    CANCELLED = "Cancelled"
+    DRAFT = "DRAFT"
+    PENDING_DEPARTMENT_HEAD = "PENDING_DEPARTMENT_HEAD"
+    PENDING_ACCOUNTS = "PENDING_ACCOUNTS"
+    PENDING_GM = "PENDING_GM"
+    PENDING_DIRECTOR = "PENDING_DIRECTOR"
+    PENDING_PROCUREMENT = "PENDING_PROCUREMENT"
+    PROCESSED = "PROCESSED"
+    REJECTED = "REJECTED"
 
-    @property
-    def is_pending(self) -> bool:
-        """Check if status is pending."""
-        return self == RequestStatus.PENDING
 
-    @property
-    def is_approved(self) -> bool:
-        """Check if fully approved."""
-        return self == RequestStatus.LEVEL2_APPROVED
+class DecisionStage(str, Enum):
+    """Approval stage for a purchase request."""
 
-    @property
-    def is_final(self) -> bool:
-        """Check if status is terminal."""
-        return self in (
-            RequestStatus.LEVEL2_APPROVED,
-            RequestStatus.REJECTED,
-            RequestStatus.CANCELLED
-        )
+    DEPARTMENT_HEAD = "DEPARTMENT_HEAD"
+    ACCOUNTS = "ACCOUNTS"
+    GM = "GM"
+    DIRECTOR = "DIRECTOR"
 
-    @property
-    def can_approve_level1(self) -> bool:
-        """Check if Level 1 approval is allowed."""
-        return self == RequestStatus.PENDING
 
-    @property
-    def can_approve_level2(self) -> bool:
-        """Check if Level 2 approval is allowed."""
-        return self == RequestStatus.LEVEL1_APPROVED
+class DecisionType(str, Enum):
+    """Decision made at a specific stage."""
 
-    @property
-    def can_reject(self) -> bool:
-        """Check if rejection is allowed."""
-        return self in (RequestStatus.PENDING, RequestStatus.LEVEL1_APPROVED)
+    APPROVED = "APPROVED"
+    VERIFIED = "VERIFIED"
+    RECOMMENDED = "RECOMMENDED"
+    REJECTED = "REJECTED"
 
 
 class OrderStatus(str, Enum):
@@ -94,6 +81,7 @@ class Money(ValueObject):
         """Validate money."""
         if self.amount < 0:
             from shared.domain.exceptions import ValidationError
+
             raise ValidationError("Amount cannot be negative")
 
     def __add__(self, other: "Money") -> "Money":
@@ -109,7 +97,7 @@ class Money(ValueObject):
     def __mul__(self, factor: int) -> "Money":
         return Money(
             amount=(self.amount * Decimal(str(factor))).quantize(Decimal("0.01")),
-            currency=self.currency
+            currency=self.currency,
         )
 
     @property
@@ -137,6 +125,7 @@ class VendorRating(ValueObject):
         """Validate rating."""
         if self.value < Decimal("0") or self.value > Decimal("5"):
             from shared.domain.exceptions import ValidationError
+
             raise ValidationError("Rating must be between 0 and 5")
 
     @property
@@ -169,12 +158,14 @@ class OrderNumber(ValueObject):
         """Validate order number."""
         if not self.value or not self.value.startswith("PO-"):
             from shared.domain.exceptions import ValidationError
+
             raise ValidationError("Order number must start with 'PO-'")
 
     @classmethod
     def generate(cls) -> "OrderNumber":
         """Generate a new order number."""
         import secrets
+
         suffix = secrets.token_hex(4).upper()
         return cls(value=f"PO-{suffix}")
 
@@ -191,6 +182,7 @@ class SKU(ValueObject):
         """Validate SKU."""
         if not self.value or len(self.value) > 50:
             from shared.domain.exceptions import ValidationError
+
             raise ValidationError("SKU must be 1-50 characters")
 
 
@@ -207,9 +199,11 @@ class BudgetAllocation(ValueObject):
         """Validate allocation."""
         if self.allocated_amount < 0:
             from shared.domain.exceptions import ValidationError
+
             raise ValidationError("Allocated amount cannot be negative")
         if self.used_amount < 0:
             from shared.domain.exceptions import ValidationError
+
             raise ValidationError("Used amount cannot be negative")
 
     @property
@@ -239,10 +233,11 @@ class BudgetAllocation(ValueObject):
         """Create new allocation with amount allocated."""
         if not self.can_allocate(amount):
             from shared.domain.exceptions import ValidationError
+
             raise ValidationError(
                 f"Insufficient budget. Requested: {amount}, Available: {self.remaining_amount}"
             )
         return BudgetAllocation(
             allocated_amount=self.allocated_amount,
-            used_amount=self.used_amount + amount
+            used_amount=self.used_amount + amount,
         )
