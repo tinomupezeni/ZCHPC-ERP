@@ -1,31 +1,29 @@
 """
 Payroll API views.
-"""
 
-from datetime import date, datetime
-from decimal import Decimal
+Views only translate HTTP into application inputs. Object-level authorization
+(the payroll policy) is enforced inside the application services; their
+AuthorizationError becomes 401/403 here via ``error_response``.
+"""
 
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
-from modules.payroll.infrastructure.persistence.models import (
-    TaxBracket as TaxBracketModel,
-    DailyZiGRateToUSD,
-    Payroll as PayrollModel,
-)
-from modules.hr.infrastructure.persistence.models import (
-    AllowanceType as AllowanceTypeModel,
-    DeductionType as DeductionTypeModel,
-)
-
-from modules.payroll.domain.value_objects import PayrollPeriod, Currency
+from modules.payroll.domain.value_objects import PayrollPeriod
 from modules.payroll.application.services import (
     PayrollService,
     ProcessPayrollCommand,
-    ExchangeRateService,
-    CreateExchangeRateCommand,
 )
+from modules.payroll.application.services.employee_payroll_data_service import (
+    EmployeePayrollDataService,
+)
+from modules.payroll.application.services.payroll_configuration_service import (
+    PayrollConfigurationService,
+)
+from modules.payroll.application.services.payslip_access_service import PayslipAccessService
+from modules.payroll.api.actors import payroll_actor_from_request
+from modules.payroll.api.errors import error_response
 from modules.payroll.infrastructure.persistence.django_tax_repository import DjangoTaxTableRepository
 from modules.payroll.infrastructure.persistence.django_exchange_rate_repository import DjangoExchangeRateRepository
 from modules.payroll.infrastructure.persistence.django_payslip_repository import DjangoPayslipRepository
@@ -42,13 +40,18 @@ from modules.payroll.api.serializers import (
     CreateTaxBracketSerializer,
     ExchangeRateSerializer,
     CreateExchangeRateSerializer,
-    PayslipSerializer,
     PayslipListSerializer,
-    ProcessPayrollSerializer,
-    PayrollSummarySerializer,
     AllowanceTypeSerializer,
     DeductionTypeSerializer,
+    PayrollProfileSerializer,
+    StatutoryProfileSerializer,
+    EmployeeBankAccountSerializer,
 )
+from shared.domain.exceptions import AuthorizationError, DomainException
+
+_configuration = PayrollConfigurationService()
+_payslips = PayslipAccessService()
+_employee_data = EmployeePayrollDataService()
 
 
 # ============================================================
@@ -60,17 +63,13 @@ class TaxBracketListView(APIView):
 
     def get(self, request):
         """List all tax brackets."""
-        currency = request.query_params.get("currency")
-
-        queryset = TaxBracketModel.objects.all().order_by(
-            "currency", "min_income", "-active_from"
-        )
-
-        if currency:
-            queryset = queryset.filter(currency=currency.upper())
-
-        serializer = TaxBracketSerializer(queryset, many=True)
-        return Response(serializer.data)
+        try:
+            brackets = _configuration.list_tax_brackets(
+                payroll_actor_from_request(request), request.query_params.get("currency")
+            )
+        except DomainException as e:
+            return error_response(e)
+        return Response(TaxBracketSerializer(brackets, many=True).data)
 
     def post(self, request):
         """Create a new tax bracket."""
@@ -78,21 +77,14 @@ class TaxBracketListView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        data = serializer.validated_data
-        bracket = TaxBracketModel.objects.create(
-            currency=data["currency"],
-            min_income=data["min_income"],
-            max_income=data.get("max_income"),
-            rate=data["rate"],
-            deduction=data["deduction"],
-            active_from=data["active_from"],
-            provider=data.get("provider", "")
-        )
+        try:
+            bracket = _configuration.create_tax_bracket(
+                payroll_actor_from_request(request), serializer.validated_data
+            )
+        except DomainException as e:
+            return error_response(e)
 
-        return Response(
-            TaxBracketSerializer(bracket).data,
-            status=status.HTTP_201_CREATED
-        )
+        return Response(TaxBracketSerializer(bracket).data, status=status.HTTP_201_CREATED)
 
 
 class TaxBracketDetailView(APIView):
@@ -101,44 +93,34 @@ class TaxBracketDetailView(APIView):
     def get(self, request, bracket_id):
         """Get a specific tax bracket."""
         try:
-            bracket = TaxBracketModel.objects.get(id=bracket_id)
-            return Response(TaxBracketSerializer(bracket).data)
-        except TaxBracketModel.DoesNotExist:
-            return Response(
-                {"error": "Tax bracket not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            bracket = _configuration.get_tax_bracket(payroll_actor_from_request(request), bracket_id)
+        except DomainException as e:
+            return error_response(e)
+        return Response(TaxBracketSerializer(bracket).data)
 
     def put(self, request, bracket_id):
         """Update a tax bracket."""
-        try:
-            bracket = TaxBracketModel.objects.get(id=bracket_id)
-        except TaxBracketModel.DoesNotExist:
-            return Response(
-                {"error": "Tax bracket not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
         serializer = CreateTaxBracketSerializer(data=request.data, partial=True)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        for key, value in serializer.validated_data.items():
-            setattr(bracket, key, value)
-        bracket.save()
-
+        try:
+            bracket = _configuration.update_tax_bracket(
+                payroll_actor_from_request(request), bracket_id, serializer.validated_data
+            )
+        except DomainException as e:
+            return error_response(e)
         return Response(TaxBracketSerializer(bracket).data)
 
     def delete(self, request, bracket_id):
         """Delete a tax bracket."""
         try:
-            TaxBracketModel.objects.filter(id=bracket_id).delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            _configuration.delete_tax_bracket(payroll_actor_from_request(request), bracket_id)
+        except AuthorizationError as e:
+            return error_response(e)
         except Exception as e:
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ============================================================
@@ -151,9 +133,11 @@ class ExchangeRateListView(APIView):
     def get(self, request):
         """List exchange rates (last 365 days by default)."""
         limit = int(request.query_params.get("limit", 365))
-        rates = DailyZiGRateToUSD.objects.all().order_by("-date")[:limit]
-        serializer = ExchangeRateSerializer(rates, many=True)
-        return Response(serializer.data)
+        try:
+            rates = _configuration.list_exchange_rates(payroll_actor_from_request(request), limit)
+        except DomainException as e:
+            return error_response(e)
+        return Response(ExchangeRateSerializer(rates, many=True).data)
 
     def post(self, request):
         """Create a new exchange rate."""
@@ -162,25 +146,14 @@ class ExchangeRateListView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         data = serializer.validated_data
-        rate_date = data["date"]
-        zig_rate = data["zigRate"]
-
-        # Check if rate exists for this date
-        existing = DailyZiGRateToUSD.objects.filter(date=rate_date).first()
-        if existing:
-            existing.average = zig_rate
-            existing.save()
-            rate = existing
-        else:
-            rate = DailyZiGRateToUSD.objects.create(
-                date=rate_date,
-                average=zig_rate
+        try:
+            rate = _configuration.save_exchange_rate(
+                payroll_actor_from_request(request), data["date"], data["zigRate"]
             )
+        except DomainException as e:
+            return error_response(e)
 
-        return Response(
-            ExchangeRateSerializer(rate).data,
-            status=status.HTTP_201_CREATED
-        )
+        return Response(ExchangeRateSerializer(rate).data, status=status.HTTP_201_CREATED)
 
 
 class ExchangeRateDetailView(APIView):
@@ -189,24 +162,20 @@ class ExchangeRateDetailView(APIView):
     def get(self, request, rate_id):
         """Get a specific exchange rate."""
         try:
-            rate = DailyZiGRateToUSD.objects.get(id=rate_id)
-            return Response(ExchangeRateSerializer(rate).data)
-        except DailyZiGRateToUSD.DoesNotExist:
-            return Response(
-                {"error": "Exchange rate not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            rate = _configuration.get_exchange_rate(payroll_actor_from_request(request), rate_id)
+        except DomainException as e:
+            return error_response(e)
+        return Response(ExchangeRateSerializer(rate).data)
 
     def delete(self, request, rate_id):
         """Delete an exchange rate."""
         try:
-            DailyZiGRateToUSD.objects.filter(id=rate_id).delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            _configuration.delete_exchange_rate(payroll_actor_from_request(request), rate_id)
+        except AuthorizationError as e:
+            return error_response(e)
         except Exception as e:
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class LatestExchangeRateView(APIView):
@@ -214,12 +183,10 @@ class LatestExchangeRateView(APIView):
 
     def get(self, request):
         """Get the most recent exchange rate."""
-        rate = DailyZiGRateToUSD.objects.order_by("-date").first()
-        if not rate:
-            return Response(
-                {"error": "No exchange rates available"},
-                status=status.HTTP_404_NOT_FOUND
-            )
+        try:
+            rate = _configuration.get_latest_exchange_rate(payroll_actor_from_request(request))
+        except DomainException as e:
+            return error_response(e)
         return Response(ExchangeRateSerializer(rate).data)
 
 
@@ -247,15 +214,14 @@ class PayslipListView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        payslips = PayrollModel.objects.filter(
-            period__year=period.year,
-            period__month=period.month
-        ).select_related("employee", "employee__department").order_by(
-            "employee__employee_id"
-        )
+        try:
+            payslips = _payslips.list_payslips(
+                payroll_actor_from_request(request), period.year, period.month
+            )
+        except DomainException as e:
+            return error_response(e)
 
-        serializer = PayslipListSerializer(payslips, many=True)
-        return Response(serializer.data)
+        return Response(PayslipListSerializer(payslips, many=True).data)
 
     def post(self, request):
         """Process payroll for a period - generates a payslip for every active employee who doesn't already have one."""
@@ -286,7 +252,9 @@ class PayslipListView(APIView):
 
         try:
             command = ProcessPayrollCommand(period=period, processed_by=request.user.id)
-            result = service.process_payroll(command)
+            result = service.process_payroll(command, payroll_actor_from_request(request))
+        except AuthorizationError as e:
+            return error_response(e)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -308,14 +276,9 @@ class PayslipDetailView(APIView):
     def get(self, request, payslip_id):
         """Get detailed payslip information."""
         try:
-            payslip = PayrollModel.objects.select_related(
-                "employee", "employee__department"
-            ).get(id=payslip_id)
-        except PayrollModel.DoesNotExist:
-            return Response(
-                {"error": "Payslip not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            payslip = _payslips.get_payslip(payroll_actor_from_request(request), payslip_id)
+        except DomainException as e:
+            return error_response(e)
 
         # Build detailed response
         data = {
@@ -358,21 +321,9 @@ class PayslipApproveView(APIView):
     def post(self, request, payslip_id):
         """Approve (mark as processed) a payslip."""
         try:
-            payslip = PayrollModel.objects.get(id=payslip_id)
-        except PayrollModel.DoesNotExist:
-            return Response(
-                {"error": "Payslip not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        if payslip.status != "Draft":
-            return Response(
-                {"error": f"Cannot approve payslip in {payslip.status} status"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        payslip.status = "Processed"
-        payslip.save()
+            payslip = _payslips.approve_payslip(payroll_actor_from_request(request), payslip_id)
+        except DomainException as e:
+            return error_response(e)
 
         return Response({"id": payslip.id, "status": payslip.status})
 
@@ -401,35 +352,12 @@ class PayrollSummaryView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Aggregate payslip data
-        payslips = PayrollModel.objects.filter(
-            period__year=period.year,
-            period__month=period.month
-        )
-
-        if not payslips.exists():
-            return Response(
-                {"error": "No payroll data for this period"},
-                status=status.HTTP_404_NOT_FOUND
+        try:
+            summary = _payslips.get_period_summary(
+                payroll_actor_from_request(request), period.year, period.month
             )
-
-        from django.db.models import Sum, Count
-
-        summary = payslips.aggregate(
-            total_employees=Count("id"),
-            total_base_usd=Sum("base_salary_usd"),
-            total_base_zig=Sum("base_salary_zig"),
-            total_allowances_usd=Sum("total_allowances_usd"),
-            total_allowances_zig=Sum("total_allowances_zig"),
-            total_net_usd=Sum("net_salary_usd"),
-            total_net_zig=Sum("net_salary_zig"),
-            total_paye_usd=Sum("paye_usd"),
-            total_paye_zig=Sum("paye_zig"),
-            total_nssa_emp_usd=Sum("nssa_employee_usd"),
-            total_nssa_emp_zig=Sum("nssa_employee_zig"),
-            total_nssa_employer_usd=Sum("nssa_employer_usd"),
-            total_nssa_employer_zig=Sum("nssa_employer_zig"),
-        )
+        except DomainException as e:
+            return error_response(e)
 
         data = {
             "period": period.code,
@@ -469,9 +397,11 @@ class AllowanceTypeListView(APIView):
 
     def get(self, request):
         """List all allowance types."""
-        types = AllowanceTypeModel.objects.all().order_by("name")
-        serializer = AllowanceTypeSerializer(types, many=True)
-        return Response(serializer.data)
+        try:
+            types = _configuration.list_allowance_types(payroll_actor_from_request(request))
+        except DomainException as e:
+            return error_response(e)
+        return Response(AllowanceTypeSerializer(types, many=True).data)
 
     def post(self, request):
         """Create a new allowance type."""
@@ -479,11 +409,15 @@ class AllowanceTypeListView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        allowance_type = AllowanceTypeModel.objects.create(
-            name=serializer.validated_data["name"],
-            description=serializer.validated_data.get("description", ""),
-            amount=serializer.validated_data.get("default_amount", 0)
-        )
+        try:
+            allowance_type = _configuration.create_allowance_type(
+                payroll_actor_from_request(request),
+                name=serializer.validated_data["name"],
+                description=serializer.validated_data.get("description", ""),
+                amount=serializer.validated_data.get("default_amount", 0),
+            )
+        except DomainException as e:
+            return error_response(e)
 
         return Response(
             AllowanceTypeSerializer(allowance_type).data,
@@ -496,9 +430,11 @@ class DeductionTypeListView(APIView):
 
     def get(self, request):
         """List all deduction types."""
-        types = DeductionTypeModel.objects.all().order_by("name")
-        serializer = DeductionTypeSerializer(types, many=True)
-        return Response(serializer.data)
+        try:
+            types = _configuration.list_deduction_types(payroll_actor_from_request(request))
+        except DomainException as e:
+            return error_response(e)
+        return Response(DeductionTypeSerializer(types, many=True).data)
 
     def post(self, request):
         """Create a new deduction type."""
@@ -506,64 +442,84 @@ class DeductionTypeListView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        deduction_type = DeductionTypeModel.objects.create(
-            name=serializer.validated_data["name"],
-            description=serializer.validated_data.get("description", ""),
-            amount=serializer.validated_data.get("default_amount", 0)
-        )
+        try:
+            deduction_type = _configuration.create_deduction_type(
+                payroll_actor_from_request(request),
+                name=serializer.validated_data["name"],
+                description=serializer.validated_data.get("description", ""),
+                amount=serializer.validated_data.get("default_amount", 0),
+            )
+        except DomainException as e:
+            return error_response(e)
 
         return Response(
             DeductionTypeSerializer(deduction_type).data,
             status=status.HTTP_201_CREATED
         )
 
-from django.shortcuts import get_object_or_404
-from modules.payroll.infrastructure.persistence.models import PayrollProfile, StatutoryProfile, EmployeeBankAccount
-from modules.hr.infrastructure.persistence.models import Employees
-from .serializers import PayrollProfileSerializer, StatutoryProfileSerializer, EmployeeBankAccountSerializer
+
+# ============================================================
+# Per-employee payroll data (profile, statutory, bank accounts)
+# ============================================================
 
 class PayrollProfileDetailView(APIView):
     def get(self, request, employee_id):
-        profile, _ = PayrollProfile.objects.get_or_create(employee__uuid=employee_id)
-        serializer = PayrollProfileSerializer(profile)
-        return Response(serializer.data)
+        try:
+            profile = _employee_data.get_payroll_profile(payroll_actor_from_request(request), employee_id)
+        except DomainException as e:
+            return error_response(e)
+        return Response(PayrollProfileSerializer(profile).data)
 
     def put(self, request, employee_id):
-        profile = get_object_or_404(PayrollProfile, employee__uuid=employee_id)
         serializer = PayrollProfileSerializer(data=request.data)
-        if serializer.is_valid():
-            for k, v in serializer.validated_data.items():
-                setattr(profile, k, v)
-            profile.save()
-            return Response(PayrollProfileSerializer(profile).data)
-        return Response(serializer.errors, status=400)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+        try:
+            profile = _employee_data.update_payroll_profile(
+                payroll_actor_from_request(request), employee_id, serializer.validated_data
+            )
+        except DomainException as e:
+            return error_response(e)
+        return Response(PayrollProfileSerializer(profile).data)
+
 
 class StatutoryProfileDetailView(APIView):
     def get(self, request, employee_id):
-        profile, _ = StatutoryProfile.objects.get_or_create(employee__uuid=employee_id)
-        serializer = StatutoryProfileSerializer(profile)
-        return Response(serializer.data)
+        try:
+            profile = _employee_data.get_statutory_profile(payroll_actor_from_request(request), employee_id)
+        except DomainException as e:
+            return error_response(e)
+        return Response(StatutoryProfileSerializer(profile).data)
 
     def put(self, request, employee_id):
-        profile = get_object_or_404(StatutoryProfile, employee__uuid=employee_id)
         serializer = StatutoryProfileSerializer(data=request.data)
-        if serializer.is_valid():
-            for k, v in serializer.validated_data.items():
-                setattr(profile, k, v)
-            profile.save()
-            return Response(StatutoryProfileSerializer(profile).data)
-        return Response(serializer.errors, status=400)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+        try:
+            profile = _employee_data.update_statutory_profile(
+                payroll_actor_from_request(request), employee_id, serializer.validated_data
+            )
+        except DomainException as e:
+            return error_response(e)
+        return Response(StatutoryProfileSerializer(profile).data)
+
 
 class EmployeeBankAccountListView(APIView):
     def get(self, request, employee_id):
-        accounts = EmployeeBankAccount.objects.filter(employee__uuid=employee_id)
-        serializer = EmployeeBankAccountSerializer(accounts, many=True)
-        return Response(serializer.data)
+        try:
+            accounts = _employee_data.list_bank_accounts(payroll_actor_from_request(request), employee_id)
+        except DomainException as e:
+            return error_response(e)
+        return Response(EmployeeBankAccountSerializer(accounts, many=True).data)
 
     def post(self, request, employee_id):
-        employee = get_object_or_404(Employees, uuid=employee_id)
         serializer = EmployeeBankAccountSerializer(data=request.data)
-        if serializer.is_valid():
-            account = EmployeeBankAccount.objects.create(employee=employee, **serializer.validated_data)
-            return Response(EmployeeBankAccountSerializer(account).data, status=201)
-        return Response(serializer.errors, status=400)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+        try:
+            account = _employee_data.add_bank_account(
+                payroll_actor_from_request(request), employee_id, serializer.validated_data
+            )
+        except DomainException as e:
+            return error_response(e)
+        return Response(EmployeeBankAccountSerializer(account).data, status=201)

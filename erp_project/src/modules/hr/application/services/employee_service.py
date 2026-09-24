@@ -22,6 +22,10 @@ from modules.hr.application.interfaces import (
     SalaryDTO,
 )
 from modules.identity.domain.value_objects import PermissionSet
+from modules.payroll.application.authorization import (
+    PayrollActor,
+    PayrollAuthorizationPolicy,
+)
 from modules.hr.domain.entities import Employee
 from modules.hr.domain.value_objects import (
     EmergencyContact,
@@ -160,19 +164,68 @@ class EmployeeService:
             code="EMPLOYEE_ASSIGNMENT_NOT_AUTHORIZED",
         )
 
-    def create_employee(self, command: CreateEmployeeCommand) -> Employee:
+    @staticmethod
+    def _authorize_payroll_data_changes(
+        command: "CreateEmployeeCommand | UpdateEmployeeCommand",
+        actor_permissions: PermissionSet | None,
+        target_employee_id: int | None,
+    ) -> None:
+        """
+        Salary, bank and statutory data live in payroll's tables and are
+        governed by payroll's authorization policy (REM-02): reaching the hr
+        module and being allowed to edit an employee is not, by itself,
+        authority to write this data. Runs before anything is loaded or saved.
+
+        ``actor_permissions=None`` is treated as holding nothing.
+        """
+        salary = (
+            command.usd_salary is not None
+            or command.zig_salary is not None
+            or (isinstance(command, UpdateEmployeeCommand) and command.pay_frequency is not None)
+        )
+        bank = bool(command.bank_name or command.bank_account)
+        statutory = bool(
+            command.nssa_number
+            or command.zimra_number
+            or command.paye_number
+            or command.pension_fund
+            or (isinstance(command, UpdateEmployeeCommand) and command.pays_aids_levy is not None)
+        )
+        if not (salary or bank or statutory):
+            return
+
+        policy = PayrollAuthorizationPolicy()
+        actor = PayrollActor.from_permissions(actor_permissions or PermissionSet.empty())
+        if salary:
+            policy.authorize_manage_payroll_profile(actor, target_employee_id)
+        if bank:
+            policy.authorize_manage_bank_accounts(actor, target_employee_id)
+        if statutory:
+            policy.authorize_manage_statutory_profile(actor, target_employee_id)
+
+    def create_employee(
+        self,
+        command: CreateEmployeeCommand,
+        actor_permissions: PermissionSet | None = None,
+    ) -> Employee:
         """
         Create a new employee.
 
         Args:
             command: Create employee command
+            actor_permissions: The creating actor's permissions. Only consulted
+                when the command carries salary, bank or statutory data, which
+                then requires the matching payroll capabilities.
 
         Returns:
             Created employee
 
         Raises:
+            AuthorizationError: If payroll data is supplied without the
+                matching payroll capability.
             ValidationError: If validation fails
         """
+        self._authorize_payroll_data_changes(command, actor_permissions, None)
         # Validate email uniqueness
         if command.email and self._employees.exists_by_email(command.email):
             raise ValidationError(
@@ -301,6 +354,7 @@ class EmployeeService:
             ValidationError: If validation fails
         """
         self._authorize_assignment_change(command, actor_permissions)
+        self._authorize_payroll_data_changes(command, actor_permissions, command.employee_id)
 
         employee = self._employees.get_by_id(command.employee_id)
         if not employee:
@@ -419,32 +473,57 @@ class EmployeeService:
 
         return employee
 
-    def get_employee(self, employee_id: int) -> EmployeeDTO | None:
-        """Get employee DTO by ID."""
+    def get_employee(
+        self, employee_id: int, actor_permissions: PermissionSet | None = None
+    ) -> EmployeeDTO | None:
+        """
+        Get employee DTO by ID.
+
+        Salary/bank fields are populated only for an actor holding the matching
+        payroll view capability; otherwise they are None (see _to_dto).
+        """
         employee = self._employees.get_by_id(employee_id)
         if not employee:
             return None
-        return self._to_dto(employee)
+        return self._to_dto(employee, actor_permissions)
 
-    def get_employee_by_employee_id(self, employee_id: str) -> EmployeeDTO | None:
+    def get_employee_by_employee_id(
+        self, employee_id: str, actor_permissions: PermissionSet | None = None
+    ) -> EmployeeDTO | None:
         """Get employee DTO by employee number."""
         employee = self._employees.get_by_employee_id(employee_id)
         if not employee:
             return None
-        return self._to_dto(employee)
+        return self._to_dto(employee, actor_permissions)
 
-    def get_active_employees(self) -> list[EmployeeDTO]:
+    def get_active_employees(
+        self, actor_permissions: PermissionSet | None = None
+    ) -> list[EmployeeDTO]:
         """Get all active employees."""
         employees = self._employees.get_all(include_inactive=False)
-        return [self._to_dto(e) for e in employees]
+        return [self._to_dto(e, actor_permissions) for e in employees]
 
-    def get_employees_by_department(self, department_id: int) -> list[EmployeeDTO]:
+    def get_employees_by_department(
+        self, department_id: int, actor_permissions: PermissionSet | None = None
+    ) -> list[EmployeeDTO]:
         """Get employees in a department."""
         employees = self._employees.get_by_department(department_id)
-        return [self._to_dto(e) for e in employees]
+        return [self._to_dto(e, actor_permissions) for e in employees]
 
-    def get_employee_salary(self, employee_id: int) -> SalaryDTO | None:
-        """Get employee salary information."""
+    def get_employee_salary(
+        self, employee_id: int, actor_permissions: PermissionSet | None
+    ) -> SalaryDTO | None:
+        """
+        Get employee salary information.
+
+        Requires the payroll profile-view capability, checked before anything
+        about the employee is loaded (so a caller without it cannot tell
+        whether the employee exists).
+        """
+        PayrollAuthorizationPolicy().authorize_view_payroll_profile(
+            PayrollActor.from_permissions(actor_permissions or PermissionSet.empty()),
+            employee_id,
+        )
         employee = self._employees.get_by_id(employee_id)
         if not employee:
             return None
@@ -553,8 +632,50 @@ class EmployeeService:
             defaults={"leave_days_entitled": leave_days_entitled},
         )
 
-    def _to_dto(self, employee: Employee) -> EmployeeDTO:
-        """Convert employee entity to DTO."""
+    @staticmethod
+    def _permitted(authorize, actor: PayrollActor, employee_id: int) -> bool:
+        try:
+            authorize(actor, employee_id)
+        except AuthorizationError:
+            return False
+        return True
+
+    def _payroll_fields_for(
+        self, employee_id: int, actor_permissions: PermissionSet | None
+    ) -> dict:
+        """
+        Salary/bank values for a DTO, redacted to None unless the actor holds
+        the matching payroll view capability (REM-02). Nothing is read from
+        payroll's tables when neither is held. None permissions hold nothing.
+        """
+        policy = PayrollAuthorizationPolicy()
+        actor = PayrollActor.from_permissions(actor_permissions or PermissionSet.empty())
+        may_profile = self._permitted(policy.authorize_view_payroll_profile, actor, employee_id)
+        may_bank = self._permitted(policy.authorize_view_bank_accounts, actor, employee_id)
+
+        info = {
+            "usd_salary": None,
+            "zig_salary": None,
+            "pay_frequency": None,
+            "bank_name": None,
+            "bank_account": None,
+        }
+        if not (may_profile or may_bank):
+            return info
+
+        payroll_info = self._get_payroll_info(employee_id)
+        if may_profile:
+            for key in ("usd_salary", "zig_salary", "pay_frequency"):
+                info[key] = payroll_info[key]
+        if may_bank:
+            for key in ("bank_name", "bank_account"):
+                info[key] = payroll_info[key]
+        return info
+
+    def _to_dto(
+        self, employee: Employee, actor_permissions: PermissionSet | None = None
+    ) -> EmployeeDTO:
+        """Convert employee entity to DTO (payroll fields redacted by default)."""
         dept_name = None
         if employee.department_id:
             dept = self._departments.get_by_id(employee.department_id)
@@ -567,7 +688,7 @@ class EmployeeService:
             if pos:
                 pos_title = pos.title
 
-        payroll_info = self._get_payroll_info(employee.id)
+        payroll_info = self._payroll_fields_for(employee.id, actor_permissions)
 
         return EmployeeDTO(
             id=employee.id,
