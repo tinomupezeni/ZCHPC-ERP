@@ -44,6 +44,12 @@ class TestLegacyGrantsArePreserved:
         ["ADMIN", "HUMAN_RESOURCES", "ACCOUNTANT", "DEPARTMENT_MANAGER", "INTERN"],
     )
     def test_empty_role_receives_its_legacy_grants(self, role_name):
+        # hr.0019_seed_hr_role now seeds a real HUMAN_RESOURCES role as
+        # baseline data (REM-05), so this test - which wants to control the
+        # "before" state as an empty-permissions role by this exact name -
+        # must not assume the name is unclaimed. A no-op for the other
+        # four names.
+        Role.objects.filter(name=role_name).delete()
         role = Role.objects.create(name=role_name, permissions=[])
 
         run_seeding()

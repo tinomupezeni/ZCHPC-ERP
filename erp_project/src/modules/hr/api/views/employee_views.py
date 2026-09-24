@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from shared.domain.exceptions import NotFoundError, ValidationError
+from shared.domain.exceptions import AuthorizationError, NotFoundError, ValidationError
 
 from modules.hr.api.serializers import (
     CreateEmployeeRequestSerializer,
@@ -16,6 +16,7 @@ from modules.hr.api.serializers import (
     SalarySerializer,
     UpdateEmployeeRequestSerializer,
 )
+from modules.hr.application.authorization import resolve_actor_permissions
 from modules.hr.application.services import (
     CreateEmployeeCommand,
     EmployeeService,
@@ -146,13 +147,14 @@ class EmployeeDetailView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         service = get_employee_service()
+        actor_permissions = resolve_actor_permissions(request.user)
 
         try:
             command = UpdateEmployeeCommand(
                 employee_id=employee_id,
                 **serializer.validated_data,
             )
-            employee = service.update_employee(command)
+            employee = service.update_employee(command, actor_permissions=actor_permissions)
 
             response_data = {
                 "id": employee.id,
@@ -165,6 +167,11 @@ class EmployeeDetailView(APIView):
 
             return Response(response_data)
 
+        except AuthorizationError as e:
+            return Response(
+                {"error": e.message, "code": e.code},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         except NotFoundError as e:
             return Response(
                 {"error": str(e)},

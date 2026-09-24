@@ -9,10 +9,11 @@ from uuid import UUID
 
 from django.db import transaction
 
-from shared.domain.exceptions import ValidationError, NotFoundError
+from shared.domain.exceptions import AuthorizationError, ValidationError, NotFoundError
 from shared.domain.value_objects import Email, NationalId, PhoneNumber, EmployeeId
 from shared.infrastructure import EventBus
 
+from modules.hr.application.authorization import EmployeeManagementPermissions
 from modules.hr.application.interfaces import (
     IEmployeeRepository,
     IDepartmentRepository,
@@ -20,6 +21,7 @@ from modules.hr.application.interfaces import (
     EmployeeDTO,
     SalaryDTO,
 )
+from modules.identity.domain.value_objects import PermissionSet
 from modules.hr.domain.entities import Employee
 from modules.hr.domain.value_objects import (
     EmergencyContact,
@@ -127,6 +129,36 @@ class EmployeeService:
         self._departments = department_repository
         self._positions = position_repository
         self._event_bus = event_bus or EventBus.get_instance()
+
+    @staticmethod
+    def _authorize_assignment_change(
+        command: UpdateEmployeeCommand, actor_permissions: PermissionSet
+    ) -> None:
+        """
+        Require EmployeeManagementPermissions.MANAGE_ASSIGNMENTS before a
+        role_id/department_id change is allowed to proceed.
+
+        Reaching this service at all already means the caller passed
+        RBACMiddleware's coarse "does this role hold anything in the hr
+        module" gate - that gate answers a different, coarser question (may
+        this actor reach hr routes at all) and was never meant to be the
+        boundary for a specific, sensitive field change. This is the
+        boundary for that; every other field on UpdateEmployeeCommand is
+        unaffected.
+        """
+        if command.role_id is None and command.department_id is None:
+            return
+
+        if actor_permissions.has_permission(
+            EmployeeManagementPermissions.MANAGE_ASSIGNMENTS
+        ):
+            return
+
+        raise AuthorizationError(
+            "Changing an employee's role or department requires the "
+            f"'{EmployeeManagementPermissions.MANAGE_ASSIGNMENTS}' permission.",
+            code="EMPLOYEE_ASSIGNMENT_NOT_AUTHORIZED",
+        )
 
     def create_employee(self, command: CreateEmployeeCommand) -> Employee:
         """
@@ -243,20 +275,33 @@ class EmployeeService:
 
         return employee
 
-    def update_employee(self, command: UpdateEmployeeCommand) -> Employee:
+    def update_employee(
+        self, command: UpdateEmployeeCommand, actor_permissions: PermissionSet
+    ) -> Employee:
         """
         Update an existing employee.
 
         Args:
             command: Update employee command
+            actor_permissions: The permissions held by the employee making
+                this request, per ``hr.Role.permissions`` (see
+                ``modules.identity.infrastructure.route_access
+                .permission_set_for_user``). Required so this method - not
+                just the coarse per-module HTTP gate - can enforce who may
+                reassign an employee's role or department.
 
         Returns:
             Updated employee
 
         Raises:
+            AuthorizationError: If the command changes role_id or
+                department_id and actor_permissions does not include
+                EmployeeManagementPermissions.MANAGE_ASSIGNMENTS.
             NotFoundError: If employee not found
             ValidationError: If validation fails
         """
+        self._authorize_assignment_change(command, actor_permissions)
+
         employee = self._employees.get_by_id(command.employee_id)
         if not employee:
             raise NotFoundError(f"Employee with ID {command.employee_id} not found")

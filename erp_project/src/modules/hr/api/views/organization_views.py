@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from shared.domain.exceptions import NotFoundError, ValidationError
+from shared.domain.exceptions import AuthorizationError, NotFoundError, ValidationError
 
 from modules.hr.api.serializers import (
     CreateDepartmentRequestSerializer,
@@ -17,13 +17,17 @@ from modules.hr.api.serializers import (
     UpdateDepartmentRequestSerializer,
     UpdatePositionRequestSerializer,
 )
+from modules.hr.application.authorization import resolve_actor_permissions
 from modules.hr.application.services import (
     CreateDepartmentCommand,
     CreatePositionCommand,
+    CreateRoleCommand,
     DepartmentService,
     PositionService,
+    RoleService,
     UpdateDepartmentCommand,
     UpdatePositionCommand,
+    UpdateRoleCommand,
 )
 from modules.hr.infrastructure.persistence.department_repository import DjangoDepartmentRepository
 from modules.hr.infrastructure.persistence.employee_repository import DjangoEmployeeRepository
@@ -394,31 +398,25 @@ class RoleListCreateView(APIView):
 
     def post(self, request):
         """Create a new role."""
-        from modules.hr.infrastructure.persistence.models import Role
-
-        name = request.data.get("name")
-        display_name = request.data.get("display_name", name)
-        description = request.data.get("description", "")
-        permissions = request.data.get("permissions", [])
-
-        if not name:
-            return Response(
-                {"error": "Name is required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if Role.objects.filter(name=name).exists():
-            return Response(
-                {"error": f"Role with name '{name}' already exists"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        role = Role.objects.create(
-            name=name,
-            display_name=display_name,
-            description=description,
-            permissions=permissions,
+        command = CreateRoleCommand(
+            name=request.data.get("name"),
+            display_name=request.data.get("display_name"),
+            description=request.data.get("description", ""),
+            permissions=request.data.get("permissions"),
         )
+
+        try:
+            role = RoleService().create_role(command, resolve_actor_permissions(request.user))
+        except AuthorizationError as e:
+            return Response(
+                {"error": e.message, "code": e.code},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except ValidationError as e:
+            return Response(
+                {"error": e.message, "code": e.code},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         return Response(
             {
@@ -472,26 +470,27 @@ class RoleDetailView(APIView):
 
     def _update(self, request, role_id: int):
         """Handle role update."""
-        from modules.hr.infrastructure.persistence.models import Role
+        command = UpdateRoleCommand(
+            role_id=role_id,
+            name=request.data.get("name"),
+            display_name=request.data.get("display_name"),
+            description=request.data.get("description"),
+            permissions=request.data.get("permissions"),
+            permissions_provided="permissions" in request.data,
+        )
 
         try:
-            role = Role.objects.get(id=role_id)
-        except Role.DoesNotExist:
+            role = RoleService().update_role(command, resolve_actor_permissions(request.user))
+        except AuthorizationError as e:
             return Response(
-                {"error": "Role not found"},
+                {"error": e.message, "code": e.code},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except NotFoundError as e:
+            return Response(
+                {"error": str(e)},
                 status=status.HTTP_404_NOT_FOUND,
             )
-
-        if "name" in request.data:
-            role.name = request.data["name"]
-        if "display_name" in request.data:
-            role.display_name = request.data["display_name"]
-        if "description" in request.data:
-            role.description = request.data["description"]
-        if "permissions" in request.data:
-            role.permissions = request.data["permissions"]
-
-        role.save()
 
         return Response({
             "id": role.id,
@@ -503,14 +502,17 @@ class RoleDetailView(APIView):
 
     def delete(self, request, role_id: int):
         """Delete a role."""
-        from modules.hr.infrastructure.persistence.models import Role
-
         try:
-            role = Role.objects.get(id=role_id)
-            role.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        except Role.DoesNotExist:
+            RoleService().delete_role(role_id, resolve_actor_permissions(request.user))
+        except AuthorizationError as e:
             return Response(
-                {"error": "Role not found"},
+                {"error": e.message, "code": e.code},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except NotFoundError as e:
+            return Response(
+                {"error": str(e)},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
