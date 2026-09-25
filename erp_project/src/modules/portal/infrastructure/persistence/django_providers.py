@@ -444,69 +444,66 @@ class DjangoRecruitmentProvider(IRecruitmentProvider):
         except Job.DoesNotExist:
             return None
 
+    # Applying and status lookup go through the Recruitment application
+    # service - the single implementation of the public careers rules
+    # (applicant matching, same-job updates, never rewriting a Candidate from
+    # an anonymous request, no existence disclosure on lookup). REM-04.
+
+    @staticmethod
+    def _application_service():
+        from modules.recruitment.application.services import ApplicationService
+        from modules.recruitment.infrastructure.persistence.django_application_repository import (
+            DjangoApplicationRepository,
+        )
+        from modules.recruitment.infrastructure.persistence.django_candidate_repository import (
+            DjangoCandidateRepository,
+        )
+        from modules.recruitment.infrastructure.persistence.django_job_repository import (
+            DjangoJobRepository,
+        )
+
+        return ApplicationService(
+            application_repository=DjangoApplicationRepository(),
+            candidate_repository=DjangoCandidateRepository(),
+            job_repository=DjangoJobRepository(),
+        )
+
     def apply_for_job(
         self,
         job_id: int,
         candidate_data: dict,
     ) -> int:
-        from modules.recruitment.infrastructure.persistence.models import Candidate, JobApplication
-        from django.db import transaction
+        from modules.recruitment.application.services import SubmitApplicationCommand
 
-        with transaction.atomic():
-            # Get or create candidate
-            candidate, _ = Candidate.objects.update_or_create(
+        date_of_birth = candidate_data.get("date_of_birth")
+        result = self._application_service().submit_application(
+            SubmitApplicationCommand(
+                job_id=job_id,
                 national_id=candidate_data["national_id"],
-                defaults={
-                    "first_name": candidate_data["first_name"],
-                    "last_name": candidate_data["last_name"],
-                    "email": candidate_data["email"],
-                    "phone": candidate_data["phone"],
-                    "date_of_birth": candidate_data.get("date_of_birth"),
-                    "qualifications": candidate_data.get("qualifications", ""),
-                    "experience": candidate_data.get("experience", ""),
-                },
+                first_name=candidate_data["first_name"],
+                last_name=candidate_data["last_name"],
+                email=candidate_data["email"],
+                phone=candidate_data.get("phone") or "",
+                date_of_birth=str(date_of_birth) if date_of_birth else None,
+                qualifications=candidate_data.get("qualifications") or "",
+                experience=candidate_data.get("experience") or "",
+                cover_letter=candidate_data.get("cover_letter") or "",
             )
-
-            # Check if already applied
-            if JobApplication.objects.filter(
-                job_id=job_id,
-                candidate=candidate,
-            ).exists():
-                raise ValueError("You have already applied for this position")
-
-            # Create application
-            application = JobApplication.objects.create(
-                job_id=job_id,
-                candidate=candidate,
-                cover_letter=candidate_data.get("cover_letter", ""),
-                status="Pending",
-            )
-
-            return application.id
+        )
+        return result.application.id
 
     def check_application_status(
         self,
         national_id: str,
     ) -> List[dict]:
-        from modules.recruitment.infrastructure.persistence.models import Candidate, JobApplication
-
-        try:
-            candidate = Candidate.objects.get(national_id=national_id)
-        except Candidate.DoesNotExist:
-            return []
-
-        applications = JobApplication.objects.filter(
-            candidate=candidate,
-        ).select_related("job")
-
         return [
             {
                 "job_id": app.job_id,
-                "job_title": app.job.title,
+                "job_title": app.job_title,
                 "applied_at": app.applied_at.isoformat(),
                 "status": app.status,
             }
-            for app in applications
+            for app in self._application_service().lookup_application_status(national_id)
         ]
 
 

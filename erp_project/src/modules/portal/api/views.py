@@ -4,7 +4,7 @@ API views for the portal module.
 
 from datetime import date
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -21,6 +21,7 @@ from modules.portal.application.services import (
     PortalPayslipService,
     CareersService,
 )
+from modules.recruitment.api.throttles import RecruitmentApplyThrottle, RecruitmentStatusThrottle
 from modules.portal.infrastructure.persistence.django_providers import (
     DjangoEmployeeProvider,
     DjangoAttendanceProvider,
@@ -525,6 +526,7 @@ def public_job_detail(request: Request, job_id: int) -> Response:
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@throttle_classes([RecruitmentApplyThrottle])
 def public_job_apply(request: Request, job_id: int) -> Response:
     """Apply for a job (public)."""
     serializer = JobApplicationSerializer(data=request.data)
@@ -550,6 +552,7 @@ def public_job_apply(request: Request, job_id: int) -> Response:
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@throttle_classes([RecruitmentStatusThrottle])
 def public_application_status(request: Request) -> Response:
     """Check application status by national ID (public)."""
     national_id = request.data.get("national_id")

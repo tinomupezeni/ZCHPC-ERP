@@ -4,6 +4,7 @@ Django ORM implementation of ICandidateRepository.
 
 from typing import Sequence
 
+from modules.recruitment.infrastructure.persistence._save import insert_or_update
 from modules.recruitment.infrastructure.persistence.models import Candidate as CandidateModel
 
 from modules.recruitment.application.interfaces import ICandidateRepository
@@ -43,10 +44,11 @@ class DjangoCandidateRepository(ICandidateRepository):
         return [self._to_entity(model) for model in queryset]
 
     def save(self, candidate: Candidate) -> Candidate:
-        """Save candidate."""
-        model, created = CandidateModel.objects.update_or_create(
-            id=candidate.id,
-            defaults={
+        """Insert a new candidate (id None) or update its existing row."""
+        model = insert_or_update(
+            CandidateModel,
+            candidate.id,
+            {
                 "first_name": candidate.first_name,
                 "last_name": candidate.last_name,
                 "email": candidate.email,
@@ -57,25 +59,14 @@ class DjangoCandidateRepository(ICandidateRepository):
                 "qualifications": candidate.qualifications,
                 "experience": candidate.experience,
                 "notes": candidate.notes,
+                "resume": candidate.resume_path or None,
             },
         )
-        # Handle resume separately if needed
-        if candidate.resume_path and not created:
-            # Only update resume if it changed
-            if model.resume.name != candidate.resume_path:
-                model.resume = candidate.resume_path
-                model.save()
-
         return self._to_entity(model)
 
     def delete(self, candidate_id: int) -> None:
         """Delete candidate."""
         CandidateModel.objects.filter(id=candidate_id).delete()
-
-    def get_next_id(self) -> int:
-        """Get next available ID."""
-        last = CandidateModel.objects.order_by("-id").first()
-        return (last.id + 1) if last else 1
 
     def _to_entity(self, model: CandidateModel) -> Candidate:
         """Convert Django model to domain entity."""

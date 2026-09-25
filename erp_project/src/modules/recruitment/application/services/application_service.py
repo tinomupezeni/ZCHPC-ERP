@@ -4,16 +4,21 @@ Application service for job applications.
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Sequence
+from typing import Any, Sequence
 
 from shared.domain.exceptions import NotFoundError, ValidationError
 
+from modules.recruitment.application.authorization import (
+    RecruitmentActor,
+    RecruitmentAuthorizationPolicy,
+)
 from modules.recruitment.application.interfaces import (
     ApplicationDTO,
     ApplicationStatusDTO,
     IApplicationRepository,
     ICandidateRepository,
     IJobRepository,
+    IResumeStorage,
 )
 from modules.recruitment.domain.entities import Application, Candidate
 from modules.recruitment.domain.events import (
@@ -30,7 +35,11 @@ from modules.recruitment.domain.value_objects import ApplicationStatus
 
 @dataclass
 class SubmitApplicationCommand:
-    """Command to submit a job application."""
+    """
+    Command to submit (or resubmit) a job application from the public
+    careers flow. The caller is anonymous: nothing here is trusted as proof
+    of who the applicant is.
+    """
 
     job_id: int
     # Candidate info - can be new or existing
@@ -44,7 +53,9 @@ class SubmitApplicationCommand:
     qualifications: str = ""
     experience: str = ""
     cover_letter: str = ""
-    resume_path: str | None = None
+    # The uploaded file itself; it is only stored once the submission has
+    # been accepted, so a refused submission leaves nothing behind.
+    resume_file: Any = None
 
 
 @dataclass
@@ -55,9 +66,35 @@ class UpdateApplicationStatusCommand:
     new_status: str
 
 
+@dataclass(frozen=True)
+class SubmissionResult:
+    """Outcome of a public submission: the application, and whether it is new."""
+
+    application: ApplicationDTO
+    created: bool
+
+
+APPLICATION_DECIDED = (
+    "This application has already been decided and can no longer be changed. "
+    "Please contact HR if you need to discuss it."
+)
+
+APPLICANT_IDENTITY_CONFLICT = (
+    "These details don't match our records for a previous application. "
+    "If you have applied before, use the same ID number and email address "
+    "you used then, or contact HR."
+)
+
+
 class ApplicationService:
     """
     Application service for job application operations.
+
+    Internal operations (viewing applications, changing their status) take
+    the acting RecruitmentActor and are authorized (REM-04) before anything is
+    read or changed. The public careers operations - submit_application,
+    has_applied, lookup_application_status - take no actor: they are public by
+    design, and each discloses or changes only what that workflow needs.
     """
 
     def __init__(
@@ -65,110 +102,129 @@ class ApplicationService:
         application_repository: IApplicationRepository,
         candidate_repository: ICandidateRepository,
         job_repository: IJobRepository,
+        resume_storage: IResumeStorage | None = None,
+        authorization_policy: RecruitmentAuthorizationPolicy | None = None,
     ) -> None:
         self._app_repo = application_repository
         self._candidate_repo = candidate_repository
         self._job_repo = job_repository
+        self._resume_storage = resume_storage
+        self._policy = authorization_policy or RecruitmentAuthorizationPolicy()
         self._processor = ApplicationProcessor()
 
-    def submit_application(
-        self, command: SubmitApplicationCommand
-    ) -> ApplicationDTO:
-        """Submit a new job application."""
-        # Verify job exists and is open
+    # ------------------------------------------------------------------
+    # Public careers operations
+    # ------------------------------------------------------------------
+
+    def submit_application(self, command: SubmitApplicationCommand) -> SubmissionResult:
+        """
+        Submit a job application, or update the applicant's existing
+        application for the same job.
+
+        Matching an applicant, updating their application and modifying the
+        canonical Candidate record are deliberately separate:
+
+        - An existing Candidate is the same applicant only when *both* the
+          national ID and the email agree with what is on record. Any other
+          overlap is refused without saying whose record it collided with.
+        - An existing Candidate record is never modified here. What the
+          applicant sends (contact details, qualifications, experience,
+          resume, cover letter) is recorded on the application itself.
+        - Same applicant + same job updates that application; its review
+          status is left alone. Once the application has been decided (Hired
+          or Rejected) it is part of the hiring record and is refused instead.
+        """
         job = self._job_repo.get_by_id(command.job_id)
         if not job:
             raise NotFoundError(f"Job with ID {command.job_id} not found")
         if not job.is_open:
             raise ValidationError("Cannot apply to a closed job")
 
-        # Find or create candidate
-        candidate = None
-        if command.national_id:
-            candidate = self._candidate_repo.get_by_national_id(command.national_id)
-        if not candidate and command.email:
-            candidate = self._candidate_repo.get_by_email(command.email)
+        national_id = _normalize_national_id(command.national_id)
+        candidate = self._match_existing_applicant(national_id, command.email)
 
-        if candidate:
-            # Update existing candidate
-            candidate.update_contact(
-                email=command.email or None,
-                phone=command.phone or None,
-                address=command.address or None,
+        existing = None
+        if candidate is not None:
+            existing = self._app_repo.get_by_job_and_candidate(
+                job_id=command.job_id,
+                candidate_id=candidate.id,
             )
-            if command.qualifications or command.experience:
-                candidate.update_qualifications(
-                    qualifications=command.qualifications or None,
-                    experience=command.experience or None,
-                )
-            if command.resume_path:
-                candidate.set_resume(command.resume_path)
-            candidate = self._candidate_repo.save(candidate)
-        else:
-            # Create new candidate
-            from datetime import date as date_type
+        if existing is not None and existing.is_decided:
+            # Checked before the resume is stored, so a refusal leaves no file.
+            raise ValidationError(APPLICATION_DECIDED, code="APPLICATION_DECIDED")
 
-            dob = None
-            if command.date_of_birth:
-                try:
-                    dob = date_type.fromisoformat(command.date_of_birth)
-                except ValueError:
-                    pass
+        resume_path = self._store_resume(command.resume_file)
 
-            candidate = Candidate(
-                id=self._candidate_repo.get_next_id(),
-                first_name=command.first_name,
-                last_name=command.last_name,
-                email=command.email,
-                national_id=command.national_id,
+        if candidate is None:
+            candidate = self._create_candidate(command, national_id, resume_path)
+
+        if existing is not None:
+            existing.update_submission(
+                cover_letter=command.cover_letter,
                 phone=command.phone,
                 address=command.address,
-                date_of_birth=dob,
                 qualifications=command.qualifications,
                 experience=command.experience,
-                resume_path=command.resume_path,
+                resume_path=resume_path,
             )
-            candidate.add_domain_event(
-                CandidateCreated(
-                    candidate_id=candidate.id,
-                    email=candidate.email,
-                    national_id=candidate.national_id,
-                    created_at=datetime.now(),
-                )
-            )
-            candidate = self._candidate_repo.save(candidate)
+            saved = self._app_repo.save(existing)
+            return SubmissionResult(self._to_dto(saved, job.title, candidate), created=False)
 
-        # Check for duplicate application
-        existing = self._app_repo.get_by_job_and_candidate(
-            job_id=command.job_id,
-            candidate_id=candidate.id,
-        )
-        if existing:
-            raise ValidationError("You have already applied to this job")
-
-        # Create application
         application = Application(
-            id=self._app_repo.get_next_id(),
+            id=None,  # assigned by the database on insert
             job_id=command.job_id,
             candidate_id=candidate.id,
             cover_letter=command.cover_letter,
+            resume_path=resume_path,
+            phone=command.phone,
+            address=command.address,
+            qualifications=command.qualifications,
+            experience=command.experience,
         )
-        application.add_domain_event(
+        saved = self._app_repo.save(application)
+        saved.add_domain_event(
             ApplicationReceived(
-                application_id=application.id,
-                job_id=application.job_id,
-                candidate_id=application.candidate_id,
+                application_id=saved.id,
+                job_id=saved.job_id,
+                candidate_id=saved.candidate_id,
                 applied_at=datetime.now(),
             )
         )
+        return SubmissionResult(self._to_dto(saved, job.title, candidate), created=True)
 
-        saved = self._app_repo.save(application)
-        return self._to_dto(saved, job.title, candidate)
+    def has_applied(self, national_id: str, job_id: int) -> bool:
+        """Whether whoever holds this national ID has applied to this job."""
+        normalized = _normalize_national_id(national_id)
+        candidate = self._candidate_repo.get_by_national_id(normalized) if normalized else None
+        if not candidate:
+            return False
+        return self._app_repo.get_by_job_and_candidate(
+            job_id=job_id,
+            candidate_id=candidate.id,
+        ) is not None
+
+    def lookup_application_status(self, national_id: str) -> Sequence[ApplicationStatusDTO]:
+        """
+        Public status lookup by national ID.
+
+        An unknown ID and a known ID with no applications give the same empty
+        result, so the lookup does not confirm whether a candidate exists.
+        """
+        normalized = _normalize_national_id(national_id)
+        candidate = self._candidate_repo.get_by_national_id(normalized) if normalized else None
+        if not candidate:
+            return []
+        return self._status_dtos(candidate.id)
+
+    # ------------------------------------------------------------------
+    # Internal operations
+    # ------------------------------------------------------------------
 
     def update_status(
-        self, command: UpdateApplicationStatusCommand
+        self, command: UpdateApplicationStatusCommand, actor: RecruitmentActor
     ) -> ApplicationDTO:
         """Update application status."""
+        self._policy.authorize_review_applications(actor)
         application = self._app_repo.get_by_id(command.application_id)
         if not application:
             raise NotFoundError(
@@ -271,8 +327,9 @@ class ApplicationService:
             # A broken email config should never block a status update.
             pass
 
-    def get_application(self, application_id: int) -> ApplicationDTO:
+    def get_application(self, application_id: int, actor: RecruitmentActor) -> ApplicationDTO:
         """Get an application by ID."""
+        self._policy.authorize_view_applications(actor)
         application = self._app_repo.get_by_id(application_id)
         if not application:
             raise NotFoundError(
@@ -292,8 +349,11 @@ class ApplicationService:
         self,
         job_id: int,
         status: str | None = None,
+        *,
+        actor: RecruitmentActor,
     ) -> Sequence[ApplicationDTO]:
         """Get all applications for a job."""
+        self._policy.authorize_view_applications(actor)
         app_status = ApplicationStatus.from_string(status) if status else None
         applications = self._app_repo.get_by_job(job_id, status=app_status)
 
@@ -310,12 +370,96 @@ class ApplicationService:
     def get_candidate_applications(
         self,
         candidate_id: int,
+        actor: RecruitmentActor,
     ) -> Sequence[ApplicationStatusDTO]:
-        """Get all applications for a candidate."""
-        applications = self._app_repo.get_by_candidate(candidate_id)
+        """Get all applications for a candidate (internal)."""
+        self._policy.authorize_view_applications(actor)
+        return self._status_dtos(candidate_id)
 
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _match_existing_applicant(self, national_id: str | None, email: str) -> Candidate | None:
+        """
+        The existing Candidate this submission belongs to, or None if the
+        applicant is new.
+
+        Raises ValidationError when the submission overlaps an existing
+        Candidate (by national ID or email) without agreeing with it on both -
+        e.g. someone else's national ID with a different email. The message
+        is generic: it never reveals whose record was hit.
+        """
+        by_national_id = (
+            self._candidate_repo.get_by_national_id(national_id) if national_id else None
+        )
+        by_email = self._candidate_repo.get_by_email(email) if email else None
+
+        candidate = by_national_id or by_email
+        if candidate is None:
+            return None
+
+        same_record = (
+            by_national_id is None or by_email is None or by_national_id.id == by_email.id
+        )
+        same_identity = (
+            _normalize_national_id(candidate.national_id) == national_id
+            and (candidate.email or "").casefold() == (email or "").casefold()
+        )
+        if not (same_record and same_identity):
+            raise ValidationError(APPLICANT_IDENTITY_CONFLICT, code="APPLICANT_IDENTITY_CONFLICT")
+        return candidate
+
+    def _create_candidate(
+        self,
+        command: SubmitApplicationCommand,
+        national_id: str | None,
+        resume_path: str | None,
+    ) -> Candidate:
+        """A new applicant's first submission becomes their Candidate record."""
+        from datetime import date as date_type
+
+        dob = None
+        if command.date_of_birth:
+            try:
+                dob = date_type.fromisoformat(command.date_of_birth)
+            except ValueError:
+                pass
+
+        candidate = Candidate(
+            id=None,  # assigned by the database on insert
+            first_name=command.first_name,
+            last_name=command.last_name,
+            email=command.email,
+            national_id=national_id,
+            phone=command.phone,
+            address=command.address,
+            date_of_birth=dob,
+            qualifications=command.qualifications,
+            experience=command.experience,
+            resume_path=resume_path,
+        )
+        saved = self._candidate_repo.save(candidate)
+        saved.add_domain_event(
+            CandidateCreated(
+                candidate_id=saved.id,
+                email=saved.email,
+                national_id=saved.national_id,
+                created_at=datetime.now(),
+            )
+        )
+        return saved
+
+    def _store_resume(self, resume_file) -> str | None:
+        if resume_file is None:
+            return None
+        if self._resume_storage is None:
+            raise ValidationError("Resume uploads are not supported here")
+        return self._resume_storage.save(resume_file)
+
+    def _status_dtos(self, candidate_id: int) -> list[ApplicationStatusDTO]:
         results = []
-        for app in applications:
+        for app in self._app_repo.get_by_candidate(candidate_id):
             job = self._job_repo.get_by_id(app.job_id)
             results.append(
                 ApplicationStatusDTO(
@@ -325,33 +469,7 @@ class ApplicationService:
                     applied_at=app.applied_at,
                 )
             )
-
         return results
-
-    def check_application_by_national_id(
-        self,
-        national_id: str,
-        job_id: int,
-    ) -> dict:
-        """Check if a candidate has applied to a job by national ID."""
-        candidate = self._candidate_repo.get_by_national_id(national_id)
-        if not candidate:
-            return {
-                "candidate_exists": False,
-                "has_applied": False,
-            }
-
-        existing = self._app_repo.get_by_job_and_candidate(
-            job_id=job_id,
-            candidate_id=candidate.id,
-        )
-
-        return {
-            "candidate_exists": True,
-            "has_applied": existing is not None,
-            "candidate_id": candidate.id,
-            "candidate_name": candidate.full_name,
-        }
 
     def _to_dto(
         self,
@@ -372,3 +490,9 @@ class ApplicationService:
             applied_at=application.applied_at,
             updated_at=application.updated_at,
         )
+
+
+def _normalize_national_id(national_id: str | None) -> str | None:
+    """Blank national IDs are absent, not an empty-string identity."""
+    normalized = (national_id or "").strip()
+    return normalized or None

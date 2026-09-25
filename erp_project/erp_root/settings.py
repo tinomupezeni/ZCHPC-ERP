@@ -134,6 +134,26 @@ REST_FRAMEWORK = {
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+    # Rates for the views that opt into throttling (no global default). The
+    # anonymous careers endpoints (REM-04) use these via
+    # modules.recruitment.api.throttles. Counts live in the default cache.
+    "DEFAULT_THROTTLE_RATES": {
+        "recruitment_apply": os.environ.get("RECRUITMENT_APPLY_RATE", "30/hour"),
+        "recruitment_check": os.environ.get("RECRUITMENT_CHECK_RATE", "60/hour"),
+        "recruitment_status": os.environ.get("RECRUITMENT_STATUS_RATE", "60/hour"),
+    },
+    # How many trusted reverse proxies sit in front of Django; throttles use it
+    # to decide which address identifies the client. X-Forwarded-For is only
+    # trustworthy for the entries a trusted proxy appended, so:
+    #   0 (default) - clients connect directly: use REMOTE_ADDR and ignore
+    #                 X-Forwarded-For entirely (anyone can send that header).
+    #   1           - behind exactly one nginx: use the last X-Forwarded-For
+    #                 entry, the one nginx appends. Set DRF_NUM_PROXIES=1 only
+    #                 where Django is reachable *solely* through nginx, or a
+    #                 direct caller could forge that entry.
+    # Never leave this as None: DRF then keys throttles on the whole
+    # client-supplied header, and rotating it defeats every rate limit.
+    "NUM_PROXIES": int(os.environ.get("DRF_NUM_PROXIES") or 0),
 }
 
 TEMPLATES = [

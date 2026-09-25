@@ -8,6 +8,21 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from modules.identity.infrastructure.persistence.models import CustomUser
 
 
+@pytest.fixture(autouse=True)
+def _isolated_throttle_and_media(settings, tmp_path):
+    """
+    Throttle counters live in the default cache, so each test starts with a
+    clean budget; uploaded resumes go to a temp dir instead of the repo's
+    mediafiles/ (which earlier test runs polluted, and one file got committed).
+    """
+    from django.core.cache import cache
+
+    cache.clear()
+    settings.MEDIA_ROOT = str(tmp_path)
+    yield
+    cache.clear()
+
+
 @pytest.fixture
 def auth_client():
     """Create client authenticated with JWT bearer token."""

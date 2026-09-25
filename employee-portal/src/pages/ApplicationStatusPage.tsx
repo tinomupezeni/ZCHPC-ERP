@@ -35,7 +35,6 @@ const statusConfig: Record<
 export function ApplicationStatusPage() {
   const [idNumber, setIdNumber] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [candidateName, setCandidateName] = useState<string | null>(null);
   const [applications, setApplications] = useState<ApplicationStatus[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -50,14 +49,11 @@ export function ApplicationStatusPage() {
     try {
       setIsSearching(true);
       const result = await jobsService.getApplicationStatus(idNumber);
-      setCandidateName(result.candidate_name);
-      setApplications(result.applications);
+      setApplications(result);
       setHasSearched(true);
     } catch (err: any) {
-      if (err.response?.status === 404) {
-        setCandidateName(null);
-        setApplications([]);
-        setHasSearched(true);
+      if (err.response?.status === 429) {
+        toast.error('Too many lookups. Please wait a while and try again.');
       } else {
         toast.error('Failed to fetch application status');
       }
@@ -120,20 +116,11 @@ export function ApplicationStatusPage() {
       {/* Results */}
       {hasSearched && (
         <>
-          {candidateName && applications.length > 0 ? (
+          {applications.length > 0 ? (
             <div className="space-y-4">
-              <Card>
-                <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground">
-                    Showing applications for:
-                  </p>
-                  <p className="font-semibold text-lg">{candidateName}</p>
-                </CardContent>
-              </Card>
-
               <div className="space-y-4">
                 {applications.map((app) => (
-                  <Card key={app.id}>
+                  <Card key={app.job_id}>
                     <CardContent className="p-4">
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div className="flex items-start gap-3">
@@ -142,14 +129,9 @@ export function ApplicationStatusPage() {
                           </div>
                           <div>
                             <h3 className="font-semibold">{app.job_title}</h3>
-                            {app.job_department && (
-                              <p className="text-sm text-muted-foreground">
-                                {app.job_department}
-                              </p>
-                            )}
                             <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
                               <Calendar className="h-3 w-3" />
-                              Applied on {format(new Date(app.applied_on), 'MMMM d, yyyy')}
+                              Applied on {format(new Date(app.applied_at), 'MMMM d, yyyy')}
                             </p>
                           </div>
                         </div>
