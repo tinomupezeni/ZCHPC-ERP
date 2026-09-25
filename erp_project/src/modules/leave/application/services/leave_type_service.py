@@ -7,6 +7,10 @@ from typing import Sequence
 
 from shared.domain.exceptions import NotFoundError, ValidationError
 
+from modules.leave.application.authorization import (
+    LeaveActor,
+    LeaveAuthorizationPolicy,
+)
 from modules.leave.application.interfaces import ILeaveTypeRepository, LeaveTypeDTO
 from modules.leave.domain.entities import LeaveType
 from modules.leave.domain.events import LeaveTypeCreated
@@ -38,11 +42,17 @@ class LeaveTypeService:
     Handles use cases related to leave types.
     """
 
-    def __init__(self, leave_type_repository: ILeaveTypeRepository) -> None:
+    def __init__(
+        self,
+        leave_type_repository: ILeaveTypeRepository,
+        authorization_policy: LeaveAuthorizationPolicy | None = None,
+    ) -> None:
+        self._authz = authorization_policy or LeaveAuthorizationPolicy()
         self._repository = leave_type_repository
 
-    def create_leave_type(self, command: CreateLeaveTypeCommand) -> LeaveTypeDTO:
-        """Create a new leave type."""
+    def create_leave_type(self, command: CreateLeaveTypeCommand, actor: LeaveActor) -> LeaveTypeDTO:
+        """Create a new leave type (requires leave.type.manage)."""
+        self._authz.authorize_manage_types(actor)
         # Check for duplicate name
         existing = self._repository.get_by_name(command.name)
         if existing:
@@ -69,8 +79,9 @@ class LeaveTypeService:
         saved = self._repository.save(leave_type)
         return self._to_dto(saved)
 
-    def update_leave_type(self, command: UpdateLeaveTypeCommand) -> LeaveTypeDTO:
-        """Update an existing leave type."""
+    def update_leave_type(self, command: UpdateLeaveTypeCommand, actor: LeaveActor) -> LeaveTypeDTO:
+        """Update an existing leave type (requires leave.type.manage)."""
+        self._authz.authorize_manage_types(actor)
         leave_type = self._repository.get_by_id(command.leave_type_id)
         if not leave_type:
             raise NotFoundError(f"Leave type with ID {command.leave_type_id} not found")
@@ -108,8 +119,9 @@ class LeaveTypeService:
         leave_types = self._repository.get_all(include_inactive=include_inactive)
         return [self._to_dto(lt) for lt in leave_types]
 
-    def delete_leave_type(self, leave_type_id: int) -> None:
-        """Delete a leave type."""
+    def delete_leave_type(self, leave_type_id: int, actor: LeaveActor) -> None:
+        """Delete a leave type (requires leave.type.manage)."""
+        self._authz.authorize_manage_types(actor)
         leave_type = self._repository.get_by_id(leave_type_id)
         if not leave_type:
             raise NotFoundError(f"Leave type with ID {leave_type_id} not found")

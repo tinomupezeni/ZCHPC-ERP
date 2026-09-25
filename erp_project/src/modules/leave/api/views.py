@@ -9,8 +9,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from modules.identity.infrastructure.permissions import IsHRorAdmin
+from shared.domain.exceptions import DomainException
 
+from modules.leave.api.actors import leave_actor_from_request
+from modules.leave.api.errors import error_response
 from modules.leave.api.serializers import (
     AdjustLeaveBalanceRequestSerializer,
     AdminLeaveRequestResponseSerializer,
@@ -40,6 +42,9 @@ from modules.leave.application.services.leave_request_service import (
     CancelLeaveRequestCommand,
     ReviewLeaveRequestCommand,
     SubmitLeaveRequestCommand,
+)
+from modules.leave.application.services.leave_request_query_service import (
+    LeaveRequestQueryService,
 )
 from modules.leave.application.services.leave_type_service import (
     CreateLeaveTypeCommand,
@@ -85,15 +90,12 @@ def get_leave_request_service() -> LeaveRequestService:
     )
 
 
-def get_employee_id(user) -> int | None:
-    """Get employee ID from user."""
-    from modules.hr.infrastructure.persistence.models import Employees
+# Authorization (REM-03) is enforced in the leave application services, which
+# take the LeaveActor built here. Views only translate HTTP; every service call
+# catches DomainException through error_response *before* any broader handler,
+# so an AuthorizationError is never reported as a 400.
 
-    try:
-        employee = Employees.objects.get(user=user)
-        return employee.id
-    except Employees.DoesNotExist:
-        return None
+_NOT_LINKED = {"error": "User is not linked to an employee record"}
 
 
 # =============================================================================
@@ -125,11 +127,13 @@ class LeaveTypeListView(APIView):
         service = get_leave_type_service()
         try:
             command = CreateLeaveTypeCommand(**serializer.validated_data)
-            leave_type = service.create_leave_type(command)
+            leave_type = service.create_leave_type(command, leave_actor_from_request(request))
             return Response(
                 LeaveTypeResponseSerializer(leave_type).data,
                 status=status.HTTP_201_CREATED,
             )
+        except DomainException as e:
+            return error_response(e)
         except Exception as e:
             return Response(
                 {"error": str(e)},
@@ -168,11 +172,13 @@ class LeaveTypeDetailView(APIView):
                 leave_type_id=leave_type_id,
                 **serializer.validated_data,
             )
-            leave_type = service.update_leave_type(command)
+            leave_type = service.update_leave_type(command, leave_actor_from_request(request))
             return Response(
                 LeaveTypeResponseSerializer(leave_type).data,
                 status=status.HTTP_200_OK,
             )
+        except DomainException as e:
+            return error_response(e)
         except Exception as e:
             return Response(
                 {"error": str(e)},
@@ -183,8 +189,10 @@ class LeaveTypeDetailView(APIView):
         """Delete a leave type."""
         service = get_leave_type_service()
         try:
-            service.delete_leave_type(leave_type_id)
+            service.delete_leave_type(leave_type_id, leave_actor_from_request(request))
             return Response(status=status.HTTP_204_NO_CONTENT)
+        except DomainException as e:
+            return error_response(e)
         except Exception as e:
             return Response(
                 {"error": str(e)},
@@ -204,12 +212,10 @@ class LeaveBalanceListView(APIView):
 
     def get(self, request):
         """Get all leave balances for current employee."""
-        employee_id = get_employee_id(request.user)
+        actor = leave_actor_from_request(request)
+        employee_id = actor.employee_id
         if not employee_id:
-            return Response(
-                {"error": "User is not linked to an employee record"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response(_NOT_LINKED, status=status.HTTP_400_BAD_REQUEST)
 
         query_serializer = LeaveBalanceQuerySerializer(data=request.query_params)
         query_serializer.is_valid(raise_exception=True)
@@ -217,7 +223,10 @@ class LeaveBalanceListView(APIView):
         year = query_serializer.validated_data.get("year", date.today().year)
 
         service = get_leave_balance_service()
-        summary = service.get_all_balances(employee_id=employee_id, year=year)
+        try:
+            summary = service.get_all_balances(employee_id=employee_id, year=year, actor=actor)
+        except DomainException as e:
+            return error_response(e)
 
         return Response(
             LeaveBalanceSummaryResponseSerializer(summary).data,
@@ -231,24 +240,12 @@ class LeaveBalanceDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, balance_id: int):
-        """Get a specific leave balance."""
+        """Get a specific leave balance (own, or any with balance view_any)."""
         service = get_leave_balance_service()
-
-        # Use internal method to get balance
-        balance_repo = DjangoLeaveBalanceRepository()
-        balance = balance_repo.get_by_id(balance_id)
-
-        if not balance:
-            return Response(
-                {"error": "Leave balance not found"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        leave_type_repo = DjangoLeaveTypeRepository()
-        leave_type = leave_type_repo.get_by_id(balance.leave_type_id)
-        leave_type_name = leave_type.name if leave_type else "Unknown"
-
-        dto = service._to_dto(balance, leave_type_name)
+        try:
+            dto = service.get_balance_by_id(balance_id, leave_actor_from_request(request))
+        except DomainException as e:
+            return error_response(e)
         return Response(
             LeaveBalanceResponseSerializer(dto).data,
             status=status.HTTP_200_OK,
@@ -268,11 +265,13 @@ class LeaveBalanceAdminView(APIView):
         service = get_leave_balance_service()
         try:
             command = SetLeaveEntitlementCommand(**serializer.validated_data)
-            balance = service.create_or_update_balance(command)
+            balance = service.create_or_update_balance(command, leave_actor_from_request(request))
             return Response(
                 LeaveBalanceResponseSerializer(balance).data,
                 status=status.HTTP_201_CREATED,
             )
+        except DomainException as e:
+            return error_response(e)
         except Exception as e:
             return Response(
                 {"error": str(e)},
@@ -290,25 +289,21 @@ class LeaveBalanceAdjustView(APIView):
         serializer = AdjustLeaveBalanceRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        adjuster_id = get_employee_id(request.user)
-        if not adjuster_id:
-            return Response(
-                {"error": "User is not linked to an employee record"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
+        actor = leave_actor_from_request(request)
         service = get_leave_balance_service()
         try:
             command = AdjustLeaveBalanceCommand(
                 balance_id=balance_id,
-                adjusted_by_id=adjuster_id,
+                adjusted_by_id=actor.employee_id,
                 **serializer.validated_data,
             )
-            balance = service.adjust_balance(command)
+            balance = service.adjust_balance(command, actor)
             return Response(
                 LeaveBalanceResponseSerializer(balance).data,
                 status=status.HTTP_200_OK,
             )
+        except DomainException as e:
+            return error_response(e)
         except Exception as e:
             return Response(
                 {"error": str(e)},
@@ -330,11 +325,14 @@ class InitializeBalancesView(APIView):
             balances = service.initialize_balances_for_employee(
                 employee_id=employee_id,
                 year=year,
+                actor=leave_actor_from_request(request),
             )
             return Response(
                 [LeaveBalanceResponseSerializer(b).data for b in balances],
                 status=status.HTTP_201_CREATED,
             )
+        except DomainException as e:
+            return error_response(e)
         except Exception as e:
             return Response(
                 {"error": str(e)},
@@ -354,12 +352,10 @@ class LeaveRequestListView(APIView):
 
     def get(self, request):
         """Get leave requests for current employee."""
-        employee_id = get_employee_id(request.user)
+        actor = leave_actor_from_request(request)
+        employee_id = actor.employee_id
         if not employee_id:
-            return Response(
-                {"error": "User is not linked to an employee record"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response(_NOT_LINKED, status=status.HTTP_400_BAD_REQUEST)
 
         query_serializer = LeaveRequestQuerySerializer(data=request.query_params)
         query_serializer.is_valid(raise_exception=True)
@@ -377,11 +373,15 @@ class LeaveRequestListView(APIView):
             leave_status = status_map.get(status_str)
 
         service = get_leave_request_service()
-        requests = service.get_employee_requests(
-            employee_id=employee_id,
-            year=year,
-            status=leave_status,
-        )
+        try:
+            requests = service.get_employee_requests(
+                employee_id=employee_id,
+                actor=actor,
+                year=year,
+                status=leave_status,
+            )
+        except DomainException as e:
+            return error_response(e)
 
         return Response(
             [LeaveRequestResponseSerializer(r).data for r in requests],
@@ -390,12 +390,10 @@ class LeaveRequestListView(APIView):
 
     def post(self, request):
         """Submit a new leave request."""
-        employee_id = get_employee_id(request.user)
+        actor = leave_actor_from_request(request)
+        employee_id = actor.employee_id
         if not employee_id:
-            return Response(
-                {"error": "User is not linked to an employee record"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response(_NOT_LINKED, status=status.HTTP_400_BAD_REQUEST)
 
         serializer = SubmitLeaveRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -406,11 +404,13 @@ class LeaveRequestListView(APIView):
                 employee_id=employee_id,
                 **serializer.validated_data,
             )
-            leave_request = service.submit_leave_request(command)
+            leave_request = service.submit_leave_request(command, actor)
             return Response(
                 LeaveRequestResponseSerializer(leave_request).data,
                 status=status.HTTP_201_CREATED,
             )
+        except DomainException as e:
+            return error_response(e)
         except Exception as e:
             return Response(
                 {"error": str(e)},
@@ -420,22 +420,21 @@ class LeaveRequestListView(APIView):
 
 class AdminLeaveRequestListView(APIView):
     """
-    Admin/HR endpoint listing leave requests across all employees.
+    Leave requests across employees - what the HR "Leave Applications" admin
+    page needs.
 
-    Unlike LeaveRequestListView, which is scoped to the requesting user's
-    own linked Employees record, this returns every request regardless of
-    employee or status - what the HR "Leave Applications" admin page needs.
+    Every request for an actor holding leave.request.view_any; otherwise only
+    the actor's own (REM-03 - this replaced a role-name check).
     """
 
-    permission_classes = [IsAuthenticated, IsHRorAdmin]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """List all leave requests, most recently requested first."""
-        from modules.leave.infrastructure.persistence.models import LeaveRequest as LeaveRequestModel
-
-        requests = LeaveRequestModel.objects.select_related(
-            "employee", "leave_type", "reviewed_by"
-        ).all()
+        """List leave requests visible to the actor, most recently requested first."""
+        try:
+            requests = LeaveRequestQueryService().list_requests(leave_actor_from_request(request))
+        except DomainException as e:
+            return error_response(e)
 
         return Response(
             AdminLeaveRequestResponseSerializer(requests, many=True).data,
@@ -452,11 +451,13 @@ class LeaveRequestDetailView(APIView):
         """Get a specific leave request."""
         service = get_leave_request_service()
         try:
-            leave_request = service.get_leave_request(request_id)
+            leave_request = service.get_leave_request(request_id, leave_actor_from_request(request))
             return Response(
                 LeaveRequestResponseSerializer(leave_request).data,
                 status=status.HTTP_200_OK,
             )
+        except DomainException as e:
+            return error_response(e, default_status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(
                 {"error": str(e)},
@@ -474,11 +475,13 @@ class LeaveRequestCancelView(APIView):
         service = get_leave_request_service()
         try:
             command = CancelLeaveRequestCommand(request_id=request_id)
-            leave_request = service.cancel_leave_request(command)
+            leave_request = service.cancel_leave_request(command, leave_actor_from_request(request))
             return Response(
                 LeaveRequestResponseSerializer(leave_request).data,
                 status=status.HTTP_200_OK,
             )
+        except DomainException as e:
+            return error_response(e)
         except Exception as e:
             return Response(
                 {"error": str(e)},
@@ -493,15 +496,11 @@ class LeaveRequestReviewView(APIView):
 
     def post(self, request, request_id: int):
         """Review a leave request."""
-        reviewer_id = get_employee_id(request.user)
-        # A staff/superuser HR admin reviewing on the organization's behalf
-        # isn't necessarily linked to their own Employees record - only
-        # require the link for ordinary (non-admin) reviewers.
-        if not reviewer_id and not (request.user.is_staff or request.user.is_superuser):
-            return Response(
-                {"error": "User is not linked to an employee record"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        # Review authority is leave.request.review alone (confirmed REM-03
+        # decision); the service enforces it. An unlinked superuser may still
+        # review (reviewer_id None); an unlinked non-superuser resolves to no
+        # permissions and is refused there.
+        actor = leave_actor_from_request(request)
 
         serializer = ReviewLeaveRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -510,19 +509,21 @@ class LeaveRequestReviewView(APIView):
         try:
             command = ReviewLeaveRequestCommand(
                 request_id=request_id,
-                reviewer_id=reviewer_id,
+                reviewer_id=actor.employee_id,
                 **serializer.validated_data,
             )
 
             if command.approved:
-                leave_request = service.approve_leave_request(command)
+                leave_request = service.approve_leave_request(command, actor)
             else:
-                leave_request = service.reject_leave_request(command)
+                leave_request = service.reject_leave_request(command, actor)
 
             return Response(
                 LeaveRequestResponseSerializer(leave_request).data,
                 status=status.HTTP_200_OK,
             )
+        except DomainException as e:
+            return error_response(e)
         except Exception as e:
             return Response(
                 {"error": str(e)},
@@ -531,14 +532,20 @@ class LeaveRequestReviewView(APIView):
 
 
 class PendingLeaveRequestsView(APIView):
-    """List pending leave requests (for managers)."""
+    """
+    Pending leave requests: the review queue for a holder of
+    leave.request.review, otherwise only the actor's own pending requests.
+    """
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Get all pending leave requests."""
+        """Get pending leave requests visible to the actor."""
         service = get_leave_request_service()
-        pending_requests = service.get_pending_requests()
+        try:
+            pending_requests = service.get_pending_requests(leave_actor_from_request(request))
+        except DomainException as e:
+            return error_response(e)
 
         return Response(
             [LeaveRequestResponseSerializer(r).data for r in pending_requests],
@@ -553,17 +560,18 @@ class LeaveRequestSummaryView(APIView):
 
     def get(self, request):
         """Get leave request summary."""
-        employee_id = get_employee_id(request.user)
+        actor = leave_actor_from_request(request)
+        employee_id = actor.employee_id
         if not employee_id:
-            return Response(
-                {"error": "User is not linked to an employee record"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response(_NOT_LINKED, status=status.HTTP_400_BAD_REQUEST)
 
         year = int(request.query_params.get("year", date.today().year))
 
         service = get_leave_request_service()
-        summary = service.get_request_summary(employee_id=employee_id, year=year)
+        try:
+            summary = service.get_request_summary(employee_id=employee_id, year=year, actor=actor)
+        except DomainException as e:
+            return error_response(e)
 
         return Response(
             LeaveRequestSummaryResponseSerializer(summary).data,
