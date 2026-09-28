@@ -60,13 +60,17 @@ class LeaveTypeService:
 
         # Create leave type
         leave_type = LeaveType(
-            id=self._repository.get_next_id(),
+            id=None,  # database-assigned on insert (REM-06)
             name=command.name,
             default_days_allowed=command.default_days_allowed,
             is_active=command.is_active,
         )
 
-        # Add domain event
+        # Add domain event. Deliberately still built before save: it passes a
+        # keyword LeaveTypeCreated does not define (pre-existing, pinned by a
+        # strict xfail in REM-03's tests), so it raises; built after save it
+        # would leave a persisted row behind a failed request. The id is None
+        # here (database-assigned on insert) and the event is never dispatched.
         leave_type.add_domain_event(
             LeaveTypeCreated(
                 leave_type_id=leave_type.id,

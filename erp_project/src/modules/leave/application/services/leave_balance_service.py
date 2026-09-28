@@ -109,7 +109,7 @@ class LeaveBalanceService:
                 used_days=Decimal("0"),
             )
             balance = LeaveBalance(
-                id=self._balance_repository.get_next_id(),
+                id=None,  # database-assigned on insert (REM-06)
                 employee_id=command.employee_id,
                 leave_type_id=command.leave_type_id,
                 year=command.year,
@@ -294,7 +294,7 @@ class LeaveBalanceService:
                 used_days=Decimal("0"),
             )
             balance = LeaveBalance(
-                id=self._balance_repository.get_next_id(),
+                id=None,  # database-assigned on insert (REM-06)
                 employee_id=employee_id,
                 leave_type_id=leave_type.id,
                 year=year,

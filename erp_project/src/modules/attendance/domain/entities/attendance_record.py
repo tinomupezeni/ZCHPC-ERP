@@ -30,7 +30,7 @@ class AttendanceRecord(AggregateRoot[int]):
 
     def __init__(
         self,
-        id: int,
+        id: int | None,
         employee_id: int,
         record_date: date,
         time_in: ClockTime | None = None,
@@ -69,7 +69,7 @@ class AttendanceRecord(AggregateRoot[int]):
     @classmethod
     def create_for_clock_in(
         cls,
-        id: int,
+        id: int | None,
         employee_id: int,
         record_date: date,
         clock_in_time: ClockTime,

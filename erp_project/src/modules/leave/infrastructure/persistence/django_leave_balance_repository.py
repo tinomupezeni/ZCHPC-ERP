@@ -10,6 +10,7 @@ from modules.leave.infrastructure.persistence.models import LeaveBalance as Leav
 from modules.leave.application.interfaces import ILeaveBalanceRepository
 from modules.leave.domain.entities import LeaveBalance
 from modules.leave.domain.value_objects import LeaveEntitlement
+from shared.infrastructure.persistence import insert_or_update
 
 
 class DjangoLeaveBalanceRepository(ILeaveBalanceRepository):
@@ -62,12 +63,19 @@ class DjangoLeaveBalanceRepository(ILeaveBalanceRepository):
         return [self._to_entity(model) for model in queryset]
 
     def save(self, balance: LeaveBalance) -> LeaveBalance:
-        """Save balance."""
+        """
+        Save balance.
+
+        A new balance (id None) is inserted with a database-assigned id; a
+        balance with an id updates exactly that row, and an unknown id raises
+        NotFoundError rather than inserting (REM-06).
+        """
         # The existing model only has days_remaining, not entitled/used separately
         # We store the remaining days as days_remaining
-        model, created = LeaveBalanceModel.objects.update_or_create(
-            id=balance.id,
-            defaults={
+        model = insert_or_update(
+            LeaveBalanceModel,
+            balance.id,
+            {
                 "employee_id": balance.employee_id,
                 "leave_type_id": balance.leave_type_id,
                 "year": balance.year,
@@ -79,11 +87,6 @@ class DjangoLeaveBalanceRepository(ILeaveBalanceRepository):
     def delete(self, balance_id: int) -> None:
         """Delete balance."""
         LeaveBalanceModel.objects.filter(id=balance_id).delete()
-
-    def get_next_id(self) -> int:
-        """Get next available ID."""
-        last = LeaveBalanceModel.objects.order_by("-id").first()
-        return (last.id + 1) if last else 1
 
     def _to_entity(self, model: LeaveBalanceModel) -> LeaveBalance:
         """

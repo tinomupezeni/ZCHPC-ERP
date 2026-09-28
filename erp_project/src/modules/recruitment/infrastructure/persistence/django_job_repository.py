@@ -7,7 +7,7 @@ from typing import Sequence
 
 from django.db.models import Q
 
-from modules.recruitment.infrastructure.persistence._save import insert_or_update
+from shared.infrastructure.persistence import insert_or_update
 from modules.recruitment.infrastructure.persistence.models import Job as JobModel
 
 from modules.recruitment.application.interfaces import IJobRepository

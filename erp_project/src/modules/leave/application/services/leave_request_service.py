@@ -143,7 +143,7 @@ class LeaveRequestService:
 
         # Create the request
         request = LeaveRequest(
-            id=self._request_repository.get_next_id(),
+            id=None,  # database-assigned on insert (REM-06)
             employee_id=command.employee_id,
             leave_type_id=command.leave_type_id,
             period=period,
@@ -160,19 +160,19 @@ class LeaveRequestService:
             )
             raise ValidationError(f"Leave request conflicts with existing requests: {conflict_dates}")
 
-        # Add domain event
-        request.add_domain_event(
+        saved = self._request_repository.save(request)
+
+        # Add domain event once persisted, so it carries the database-assigned id
+        saved.add_domain_event(
             LeaveRequested(
-                request_id=request.id,
-                employee_id=request.employee_id,
-                leave_type_id=request.leave_type_id,
-                start_date=request.start_date,
-                end_date=request.end_date,
-                days=request.days,
+                request_id=saved.id,
+                employee_id=saved.employee_id,
+                leave_type_id=saved.leave_type_id,
+                start_date=saved.start_date,
+                end_date=saved.end_date,
+                days=saved.days,
             )
         )
-
-        saved = self._request_repository.save(request)
         return self._to_dto(saved, leave_type.name)
 
     def approve_leave_request(

@@ -1,13 +1,13 @@
 """
 Aggregate persistence that never chooses a primary key.
 
-The recruitment repositories used to mint IDs as max(id) + 1 and write with
-update_or_create(id=...). Two concurrent submissions could compute the same
-ID, and the second then *updated* the first one's row - replacing another
-person's candidate identity or application. REM-04 made that reachable
-anonymously.
+Repositories used to mint IDs as max(id) + 1 and write with
+update_or_create(id=...) or "update, else create". Two concurrent writers
+could compute the same ID, and the second then *updated* the first one's
+row - replacing another person's record while reporting success. Fixed for
+recruitment in REM-04 and for leave/attendance in REM-06.
 
-The rule now: a new aggregate (id is None) is always INSERTed and receives a
+The rule: a new aggregate (id is None) is always INSERTed and receives a
 database-assigned key; an aggregate with an id only ever updates that
 existing row, and a missing row is an error, never an implicit insert.
 """

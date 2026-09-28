@@ -4,7 +4,7 @@ Django ORM implementation of ICandidateRepository.
 
 from typing import Sequence
 
-from modules.recruitment.infrastructure.persistence._save import insert_or_update
+from shared.infrastructure.persistence import insert_or_update
 from modules.recruitment.infrastructure.persistence.models import Candidate as CandidateModel
 
 from modules.recruitment.application.interfaces import ICandidateRepository

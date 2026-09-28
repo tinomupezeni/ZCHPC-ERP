@@ -404,7 +404,7 @@ class TestNoIdCollisionOverwrite:
 
     @pytest.mark.django_db
     def test_new_submission_rows_are_inserted_without_a_chosen_id(self, jobs, monkeypatch):
-        from modules.recruitment.infrastructure.persistence import _save
+        from shared.infrastructure import persistence as _save
 
         seen = []
         real = _save.insert_or_update

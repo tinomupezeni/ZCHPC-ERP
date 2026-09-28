@@ -75,7 +75,7 @@ class QRTokenService:
 
         # Create new token
         token = QRToken.create(
-            id=self.token_repo.get_next_id(),
+            id=None,  # database-assigned on insert (REM-06)
             validity_seconds=self.validity_seconds,
         )
         token = self.token_repo.save(token)
