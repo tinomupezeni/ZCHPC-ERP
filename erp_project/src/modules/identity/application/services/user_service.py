@@ -19,6 +19,13 @@ application login is an employee's login, so there is one policy for both:
 Staff and superuser status are never written here. They are platform-level
 flags granted only by operator bootstrap (createsuperuser, seed_admin,
 create_test_account, entrypoint.sh), never by an API caller.
+
+Credentials (REM-07): every login this service creates or re-enables holds a
+password someone other than its owner knows - chosen by the creator or
+issued by generate_temp_password() - so it is marked must_change_password
+and RBACMiddleware confines it to the password change until the owner
+replaces it (change_password). Reactivation never restores the previous
+password; it issues a new temporary one.
 """
 
 import logging
@@ -69,6 +76,14 @@ class UpdateUserCommand:
 @dataclass
 class CreateUserResult:
     """Result of user creation."""
+
+    user: UserDTO
+    temp_password: str | None = None
+
+
+@dataclass
+class UpdateUserResult:
+    """Result of a user update; a reactivation issues a temporary password."""
 
     user: UserDTO
     temp_password: str | None = None
@@ -154,12 +169,14 @@ class UserService:
             temp_password = password
 
         # Staff/superuser are deliberately not parameters: a created login
-        # never holds platform-level authority.
+        # never holds platform-level authority. Whoever created it knows its
+        # password, so the owner must replace it at first login (REM-07).
         user = User.create(
             email=email,
             password=password,
             first_name=command.first_name,
             last_name=command.last_name,
+            must_change_password=True,
         )
 
         with transaction.atomic():
@@ -234,7 +251,7 @@ class UserService:
         command: UpdateUserCommand,
         actor_permissions: PermissionSet | None = None,
         actor_user_id: UUID | None = None,
-    ) -> UserDTO:
+    ) -> UpdateUserResult:
         """
         Update a user.
 
@@ -244,13 +261,18 @@ class UserService:
         hr.employee.reactivate; both refuse the actor's own account and
         anyone holding permissions the actor lacks.
 
+        Re-enabling a disabled login never restores its previous password: a
+        new temporary one is issued, returned once, and must be replaced by
+        the owner (REM-07).
+
         Args:
             command: Update command
             actor_permissions: The acting user's permissions (None holds nothing)
             actor_user_id: The acting user's id, from the authenticated request
 
         Returns:
-            Updated UserDTO
+            UpdateUserResult with the updated user and, on reactivation, the
+            temporary password
 
         Raises:
             AuthorizationError: If the actor may not make this change
@@ -290,15 +312,19 @@ class UserService:
         if command.last_name is not None:
             user.last_name = command.last_name.strip()
 
+        temp_password = None
         if command.is_active is not None:
             if command.is_active:
+                if not user.is_active:
+                    temp_password = generate_temp_password()
+                    user.issue_temporary_password(temp_password)
                 user.activate()
             else:
                 user.deactivate()
 
         self._user_repo.update(user)
 
-        return self._to_dto(user)
+        return UpdateUserResult(user=self._to_dto(user), temp_password=temp_password)
 
     def delete_user(
         self,
@@ -387,38 +413,68 @@ class UserService:
         self,
         user_id: UUID,
         new_password: str,
-        current_password: str | None = None,
-    ) -> None:
+        current_password: str,
+    ) -> UserDTO:
         """
-        Change a user's password.
+        Change a user's own password (self-service; REM-07).
+
+        ``user_id`` must be the authenticated caller's own id - the view
+        passes request.user.id and nothing else - and the current password
+        must be proven. The new password is checked by the configured
+        AUTH_PASSWORD_VALIDATORS. Success ends the forced-change state; the
+        stored hash changes, so every token issued before it stops working
+        (SIMPLE_JWT CHECK_REVOKE_TOKEN).
 
         Args:
-            user_id: User's UUID
+            user_id: The caller's own UUID
             new_password: New password
-            current_password: Current password (for self-change)
+            current_password: The caller's current password
+
+        Returns:
+            The updated UserDTO
 
         Raises:
             NotFoundError: If user not found
-            ValidationError: If current password is wrong
+            ValidationError: If the current password is wrong or the new one
+                is rejected
         """
-        user = self._user_repo.get_by_id(user_id)
-        if user is None:
-            raise NotFoundError(
-                f"User with ID {user_id} not found",
-                code="USER_NOT_FOUND",
-                details={"user_id": str(user_id)},
-            )
+        user = self._get(user_id)
 
-        # Verify current password if provided
-        if current_password is not None:
-            if not user.verify_password(current_password):
-                raise ValidationError(
-                    "Current password is incorrect",
-                    code="INVALID_CURRENT_PASSWORD",
-                )
+        if not current_password or not user.verify_password(current_password):
+            raise ValidationError(
+                "Current password is incorrect",
+                code="INVALID_CURRENT_PASSWORD",
+            )
+        if new_password == current_password:
+            raise ValidationError(
+                "The new password must differ from the current one",
+                code="PASSWORD_UNCHANGED",
+            )
+        self._validate_new_password(user, new_password)
 
         user.change_password(new_password)
         self._user_repo.update(user)
+        return self._to_dto(user)
+
+    @staticmethod
+    def _validate_new_password(user: User, new_password: str) -> None:
+        """Apply the project's AUTH_PASSWORD_VALIDATORS."""
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        from modules.identity.infrastructure.persistence.models import CustomUser
+
+        # UserAttributeSimilarityValidator needs the model instance (it reads
+        # field verbose names as well as values).
+        subject = CustomUser.objects.filter(pk=user.id).first()
+        try:
+            validate_password(new_password, user=subject)
+        except DjangoValidationError as exc:
+            raise ValidationError(
+                " ".join(exc.messages),
+                code="INVALID_NEW_PASSWORD",
+                details={"errors": list(exc.messages)},
+            ) from None
 
     def _get(self, user_id: UUID) -> User:
         user = self._user_repo.get_by_id(user_id)
@@ -498,5 +554,6 @@ class UserService:
             is_active=user.is_active,
             is_staff=user.is_staff,
             is_superuser=user.is_superuser,
+            must_change_password=user.must_change_password,
         )
 

@@ -8,7 +8,6 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import List, Optional
 
-from django.contrib.auth import authenticate
 from django.db.models import Sum
 
 from modules.portal.application.interfaces import (
@@ -87,34 +86,41 @@ class DjangoEmployeeProvider(IEmployeeProvider):
         self,
         ec_number: str,
         password: str,
+        ip_address: str = "0.0.0.0",
+        user_agent: str = "",
     ) -> Optional[EmployeeDTO]:
+        """
+        Resolve the EC number to its login, then authenticate through the
+        identity AuthService - the same failed-attempt lockout, audit log
+        and inactive-account handling as /api/v2/auth/token/ (REM-07).
+        """
         from modules.hr.infrastructure.persistence.models import Employees
-
-        # Get employee by EC number
-        try:
-            employee = Employees.objects.select_related(
-                "department", "position", "user"
-            ).get(employee_id=ec_number)
-        except Employees.DoesNotExist:
-            return None
-
-        # Check if has linked user
-        if not employee.user:
-            return None
-
-        # Authenticate user
-        user = authenticate(
-            email=employee.user.email,
-            password=password,
+        from modules.identity.application.services import AuthService, LoginCommand
+        from modules.identity.infrastructure.persistence.audit_repository import (
+            DjangoAuditLogRepository,
+        )
+        from modules.identity.infrastructure.persistence.user_repository import (
+            DjangoUserRepository,
         )
 
-        if user is None:
-            return None
+        employee = (
+            Employees.objects.select_related("department", "position", "user")
+            .filter(employee_id=ec_number)
+            .first()
+        )
+        # An unknown EC number (or one without a login) is still attempted,
+        # under the EC number itself, so the failure is audited like any other.
+        identifier = employee.user.email if employee and employee.user else ec_number
 
-        if not user.is_active:
-            return None
-
-        if not employee.is_active:
+        result = AuthService(DjangoUserRepository(), DjangoAuditLogRepository()).authenticate(
+            LoginCommand(
+                email=identifier,
+                password=password,
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+        )
+        if not result.success or employee is None or not employee.is_active:
             return None
 
         return self._to_dto(employee)

@@ -117,6 +117,9 @@ class LoginView(APIView):
                 "is_staff": result.user.is_staff,
                 "is_superuser": result.user.is_superuser,
                 "employee_profile": employee_data,
+                # REM-07: when true, these tokens reach only the password
+                # change (and "me") until the password is replaced.
+                "must_change_password": result.user.must_change_password,
             },
         }
 
@@ -124,10 +127,15 @@ class LoginView(APIView):
 
     def _get_client_ip(self, request) -> str:
         """Extract client IP from request."""
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            return x_forwarded_for.split(",")[0].strip()
-        return request.META.get("REMOTE_ADDR", "0.0.0.0")
+        return get_client_ip(request)
+
+
+def get_client_ip(request) -> str:
+    """Client IP for the login audit log (shared with the portal login)."""
+    x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+    if x_forwarded_for:
+        return x_forwarded_for.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR", "0.0.0.0")
 
 
 class AuditLogListView(APIView):

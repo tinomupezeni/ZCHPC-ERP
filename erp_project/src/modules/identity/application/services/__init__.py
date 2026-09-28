@@ -10,7 +10,9 @@ from modules.identity.application.services.user_service import (
     CreateUserCommand,
     CreateUserResult,
     UpdateUserCommand,
+    UpdateUserResult,
     UserService,
+    generate_temp_password,
 )
 
 __all__ = [
@@ -20,4 +22,6 @@ __all__ = [
     "CreateUserCommand",
     "CreateUserResult",
     "UpdateUserCommand",
+    "UpdateUserResult",
+    "generate_temp_password",
 ]

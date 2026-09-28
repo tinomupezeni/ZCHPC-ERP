@@ -173,6 +173,9 @@ class DjangoEmployeeRepository(IEmployeeRepository):
         db_employee.save()
         # Update the entity with the generated ID (set _id, not id property)
         object.__setattr__(employee, "_id", db_employee.id)
+        # The post_save signal provisions the login; relay its one-time
+        # temporary password, if any, to the caller (REM-07).
+        employee.temporary_password = getattr(db_employee, "temporary_password", None)
 
     @transaction.atomic
     def update(self, employee: Employee) -> None:

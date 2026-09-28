@@ -32,6 +32,13 @@ export const useAddEmployee = (
   const [posLoading, setPosLoading] = useState(false);
 
   const [selectedDeductions, setSelectedDeductions] = useState<Deduction[]>([]);
+  // REM-07: the new login's one-time temporary password, held in memory only
+  // until the creator closes the confirmation (never stored or re-fetched).
+  const [issuedCredential, setIssuedCredential] = useState<{
+    email: string;
+    ecNumber: string;
+    temporaryPassword: string;
+  } | null>(null);
   const [employee, setEmployee] = useState<EmployeeFormState>({
     ecNumber: "",
     firstname: "",
@@ -185,10 +192,19 @@ export const useAddEmployee = (
     }
 
     try {
-      await addEmployee(payload);
+      const response = await addEmployee(payload);
       toast.success("Employee added successfully");
-      setShowModal(false);
       fetchEmployees();
+      const temporaryPassword = response?.data?.temporary_password;
+      if (temporaryPassword) {
+        setIssuedCredential({
+          email: response.data.email,
+          ecNumber: response.data.employee_id,
+          temporaryPassword,
+        });
+      } else {
+        setShowModal(false);
+      }
     } catch (error: any) {
       const errData = error.response?.data;
       const msg = errData?.employee_id
@@ -229,5 +245,10 @@ export const useAddEmployee = (
     handleCreateDepartment,
     handleCreatePosition,
     handleSubmit,
+    issuedCredential,
+    closeIssuedCredential: () => {
+      setIssuedCredential(null);
+      setShowModal(false);
+    },
   };
 };

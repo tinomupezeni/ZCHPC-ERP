@@ -105,6 +105,10 @@ class EmployeeListCreateView(APIView):
                 "department_id": employee.department_id,
                 "position_id": employee.position_id,
                 "is_active": employee.is_active,
+                # One-time temporary password of the login provisioned for
+                # this employee (null if none was created); shown once to the
+                # creator, who must hand it over. REM-07.
+                "temporary_password": employee.temporary_password,
             }
 
             return Response(response_data, status=status.HTTP_201_CREATED)

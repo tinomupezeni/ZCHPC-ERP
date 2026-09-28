@@ -296,6 +296,11 @@ SIMPLE_JWT = {
     "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
     "TOKEN_TYPE_CLAIM": "token_type",
     "JTI_CLAIM": "jti",
+    # REM-07: tokens carry a hash of the password hash they were issued
+    # under; changing a password therefore revokes every earlier access token
+    # (and refreshes of earlier refresh tokens, which copy the stale claim).
+    # Tokens issued before this setting lack the claim and stop working once.
+    "CHECK_REVOKE_TOKEN": True,
 }
 
 # --- Internationalization ---

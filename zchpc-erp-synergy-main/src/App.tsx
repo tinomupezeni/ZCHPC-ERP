@@ -5,6 +5,7 @@ import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import LoginPage from "./pages/LoginPage";
+import ChangePasswordPage from "./pages/ChangePasswordPage";
 import Dashboard from "./pages/Dashboard";
 import SalesPage from "./pages/SalesPage";
 import AccountingPage from "./pages/AccountingPage";
@@ -35,6 +36,8 @@ const App = () => {
           <Routes>
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<LoginPage />} />
+            {/* REM-07: replacing a temporary password (no role/permission gate) */}
+            <Route path="/change-password" element={<ChangePasswordPage />} />
             <Route
               path="/dashboard"
               element={

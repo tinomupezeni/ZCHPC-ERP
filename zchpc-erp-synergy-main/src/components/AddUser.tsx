@@ -395,7 +395,9 @@ export default function AddUser({ setShowModal, onSuccess }) {
                 Account Created
               </h2>
               <p className="text-slate-500 mt-1 text-sm">
-                Provide these credentials to the employee
+                Provide these credentials to the employee. The password is
+                temporary and shown only once: they must replace it when they
+                first sign in.
               </p>
             </div>
 
@@ -418,14 +420,14 @@ export default function AddUser({ setShowModal, onSuccess }) {
               </div>
               <div className="p-4 bg-slate-900 rounded-xl text-left">
                 <label className="text-[12px] text-slate-500 font-bold uppercase tracking-widest">
-                  Password
+                  Temporary Password
                 </label>
                 <div className="flex justify-between items-center mt-1">
                   <code className="text-green-400 font-mono text-sm">
-                    {employee.password || createdCredentials.password}
+                    {employee.password || createdCredentials.temporary_password}
                   </code>
                   <button
-                    onClick={() => handleCopy(employee.password || createdCredentials.password)}
+                    onClick={() => handleCopy(employee.password || createdCredentials.temporary_password)}
                     className="text-slate-400 hover:text-white"
                   >
                     <Copy className="h-4 w-4" />

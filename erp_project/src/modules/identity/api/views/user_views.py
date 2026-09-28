@@ -106,7 +106,10 @@ class UserListCreateView(APIView):
                 "email": result.user.email,
                 "first_name": result.user.first_name,
                 "last_name": result.user.last_name,
-                "password": result.temp_password,
+                # One-time generated password (null when the creator chose
+                # one). Either way the owner must replace it at first login.
+                "temporary_password": result.temp_password,
+                "must_change_password": result.user.must_change_password,
             }
 
             return Response(
@@ -186,7 +189,7 @@ class UserDetailView(APIView):
         service = UserService(DjangoUserRepository())
 
         try:
-            user = service.update_user(
+            result = service.update_user(
                 UpdateUserCommand(
                     user_id=uuid_id,
                     first_name=serializer.validated_data.get("first_name"),
@@ -196,8 +199,11 @@ class UserDetailView(APIView):
                 actor_permissions=resolve_actor_permissions(request.user),
                 actor_user_id=request.user.id,
             )
-            response_serializer = UserResponseSerializer(user.__dict__)
-            return Response(response_serializer.data)
+            data = dict(UserResponseSerializer(result.user.__dict__).data)
+            if result.temp_password is not None:
+                # Reactivation issued a new one-time password (REM-07).
+                data["temporary_password"] = result.temp_password
+            return Response(data)
         except AuthorizationError as e:
             return _error(e, status.HTTP_403_FORBIDDEN)
         except NotFoundError as e:
@@ -256,6 +262,53 @@ class CurrentUserView(APIView):
                 {"detail": "User not found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+
+class ChangePasswordView(APIView):
+    """
+    Self-service password change.
+
+    POST /api/v2/auth/password/change/
+
+    Always acts on the authenticated caller - no user id is accepted - and
+    requires the current password. Reachable while must_change_password is
+    set (RBACMiddleware). The stored hash changes, which revokes every
+    previously issued token, so fresh tokens are returned.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = ChangePasswordRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        service = UserService(DjangoUserRepository())
+        try:
+            user = service.change_password(
+                request.user.id,
+                new_password=serializer.validated_data["new_password"],
+                current_password=serializer.validated_data["current_password"],
+            )
+        except ValidationError as e:
+            return Response(
+                {"detail": e.message, "code": e.code, **(e.details or {})},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        from modules.identity.infrastructure.persistence.models import CustomUser
+
+        refresh = RefreshToken.for_user(CustomUser.objects.get(pk=user.id))
+        return Response(
+            {
+                "detail": "Password changed.",
+                "must_change_password": user.must_change_password,
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+            }
+        )
 
 
 class UnlockUserView(APIView):

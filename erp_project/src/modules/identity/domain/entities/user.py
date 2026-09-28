@@ -3,7 +3,7 @@ User aggregate root for identity management.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -33,6 +33,8 @@ class User(AggregateRoot[UUID]):
         failed_attempts: Number of consecutive failed login attempts
         lockout_until: Datetime until which account is locked
         date_joined: When the account was created
+        must_change_password: Whether the account holds an issued temporary
+            password that its owner must replace before normal use (REM-07)
     """
 
     email: Email
@@ -45,6 +47,7 @@ class User(AggregateRoot[UUID]):
     failed_attempts: int = 0
     lockout_until: datetime | None = None
     date_joined: datetime = field(default_factory=datetime.utcnow)
+    must_change_password: bool = False
 
     # Lockout configuration
     MAX_FAILED_ATTEMPTS: int = 5
@@ -63,6 +66,7 @@ class User(AggregateRoot[UUID]):
         failed_attempts: int = 0,
         lockout_until: datetime | None = None,
         date_joined: datetime | None = None,
+        must_change_password: bool = False,
     ) -> None:
         """Initialize User aggregate."""
         super().__init__(id)
@@ -76,6 +80,7 @@ class User(AggregateRoot[UUID]):
         self.failed_attempts = failed_attempts
         self.lockout_until = lockout_until
         self.date_joined = date_joined or datetime.utcnow()
+        self.must_change_password = must_change_password
 
     @classmethod
     def create(
@@ -86,6 +91,7 @@ class User(AggregateRoot[UUID]):
         last_name: str,
         is_staff: bool = False,
         is_superuser: bool = False,
+        must_change_password: bool = False,
     ) -> "User":
         """
         Factory method to create a new user.
@@ -97,6 +103,8 @@ class User(AggregateRoot[UUID]):
             last_name: User's last name
             is_staff: Whether user has staff privileges
             is_superuser: Whether user has superuser privileges
+            must_change_password: Whether ``password`` is a temporary
+                credential the owner must replace (REM-07)
 
         Returns:
             New User instance with hashed password
@@ -111,6 +119,7 @@ class User(AggregateRoot[UUID]):
             last_name=last_name.strip(),
             is_staff=is_staff,
             is_superuser=is_superuser,
+            must_change_password=must_change_password,
         )
 
         user.add_domain_event(
@@ -132,7 +141,13 @@ class User(AggregateRoot[UUID]):
         """Check if account is currently locked."""
         if self.lockout_until is None:
             return False
-        return datetime.utcnow() < self.lockout_until
+        # Compared in aware UTC: lockout_until comes back from the database
+        # timezone-aware (USE_TZ), and a naive/aware comparison raises - which
+        # turned every login to a locked account into a 500 (found in REM-07).
+        lockout_until = self.lockout_until
+        if lockout_until.tzinfo is None:
+            lockout_until = lockout_until.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) < lockout_until
 
     def verify_password(self, plain_password: str) -> bool:
         """
@@ -148,12 +163,28 @@ class User(AggregateRoot[UUID]):
 
     def change_password(self, new_password: str) -> None:
         """
-        Change the user's password.
+        Change the user's password to one they chose themselves.
+
+        Replacing a temporary password ends the forced-change state.
 
         Args:
             new_password: New plain text password
         """
         self.password = HashedPassword.from_plain_text(new_password)
+        self.must_change_password = False
+
+    def issue_temporary_password(self, temporary_password: str) -> None:
+        """
+        Replace the password with an issued temporary one (REM-07).
+
+        The previous password stops working, and the owner must replace the
+        temporary one before normal use.
+
+        Args:
+            temporary_password: New plain text temporary password
+        """
+        self.password = HashedPassword.from_plain_text(temporary_password)
+        self.must_change_password = True
 
     def register_failed_login(self) -> bool:
         """
@@ -168,7 +199,7 @@ class User(AggregateRoot[UUID]):
 
         if self.failed_attempts >= self.MAX_FAILED_ATTEMPTS:
             from datetime import timedelta
-            self.lockout_until = datetime.utcnow() + timedelta(
+            self.lockout_until = datetime.now(timezone.utc) + timedelta(
                 minutes=self.LOCKOUT_DURATION_MINUTES
             )
             self.add_domain_event(
@@ -257,5 +288,6 @@ class User(AggregateRoot[UUID]):
             "is_staff": self.is_staff,
             "is_superuser": self.is_superuser,
             "is_locked_out": self.is_locked_out,
+            "must_change_password": self.must_change_password,
             "date_joined": self.date_joined.isoformat(),
         }

@@ -84,6 +84,15 @@ class RBACMiddleware:
     PERSONAL_RESOURCE_PATHS = [
         "/api/v2/portal/notifications",
         "/api/v2/auth/users/me/",  # the caller's own login profile
+        "/api/v2/auth/password/change/",  # the caller's own password
+    ]
+
+    # REM-07: all an account holding an issued temporary password
+    # (must_change_password) may reach, besides the exempt login/refresh and
+    # portal auth routes, until its owner replaces the password.
+    PASSWORD_CHANGE_PATHS = [
+        "/api/v2/auth/users/me/",
+        "/api/v2/auth/password/change/",
     ]
 
     def __init__(self, get_response):
@@ -105,6 +114,21 @@ class RBACMiddleware:
         # 1. Allow fully public/system paths
         if self._is_exempt(path):
             return self.get_response(request)
+
+        # 1b. First-login confinement (REM-07): an account holding an issued
+        # temporary password may only replace it. Checked before every other
+        # branch (media, personal resources, the superuser bypass) so none of
+        # them widens it.
+        if getattr(request.user, "must_change_password", False) and not any(
+            path.startswith(p) for p in self.PASSWORD_CHANGE_PATHS
+        ):
+            return JsonResponse(
+                {
+                    "detail": "You must change your temporary password before continuing.",
+                    "code": "PASSWORD_CHANGE_REQUIRED",
+                },
+                status=403,
+            )
 
         # 2. Handle /media/ specifically (Require auth, but bypass strict RBAC roles)
         # This allows employees to download their own payslips without needing 'HR' role.

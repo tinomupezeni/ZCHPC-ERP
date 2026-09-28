@@ -32,6 +32,7 @@ class UserResponseSerializer(serializers.Serializer):
     is_active = serializers.BooleanField(read_only=True)
     is_staff = serializers.BooleanField(read_only=True)
     is_superuser = serializers.BooleanField(read_only=True)
+    must_change_password = serializers.BooleanField(read_only=True)
 
 
 class CreateUserRequestSerializer(serializers.Serializer):
@@ -91,9 +92,9 @@ class ChangePasswordRequestSerializer(serializers.Serializer):
     """Serializer for password change requests."""
 
     current_password = serializers.CharField(
-        required=False,
+        required=True,
         write_only=True,
-        help_text="Required for self-change, optional for admin",
+        help_text="The caller's current (or temporary) password",
     )
     new_password = serializers.CharField(
         required=True,

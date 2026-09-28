@@ -635,15 +635,17 @@ class TestAuditEscalationChainIsBroken:
 
     def test_an_account_the_creator_may_legitimately_create_has_no_privilege(self):
         """
-        The creator can still create a plain employee (and, until REM-07,
-        knows its password), but that login carries no role and so reaches
-        nothing privileged.
+        The creator can still create a plain employee and is handed its
+        one-time temporary password (REM-07; no longer the surname), but that
+        login carries no role and so reaches nothing privileged.
         """
         client, _ = actor_with("hr.employee.view", EMP.CREATE, suffix="E04")
         payload = new_hire("E04")
-        assert client.post(EMPLOYEES_URL, payload, format="json").status_code == 201
+        created = client.post(EMPLOYEES_URL, payload, format="json")
+        assert created.status_code == 201
 
-        token = login(payload["email"], payload["surname"])
+        assert login(payload["email"], payload["surname"]).status_code == status.HTTP_401_UNAUTHORIZED
+        token = login(payload["email"], created.data["temporary_password"])
         assert token.status_code == status.HTTP_200_OK, token.data
         new_client = APIClient()
         new_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.data['access']}")
