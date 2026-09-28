@@ -41,7 +41,15 @@ a breakdown is needed.
 class EmployeeManagementPermissions:
     """Capability strings for employee-record administration."""
 
+    CREATE = "hr.employee.create"
+    DEACTIVATE = "hr.employee.deactivate"
     MANAGE_ASSIGNMENTS = "hr.employee.manage_assignments"
+    # REM-08: account-level operations on an employee's login. Kept under
+    # hr.employee.* on purpose: migration 0017 granted identity.* to nearly
+    # every legacy role, so any identity.* capability would be held by
+    # ordinary staff through that wildcard.
+    REACTIVATE = "hr.employee.reactivate"
+    DELETE = "hr.employee.delete"
 
 
 class RoleManagementPermissions:

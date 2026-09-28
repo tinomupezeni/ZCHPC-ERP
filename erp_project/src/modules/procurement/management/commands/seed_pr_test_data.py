@@ -385,7 +385,12 @@ class Command(BaseCommand):
                 employee_type="Full-time",
             )
             try:
-                entity = service.create_employee(command)
+                # Operator-run seed script (no request actor): explicitly full
+                # access, as seed_test_employees does, so the creation and
+                # role-assignment checks pass.
+                entity = service.create_employee(
+                    command, actor_permissions=PermissionSet.full_access()
+                )
             except ValidationError as exc:
                 raise CommandError(
                     f"Failed to create {spec['label']} ({spec['email']}): {exc.message}"

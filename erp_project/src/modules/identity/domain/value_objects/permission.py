@@ -69,6 +69,16 @@ class Permission(ValueObject):
         return self.value.endswith(".*")
 
     @property
+    def has_glob(self) -> bool:
+        """Check if this permission contains any fnmatch wildcard."""
+        return any(c in self.value for c in "*?[")
+
+    @property
+    def has_single_char_glob(self) -> bool:
+        """Check if this permission uses ``?`` or ``[...]`` wildcards."""
+        return "?" in self.value or "[" in self.value
+
+    @property
     def app_name(self) -> str | None:
         """Extract app name from permission."""
         if self.is_wildcard:
@@ -185,6 +195,34 @@ class PermissionSet(ValueObject):
             True if all required permissions are granted
         """
         return all(self.has_permission(r) for r in required_permissions)
+
+    def covers(self, granted: "PermissionSet") -> bool:
+        """
+        Check if this set already grants everything ``granted`` would.
+
+        Used when one actor hands permissions to another (e.g. assigning a
+        role): the holder of this set may only hand over what it holds.
+
+        Each permission in ``granted`` is treated as a requirement and checked
+        with the normal ``Permission.matches`` semantics. Matching a pattern
+        against another pattern is only sound when the matching permission
+        uses ``*`` as its sole wildcard: ``?`` or ``[...]`` could consume a
+        literal ``*`` in the granted pattern (``"?"`` would otherwise "cover"
+        ``"*"``). Such permissions therefore only cover a wildcard grant they
+        equal exactly.
+        """
+        for required in granted.permissions:
+            if not required.has_glob:
+                if not self.has_permission(required.value):
+                    return False
+                continue
+            if not any(
+                p.value == required.value
+                or (not p.has_single_char_glob and p.matches(required.value))
+                for p in self.permissions
+            ):
+                return False
+        return True
 
     def to_list(self) -> list[str]:
         """Convert to list of permission strings."""

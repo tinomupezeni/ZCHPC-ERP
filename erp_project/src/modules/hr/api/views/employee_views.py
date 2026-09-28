@@ -36,6 +36,13 @@ def get_employee_service() -> EmployeeService:
     )
 
 
+def _actor_employee_id(request) -> int | None:
+    """The authenticated caller's own employee record id - never from request data."""
+    # Reverse one-to-one: an AttributeError subclass when there is no profile.
+    employee = getattr(request.user, "employee_profile", None)
+    return employee.pk if employee else None
+
+
 class EmployeeListCreateView(APIView):
     """
     List all employees or create a new employee.
@@ -82,7 +89,9 @@ class EmployeeListCreateView(APIView):
         try:
             command = CreateEmployeeCommand(**serializer.validated_data)
             employee = service.create_employee(
-                command, actor_permissions=resolve_actor_permissions(request.user)
+                command,
+                actor_permissions=resolve_actor_permissions(request.user),
+                actor_email=request.user.email,
             )
 
             # Convert to response DTO
@@ -166,7 +175,11 @@ class EmployeeDetailView(APIView):
                 employee_id=employee_id,
                 **serializer.validated_data,
             )
-            employee = service.update_employee(command, actor_permissions=actor_permissions)
+            employee = service.update_employee(
+                command,
+                actor_permissions=actor_permissions,
+                actor_employee_id=_actor_employee_id(request),
+            )
 
             response_data = {
                 "id": employee.id,
@@ -201,10 +214,20 @@ class EmployeeDetailView(APIView):
         reason = request.data.get("reason", "")
 
         try:
-            employee = service.deactivate_employee(employee_id, reason)
+            employee = service.deactivate_employee(
+                employee_id,
+                reason,
+                actor_permissions=resolve_actor_permissions(request.user),
+                actor_employee_id=_actor_employee_id(request),
+            )
             return Response(
                 {"message": f"Employee {employee.full_name} deactivated"},
                 status=status.HTTP_200_OK,
+            )
+        except AuthorizationError as e:
+            return Response(
+                {"error": e.message, "code": e.code},
+                status=status.HTTP_403_FORBIDDEN,
             )
         except NotFoundError as e:
             return Response(

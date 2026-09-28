@@ -6,7 +6,7 @@ from django.urls import resolve
 from django.http import JsonResponse
 from .route_access import (
     grants_module_access,
-    module_for_app,
+    module_for_route,
     permission_set_for_user,
 )
 
@@ -55,7 +55,10 @@ class RBACMiddleware:
 
     # Paths that are entirely public or handled by other systems
     EXEMPT_PATHS = [
-        "/api/v2/auth/",  # Login/Token endpoints
+        # Login and token refresh only (token/, token/refresh/). The rest of
+        # /api/v2/auth/ - user administration, audit logs, modules - is
+        # ordinary protected API (REM-08).
+        "/api/v2/auth/token/",
         "/api/v2/portal/auth/",  # Portal login
         "/api/v2/portal/public/",  # Public job listings (portal module)
         "/api/v2/recruitment/public/",  # Public job listings/applications (recruitment module)
@@ -80,6 +83,7 @@ class RBACMiddleware:
     # notifications.
     PERSONAL_RESOURCE_PATHS = [
         "/api/v2/portal/notifications",
+        "/api/v2/auth/users/me/",  # the caller's own login profile
     ]
 
     def __init__(self, get_response):
@@ -160,7 +164,7 @@ class RBACMiddleware:
                 return JsonResponse({"detail": "Permission denied."}, status=403)
 
             # 6. Coarse check: does the user hold anything in this module?
-            if grants_module_access(permissions, module_for_app(app_name)):
+            if grants_module_access(permissions, module_for_route(app_name, url_name)):
                 return self.get_response(request)
 
             # FAIL-CLOSED: Deny if no permission covers this route family

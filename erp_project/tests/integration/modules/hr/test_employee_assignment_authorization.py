@@ -232,8 +232,11 @@ class TestAuthorizedHrAdminCanStillReassignRoleAndDepartment:
 
     def test_actor_with_manage_assignments_permission_can_reassign_another_employees_role(self):
         target_role = make_role("ACCOUNTANT-9009", ["procurement.purchase_request.view"])
+        # REM-01: an actor may only hand out permissions they hold, so the
+        # assigner also holds the target role's one permission.
         hr_admin_role = make_role(
-            "HR_ADMIN-9009", ["hr.employee.manage_assignments"]
+            "HR_ADMIN-9009",
+            ["hr.employee.manage_assignments", "procurement.purchase_request.view"],
         )
         hr_admin = make_employee("Helen", "Admin", "9009", role=hr_admin_role)
         employee = make_employee("Evan", "Employee", "9109", role=None)

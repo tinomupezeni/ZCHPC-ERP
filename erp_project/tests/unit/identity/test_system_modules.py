@@ -15,7 +15,12 @@ class TestSystemModules:
             first_name='Admin',
             last_name='User'
         )
-        self.client.force_authenticate(user=self.admin_user)
+        # A real bearer token, not force_authenticate: /api/v2/auth/modules/
+        # is no longer RBAC-exempt (REM-08), and force_authenticate is only
+        # seen by DRF, not by RBACMiddleware, which would treat the request
+        # as anonymous.
+        from rest_framework_simplejwt.tokens import AccessToken
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.admin_user)}")
         
         # Clear existing modules from seed if any
         SystemModule.objects.all().delete()

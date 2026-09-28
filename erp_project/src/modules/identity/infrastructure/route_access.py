@@ -43,6 +43,29 @@ def module_for_app(app_name: str) -> str:
     return module
 
 
+# Routes whose authority lives in another module's vocabulary. Identity user
+# administration is authorized by hr.employee.* capabilities (REM-08), so its
+# coarse gate is "holds anything in hr", not the identity.* wildcard that
+# migration 0017 granted to almost every legacy role.
+_ROUTE_MODULE_OVERRIDES = {
+    ("identity", "user_list"): "hr",
+    ("identity", "user_detail"): "hr",
+    ("identity", "user_unlock"): "hr",
+}
+
+
+def module_for_route(app_name: str, url_name: str) -> str:
+    """
+    The permission module whose grants open this route.
+
+    >>> module_for_route("identity", "user_list")
+    'hr'
+    >>> module_for_route("procurement_v2", "anything")
+    'procurement'
+    """
+    return _ROUTE_MODULE_OVERRIDES.get((app_name, url_name)) or module_for_app(app_name)
+
+
 def permission_set_for_user(user) -> PermissionSet | None:
     """
     The permissions granted to this user by their employee role.

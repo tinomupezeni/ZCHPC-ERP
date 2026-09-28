@@ -13,7 +13,10 @@ from shared.domain.exceptions import AuthorizationError, ValidationError, NotFou
 from shared.domain.value_objects import Email, NationalId, PhoneNumber, EmployeeId
 from shared.infrastructure import EventBus
 
-from modules.hr.application.authorization import EmployeeManagementPermissions
+from modules.hr.application.authorization import (
+    EmployeeAuthorizationPolicy,
+    resolve_actor_permissions,
+)
 from modules.hr.application.interfaces import (
     IEmployeeRepository,
     IDepartmentRepository,
@@ -133,35 +136,48 @@ class EmployeeService:
         self._departments = department_repository
         self._positions = position_repository
         self._event_bus = event_bus or EventBus.get_instance()
+        self._policy = EmployeeAuthorizationPolicy()
 
-    @staticmethod
-    def _authorize_assignment_change(
-        command: UpdateEmployeeCommand, actor_permissions: PermissionSet
+    def _role_permissions(self, role_id: int | None) -> PermissionSet | None:
+        """
+        The permissions of role ``role_id``, or None if it does not exist.
+
+        Read from hr.Role directly, as RoleService and permission_set_for_user
+        do: the identity Role entity rejects names the Roles API accepts
+        (e.g. hyphens), so it cannot be used to look up arbitrary roles.
+        """
+        if role_id is None:
+            return None
+        from modules.hr.infrastructure.persistence.models import Role
+
+        role = Role.objects.filter(pk=role_id).only("permissions").first()
+        if role is None:
+            return None
+        return PermissionSet.from_list(list(role.permissions or []))
+
+    def _authorize_assignment(
+        self,
+        actor_permissions: PermissionSet,
+        *,
+        role_id: int | None,
+        department_id: int | None,
+        is_self: bool,
     ) -> None:
         """
-        Require EmployeeManagementPermissions.MANAGE_ASSIGNMENTS before a
-        role_id/department_id change is allowed to proceed.
+        The one role/department assignment boundary, shared by create and
+        update (see EmployeeAuthorizationPolicy.authorize_assignment).
 
         Reaching this service at all already means the caller passed
         RBACMiddleware's coarse "does this role hold anything in the hr
-        module" gate - that gate answers a different, coarser question (may
-        this actor reach hr routes at all) and was never meant to be the
-        boundary for a specific, sensitive field change. This is the
-        boundary for that; every other field on UpdateEmployeeCommand is
-        unaffected.
+        module" gate - that gate was never meant to be the boundary for a
+        specific, sensitive field change. Every other field is unaffected.
         """
-        if command.role_id is None and command.department_id is None:
-            return
-
-        if actor_permissions.has_permission(
-            EmployeeManagementPermissions.MANAGE_ASSIGNMENTS
-        ):
-            return
-
-        raise AuthorizationError(
-            "Changing an employee's role or department requires the "
-            f"'{EmployeeManagementPermissions.MANAGE_ASSIGNMENTS}' permission.",
-            code="EMPLOYEE_ASSIGNMENT_NOT_AUTHORIZED",
+        self._policy.authorize_assignment(
+            actor_permissions,
+            role_id=role_id,
+            department_id=department_id,
+            role_permissions=self._role_permissions(role_id),
+            is_self=is_self,
         )
 
     @staticmethod
@@ -207,24 +223,44 @@ class EmployeeService:
         self,
         command: CreateEmployeeCommand,
         actor_permissions: PermissionSet | None = None,
+        actor_email: str | None = None,
     ) -> Employee:
         """
         Create a new employee.
 
         Args:
             command: Create employee command
-            actor_permissions: The creating actor's permissions. Only consulted
-                when the command carries salary, bank or statutory data, which
-                then requires the matching payroll capabilities.
+            actor_permissions: The creating actor's permissions. None holds
+                nothing. Creation needs hr.employee.create; a role_id also
+                goes through the role-assignment boundary, and salary, bank
+                or statutory data need the matching payroll capabilities.
+            actor_email: The creating actor's login email, from the
+                authenticated request. The new record is linked to an
+                existing login with the same email (modules.hr.signals), so
+                a matching email makes a role_id a self-assignment.
 
         Returns:
             Created employee
 
         Raises:
-            AuthorizationError: If payroll data is supplied without the
-                matching payroll capability.
-            ValidationError: If validation fails
+            AuthorizationError: If the actor lacks a required capability or
+                may not assign the requested role.
+            ValidationError: If validation fails (including an unknown role_id)
         """
+        actor_permissions = actor_permissions or PermissionSet.empty()
+        self._policy.authorize_create(actor_permissions)
+        # Initial department placement is part of creating the record (the
+        # admin UI always sends it); only the role is an assignment here.
+        self._authorize_assignment(
+            actor_permissions,
+            role_id=command.role_id,
+            department_id=None,
+            is_self=bool(
+                actor_email
+                and command.email
+                and actor_email.strip().lower() == command.email.strip().lower()
+            ),
+        )
         self._authorize_payroll_data_changes(command, actor_permissions, None)
         # Validate email uniqueness
         if command.email and self._employees.exists_by_email(command.email):
@@ -329,7 +365,10 @@ class EmployeeService:
         return employee
 
     def update_employee(
-        self, command: UpdateEmployeeCommand, actor_permissions: PermissionSet
+        self,
+        command: UpdateEmployeeCommand,
+        actor_permissions: PermissionSet,
+        actor_employee_id: int | None = None,
     ) -> Employee:
         """
         Update an existing employee.
@@ -342,18 +381,26 @@ class EmployeeService:
                 .permission_set_for_user``). Required so this method - not
                 just the coarse per-module HTTP gate - can enforce who may
                 reassign an employee's role or department.
+            actor_employee_id: The acting employee's own record id, from the
+                authenticated request, so a role change on it is judged as a
+                self-assignment.
 
         Returns:
             Updated employee
 
         Raises:
             AuthorizationError: If the command changes role_id or
-                department_id and actor_permissions does not include
-                EmployeeManagementPermissions.MANAGE_ASSIGNMENTS.
+                department_id without EmployeeManagementPermissions
+                .MANAGE_ASSIGNMENTS, or assigns a role the actor may not grant.
             NotFoundError: If employee not found
-            ValidationError: If validation fails
+            ValidationError: If validation fails (including an unknown role_id)
         """
-        self._authorize_assignment_change(command, actor_permissions)
+        self._authorize_assignment(
+            actor_permissions,
+            role_id=command.role_id,
+            department_id=command.department_id,
+            is_self=actor_employee_id is not None and actor_employee_id == command.employee_id,
+        )
         self._authorize_payroll_data_changes(command, actor_permissions, command.employee_id)
 
         employee = self._employees.get_by_id(command.employee_id)
@@ -445,23 +492,54 @@ class EmployeeService:
 
         return employee
 
-    def deactivate_employee(self, employee_id: int, reason: str = "") -> Employee:
+    def deactivate_employee(
+        self,
+        employee_id: int,
+        reason: str = "",
+        actor_permissions: PermissionSet | None = None,
+        actor_employee_id: int | None = None,
+    ) -> Employee:
         """
-        Deactivate an employee (soft delete).
+        Deactivate an employee (soft delete) and disable their login.
 
         Args:
             employee_id: Employee ID
             reason: Reason for deactivation
+            actor_permissions: The acting user's permissions. None holds
+                nothing. Needs hr.employee.deactivate, checked before the
+                target is loaded, and must cover the target's own effective
+                permissions.
+            actor_employee_id: The acting employee's own record id, from the
+                authenticated request; deactivating it is refused.
 
         Returns:
             Deactivated employee
+
+        Raises:
+            AuthorizationError: If the actor may not deactivate this employee.
+            NotFoundError: If employee not found
         """
+        actor_permissions = actor_permissions or PermissionSet.empty()
+        self._policy.authorize_deactivate(actor_permissions)
+
         employee = self._employees.get_by_id(employee_id)
         if not employee:
             raise NotFoundError(f"Employee with ID {employee_id} not found")
 
+        self._policy.authorize_deactivate_target(
+            actor_permissions,
+            target_permissions=self._effective_permissions(employee),
+            is_self=actor_employee_id is not None and actor_employee_id == employee.id,
+        )
+
+        # The employee record and its login go inactive together or not at
+        # all. SimpleJWT rejects an inactive user on every request and on
+        # token refresh, so this also ends any session already issued.
         employee.deactivate()
-        self._employees.update(employee)
+        with transaction.atomic():
+            self._employees.update(employee)
+            if employee.user_id is not None:
+                self._disable_login(employee.user_id)
 
         self._event_bus.publish(
             EmployeeTerminatedEvent(
@@ -622,6 +700,26 @@ class EmployeeService:
         if command.pension_fund is not None:
             statutory.pension_fund = command.pension_fund
         statutory.save()
+
+    def _effective_permissions(self, employee: Employee) -> PermissionSet:
+        """
+        What this employee's login can actually do: resolved the same way as
+        for an acting user (resolve_actor_permissions, so a linked superuser
+        is full access), or from their role alone when they have no login.
+        """
+        if employee.user_id is not None:
+            from modules.identity.infrastructure.persistence.models import CustomUser
+
+            user = CustomUser.objects.filter(pk=employee.user_id).first()
+            if user is not None:
+                return resolve_actor_permissions(user)
+        return self._role_permissions(employee.role_id) or PermissionSet.empty()
+
+    def _disable_login(self, user_id: UUID) -> None:
+        """Deactivate the identity account linked to an employee."""
+        from modules.identity.infrastructure.persistence.models import CustomUser
+
+        CustomUser.objects.filter(pk=user_id).update(is_active=False)
 
     def _save_leave_profile(self, employee_id: int, leave_days_entitled: int) -> None:
         """Create or update the employee's LeaveProfile row."""

@@ -606,7 +606,8 @@ class TestHrEmployeeWritesToPayrollData:
         assert PayrollProfile.objects.get(employee=victim).usd_salary == Decimal("7000.00")
 
     def test_create_with_salary_denied_creates_nothing(self):
-        client, _ = client_with("hr.employee.view")
+        # hr.employee.create (REM-01) so that the payroll check is what denies.
+        client, _ = client_with("hr.employee.view", "hr.employee.create")
         before = Employees.objects.count()
         response = client.post(
             "/api/v2/hr/employees/",
