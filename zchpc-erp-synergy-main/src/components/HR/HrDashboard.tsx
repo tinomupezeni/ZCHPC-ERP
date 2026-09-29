@@ -221,7 +221,7 @@ export default function HrDashboard() {
                 variant="ghost"
                 size="sm"
                 className="p-0 h-auto text-xs text-primary flex items-center"
-                onClick={() => navigate("/hr/employees")}
+                onClick={() => navigate("/hr/hr-employees")}
               >
                 View All Employees <ArrowRight className="ml-1 h-3 w-3" />
               </Button>
