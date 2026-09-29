@@ -58,7 +58,7 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
         className={cn(
           "w-full transition-all duration-200 justify-start h-10 px-3 rounded-lg",
           isActive 
-            ? "bg-primary/10 text-primary hover:bg-primary/15" 
+            ? "bg-blue-50 text-blue-700 hover:bg-blue-100" 
             : "text-slate-600 hover:text-slate-900 hover:bg-slate-100",
           collapsed && "justify-center px-0"
         )}
@@ -67,7 +67,7 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
         {item.icon && (
           <item.icon className={cn(
             "h-[18px] w-[18px] shrink-0",
-            isActive ? "text-primary" : "text-slate-400",
+            isActive ? "text-blue-600" : "text-slate-400",
             !collapsed && "mr-3"
           )} />
         )}
