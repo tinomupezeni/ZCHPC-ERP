@@ -1,12 +1,20 @@
 """
 Employee ID value object with generation and validation.
 
-Handles employee identifiers in the format EMP0001, EMP0002, etc.
-Also supports UUID-based employee IDs for newer records.
+Handles employee identifiers in three formats:
+- System: EMP followed by zero-padded number (EMP0001, EMP0002, etc.)
+- Institutional legacy: H followed by digits (H059, H003, ...) - real
+  ZCHPC staff numbers from spreadsheet imports. These are data, not dirt:
+  renaming them would destroy institutional identity, so they validate.
+- UUID-based employee IDs for newer records.
+
+New IDs are always generated in EMP format (see generate/from_number);
+H and UUID values round-trip unchanged with numeric_part 0.
 
 Example:
     emp_id = EmployeeId("EMP0001")
     next_id = EmployeeId.generate(current_max=1)  # EMP0002
+    legacy = EmployeeId("H059")  # accepted, preserved as-is
 """
 
 import re
@@ -24,8 +32,10 @@ class EmployeeId(ValueObject):
     """
     Value object representing an employee identifier.
 
-    Supports two formats:
-    - Legacy: EMP followed by zero-padded number (EMP0001, EMP0002, etc.)
+    Supports three formats:
+    - System: EMP followed by zero-padded number (EMP0001, EMP0002, etc.)
+    - Institutional legacy: H followed by digits (H059, ...) - real ZCHPC
+      staff numbers, preserved as-is
     - UUID: Standard UUID format
 
     Attributes:
@@ -43,6 +53,11 @@ class EmployeeId(ValueObject):
 
     # Employee ID pattern: EMP followed by digits
     EMPLOYEE_ID_PATTERN = re.compile(r"^EMP(\d{4,6})$", re.IGNORECASE)
+
+    # Institutional legacy pattern: H followed by digits (real ZCHPC staff
+    # numbers, e.g. H059). Accepted on read so legacy rows load; new IDs
+    # are always generated in EMP format.
+    LEGACY_STAFF_ID_PATTERN = re.compile(r"^H(\d{2,6})$", re.IGNORECASE)
 
     # UUID pattern
     UUID_PATTERN = re.compile(
@@ -82,10 +97,14 @@ class EmployeeId(ValueObject):
         normalized = str_value.upper()
         object.__setattr__(self, "value", normalized)
 
-        # Validate legacy format
-        if not self.EMPLOYEE_ID_PATTERN.match(normalized):
+        # Validate known formats (system EMP, institutional H-staff, UUID
+        # handled above)
+        if not (
+            self.EMPLOYEE_ID_PATTERN.match(normalized)
+            or self.LEGACY_STAFF_ID_PATTERN.match(normalized)
+        ):
             raise ValidationError(
-                f"Invalid Employee ID format: {self.value}. Expected format: EMP0001 or UUID",
+                f"Invalid Employee ID format: {self.value}. Expected format: EMP0001, H059, or UUID",
                 code="INVALID_EMPLOYEE_ID_FORMAT",
                 details={"employee_id": self.value},
             )
