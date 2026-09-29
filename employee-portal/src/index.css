@@ -80,20 +80,20 @@
   --popover: 0 0% 100%;
   --popover-foreground: 222 47% 11%;
 
-  /* Primary Blue */
-  --primary: 210 100% 50%;
+  /* Primary Blue - L42 keeps white button text at 4.9:1 (needs 4.5:1) */
+  --primary: 210 100% 42%;
   --primary-foreground: 210 40% 98%;
 
   --secondary: 210 40% 96%;
   --secondary-foreground: 222 47% 11%;
 
   --muted: 210 40% 96%;
-  --muted-foreground: 215 16% 47%;
+  --muted-foreground: 215 16% 42%;
 
   --accent: 210 40% 96%;
   --accent-foreground: 222 47% 11%;
 
-  --destructive: 0 84% 60%;
+  --destructive: 0 84% 45%;
   --destructive-foreground: 210 40% 98%;
 
   --border: 214 32% 91%;
@@ -104,7 +104,7 @@
 
   --sidebar-background: 0 0% 100%;
   --sidebar-foreground: 240 5% 26%;
-  --sidebar-primary: 210 100% 50%;
+  --sidebar-primary: 210 100% 42%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 210 40% 96%;
   --sidebar-accent-foreground: 240 6% 10%;
@@ -118,45 +118,10 @@
   --chart-5: 27 87% 67%;
 }
 
-.dark {
-  /* Dark Mode Background */
-  --background: 222 47% 11%;
-  --foreground: 210 40% 98%;
-
-  --card: 222 47% 11%;
-  --card-foreground: 210 40% 98%;
-
-  --popover: 222 47% 11%;
-  --popover-foreground: 210 40% 98%;
-
-  --primary: 210 100% 50%;
-  --primary-foreground: 0 0% 100%;
-
-  --secondary: 217 33% 18%;
-  --secondary-foreground: 210 40% 98%;
-
-  --muted: 217 33% 18%;
-  --muted-foreground: 215 20% 65%;
-
-  --accent: 217 33% 18%;
-  --accent-foreground: 210 40% 98%;
-
-  --destructive: 0 63% 31%;
-  --destructive-foreground: 210 40% 98%;
-
-  --border: 217 33% 18%;
-  --input: 217 33% 18%;
-  --ring: 213 27% 84%;
-
-  --sidebar-background: 222 47% 11%;
-  --sidebar-foreground: 210 40% 98%;
-  --sidebar-primary: 210 100% 50%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 217 33% 18%;
-  --sidebar-accent-foreground: 210 40% 98%;
-  --sidebar-border: 217 33% 18%;
-  --sidebar-ring: 213 27% 84%;
-}
+/* NOTE: no .dark block by decision (2026-09-29 design refresh) - the app
+ * is light-only. Nothing in src/ ever applied the class, so the tokens
+ * were dead. If dark mode returns, drive it from prefers-color-scheme
+ * with no in-app toggle. */
 
 * {
   border-color: hsl(var(--border));
@@ -182,6 +147,24 @@ textarea {
 
 html {
   scroll-behavior: smooth;
+}
+
+/* Visible keyboard focus for native elements (shadcn primitives carry
+ * their own focus-visible rings). --ring is near-black, visible on light. */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .hover-scale,
+  .hover-scale:hover {
+    transform: none;
+    transition: none;
+  }
 }
 
 #root {
@@ -253,10 +236,13 @@ html {
 
 @media (max-width: 640px) {
   .fuel-page { padding: 8px; }
-  .fuel-paper { padding: 32px 18px; min-height: 0; }
+  /* Paper forms scroll horizontally on phones instead of shrinking table
+   * type below readable sizes - 12px floor, scroll for the rest. */
+  .fuel-paper { padding: 32px 18px; min-height: 0; overflow-x: auto; }
+  .fuel-table { min-width: 560px; font-size: 12px; }
   .fuel-header h1, .fuel-header h2 { font-size: 12px; }
   .paper-identity, .paper-row { column-gap: 12px; row-gap: 10px; }
-  .paper-field, .fuel-table, .paper-block h3, .approval-block h3, .signature-row, .dotted-line { font-size: 10px; }
+  .paper-field, .paper-block h3, .approval-block h3, .signature-row, .dotted-line { font-size: 10px; }
   .fuel-table th, .fuel-table td { padding: 3px; }
 }
 
@@ -301,7 +287,7 @@ html {
 .stores-submit { display: flex; justify-content: center; margin-top: 24px; font-family: var(--font-inter); }
 .stores-history h2 { font-size: 18px; }
 .stores-history p { font-size: 13px; margin: 5px 0; }
-@media (max-width: 640px) { .stores-page { padding: 8px; } .stores-paper { padding: 28px 16px; min-height: 0; } .stores-header { grid-template-columns: 1fr 48px; gap: 5px; } .stores-header img { width: 44px; height: 44px; } .stores-header h1 { font-size: 15px; } .stores-table, .approval-head, .approval-line { font-size: 9px; } .stores-table th, .stores-table td { padding: 2px; } }
+@media (max-width: 640px) { .stores-page { padding: 8px; } .stores-paper { padding: 28px 16px; min-height: 0; overflow-x: auto; } .stores-header { grid-template-columns: 1fr 48px; gap: 5px; } .stores-header img { width: 44px; height: 44px; } .stores-header h1 { font-size: 15px; } .stores-table, .approval-head, .approval-line { font-size: 12px; } .stores-table { min-width: 520px; } .stores-table th, .stores-table td { padding: 2px; } }
 @media print { .stores-page { padding: 0; background: white; } .stores-actions, .stores-history, .stores-submit { display: none; } .stores-paper { width: 210mm; min-height: 297mm; padding: 12mm 17mm; border: 0; box-shadow: none; } @page { size: A4; margin: 0; } }
 .comparative-paper { width: min(100%, 1123px); min-height: 794px; padding: 36px 52px; }
 .comparative-paper .stores-header { min-height: 78px; }
