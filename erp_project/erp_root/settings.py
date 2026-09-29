@@ -100,6 +100,7 @@ INSTALLED_APPS = [
     'modules.accounts.apps.AccountsConfig',       # Account, Journal, JournalEntry
     'modules.procurement.apps.ProcurementConfig', # Vendor, PurchaseRequest, PurchaseOrder
     'modules.portal.apps.PortalConfig',           # ExpenseClaim, SupportTicket, Document
+    'modules.workflow.apps.WorkflowConfig',       # Approval chains (generic engine)
 
     # Third-party apps
     "rest_framework",
