@@ -4,7 +4,7 @@ URL patterns for the procurement module API.
 
 from django.urls import path
 
-from modules.procurement.api import purchase_request_views, views
+from modules.procurement.api import purchase_request_views, views, workflow_actions_views
 
 app_name = "procurement_v2"
 
@@ -74,6 +74,11 @@ urlpatterns = [
         "requests/<int:request_id>/",
         purchase_request_views.purchase_request_detail,
         name="request-detail"
+    ),
+    path(
+        "requests/<int:request_id>/actions/",
+        workflow_actions_views.purchase_request_actions,
+        name="request-actions"
     ),
     path(
         "requests/<int:request_id>/submit/",
