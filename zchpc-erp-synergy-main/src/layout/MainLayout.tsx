@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
-import { navItems } from "./navConfig";
+import { navItems, NAV_SECTIONS } from "./navConfig";
 import { SidebarItem } from "./SidebarItem";
 import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -58,8 +58,13 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
     return filterItems(navItems);
   }, [user, isLoading, isModulesLoading, activeModules, checkPermission]); // Dependency on 'user' is key for refresh fix
 
-  console.log(user);
-  
+  // Group visible top-level items into labeled sections (design refresh
+  // 2026-09-29). Sections are fixed-order; empty ones (permission/module
+  // filtered) are skipped. Sub-items keep their parent's group.
+  const groupedNavItems = NAV_SECTIONS.map((section) => ({
+    section,
+    items: filteredNavItems.filter((item) => (item.section ?? "System") === section),
+  })).filter((group) => group.items.length > 0);
 
   const userName = `${user?.first_name || ""} ${user?.last_name || ""}`;
   // Get role display name - check multiple sources
@@ -86,7 +91,7 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto py-6 px-3">
-          <nav className="space-y-1">
+          <nav className="space-y-1" aria-label="Primary">
             {isLoading ? (
               <div className="space-y-3 p-2 animate-pulse">
                 {[1, 2, 3, 4, 5].map((i) => (
@@ -94,14 +99,23 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
                 ))}
               </div>
             ) : (
-              filteredNavItems.map((item) => (
-                <SidebarItem
-                  key={item.path}
-                  item={item}
-                  collapsed={collapsed}
-                  expandedItems={expandedItems}
-                  setExpandedItems={setExpandedItems}
-                />
+              groupedNavItems.map((group) => (
+                <div key={group.section}>
+                  {!collapsed && (
+                    <p className="px-3 pt-4 pb-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider first:pt-0">
+                      {group.section}
+                    </p>
+                  )}
+                  {group.items.map((item) => (
+                    <SidebarItem
+                      key={item.path}
+                      item={item}
+                      collapsed={collapsed}
+                      expandedItems={expandedItems}
+                      setExpandedItems={setExpandedItems}
+                    />
+                  ))}
+                </div>
               ))
             )}
           </nav>
