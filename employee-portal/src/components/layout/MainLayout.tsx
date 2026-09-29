@@ -18,7 +18,7 @@ export function MainLayout() {
         <Header onMenuClick={() => setSidebarOpen(true)} />
 
         {/* Page content */}
-        <main className="flex-1 p-4 md:p-6 pb-24 md:pb-6 overflow-auto">
+        <main className="flex-1 p-4 md:p-6 pb-24 md:pb-6">
           <div className="max-w-7xl mx-auto">
             <Outlet />
           </div>

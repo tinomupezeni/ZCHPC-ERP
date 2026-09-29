@@ -40,6 +40,7 @@ class UpdateDepartmentCommand:
     department_id: int
     name: str | None = None
     description: str | None = None
+    head_id: int | None = None
 
 
 @dataclass
@@ -140,7 +141,26 @@ class DepartmentService:
         if command.description is not None and command.description != department.description:
             changes.append("description")
 
-        department.update(name=command.name, description=command.description)
+        if command.head_id is not None and command.head_id != department.head_id:
+            # The purpose of this field is only to identify the employee
+            # responsible for departmental approval - not to gate who may be
+            # assigned by role or permission (see F10-PR scope). It must
+            # still refer to a real employee, or PurchaseRequestDecision's
+            # non-nullable actor reference would fail later, on approval,
+            # for reasons invisible from this endpoint.
+            head = self._employees.get_by_id(command.head_id)
+            if head is None:
+                raise ValidationError(
+                    message=f"Employee with ID {command.head_id} does not exist",
+                    code="INVALID_DEPARTMENT_HEAD",
+                )
+            changes.append("head")
+
+        department.update(
+            name=command.name,
+            description=command.description,
+            head_id=command.head_id,
+        )
         self._departments.update(department)
 
         if changes:
@@ -203,11 +223,20 @@ class DepartmentService:
     def _to_dto(self, department: Department) -> DepartmentDTO:
         """Convert department entity to DTO."""
         employee_count = len(self._employees.get_by_department(department.id))
+
+        head_name = ""
+        if department.head_id is not None:
+            head = self._employees.get_by_id(department.head_id)
+            if head is not None:
+                head_name = f"{head.first_name} {head.surname}".strip()
+
         return DepartmentDTO(
             id=department.id,
             name=department.name,
             description=department.description,
             employee_count=employee_count,
+            head_id=department.head_id,
+            head_name=head_name,
         )
 
 

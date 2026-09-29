@@ -12,11 +12,7 @@ from django.utils import timezone
 
 from shared.domain.exceptions import ValidationError, NotFoundError
 from modules.procurement.domain.entities import Supplier, InventoryItem, BudgetCenter
-from modules.procurement.application.services import (
-    ProcurementService,
-    CreatePurchaseRequestDTO,
-    RequestItemDTO,
-)
+from modules.procurement.application.services import ProcurementService
 from modules.procurement.infrastructure.persistence.django_supplier_repository import DjangoSupplierRepository
 from modules.procurement.infrastructure.persistence.django_inventory_item_repository import DjangoInventoryItemRepository
 from modules.procurement.infrastructure.persistence.django_budget_center_repository import DjangoBudgetCenterRepository
@@ -33,10 +29,6 @@ from modules.procurement.api.serializers import (
     BudgetCenterSerializer,
     CreateBudgetCenterSerializer,
     UpdateBudgetCenterSerializer,
-    PurchaseRequestSerializer,
-    CreatePurchaseRequestSerializer,
-    ApproveRequestSerializer,
-    RejectRequestSerializer,
     PurchaseOrderSerializer,
     MarkDeliveredSerializer,
     CancelOrderSerializer,
@@ -303,139 +295,6 @@ def budget_center_detail(request: Request, center_id: int) -> Response:
     elif request.method == "DELETE":
         _budget_repo.delete(center_id)
         return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-# ============================
-# Purchase Request Views
-# ============================
-
-@api_view(["GET", "POST"])
-def purchase_request_list(request: Request) -> Response:
-    """List purchase requests or create a new request."""
-    if request.method == "GET":
-        status_filter = request.query_params.get("status")
-        budget_center_id = request.query_params.get("budget_center_id")
-        pending_level = request.query_params.get("pending_level")
-
-        try:
-            if pending_level:
-                requests = _procurement_service.get_pending_approvals(
-                    level=int(pending_level)
-                )
-            else:
-                requests = _procurement_service.list_requests(
-                    status=status_filter,
-                    budget_center_id=int(budget_center_id) if budget_center_id else None
-                )
-            return Response(PurchaseRequestSerializer(requests, many=True).data)
-        except Exception as e:
-            return _handle_error(e)
-
-    elif request.method == "POST":
-        serializer = CreatePurchaseRequestSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            data = serializer.validated_data
-            items = [
-                RequestItemDTO(
-                    item_id=item["item_id"],
-                    quantity=item["quantity"]
-                )
-                for item in data.get("items", [])
-            ]
-
-            dto = CreatePurchaseRequestDTO(
-                requester_id=data["requester_id"],
-                requester_name=data["requester_name"],
-                supplier_id=data["supplier_id"],
-                budget_center_id=data["budget_center_id"],
-                items=items
-            )
-
-            pr = _procurement_service.create_purchase_request(dto)
-            return Response(
-                PurchaseRequestSerializer(pr).data,
-                status=status.HTTP_201_CREATED
-            )
-        except Exception as e:
-            return _handle_error(e)
-
-
-@api_view(["GET", "DELETE"])
-def purchase_request_detail(request: Request, request_id: int) -> Response:
-    """Get or delete a purchase request."""
-    if request.method == "GET":
-        try:
-            pr = _procurement_service.get_request(request_id)
-            return Response(PurchaseRequestSerializer(pr).data)
-        except Exception as e:
-            return _handle_error(e)
-
-    elif request.method == "DELETE":
-        if _request_repo.delete(request_id):
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        else:
-            return Response(
-                {"error": "Cannot delete non-pending request"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-
-@api_view(["POST"])
-def purchase_request_approve_level1(request: Request, request_id: int) -> Response:
-    """Approve a purchase request at Level 1."""
-    serializer = ApproveRequestSerializer(data=request.data)
-    if not serializer.is_valid():
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        pr = _procurement_service.approve_level1(
-            request_id=request_id,
-            approver_id=serializer.validated_data["approver_id"]
-        )
-        return Response(PurchaseRequestSerializer(pr).data)
-    except Exception as e:
-        return _handle_error(e)
-
-
-@api_view(["POST"])
-def purchase_request_approve_level2(request: Request, request_id: int) -> Response:
-    """Approve a purchase request at Level 2 (creates Purchase Order)."""
-    serializer = ApproveRequestSerializer(data=request.data)
-    if not serializer.is_valid():
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        pr, order = _procurement_service.approve_level2(
-            request_id=request_id,
-            approver_id=serializer.validated_data["approver_id"]
-        )
-        return Response({
-            "request": PurchaseRequestSerializer(pr).data,
-            "order": PurchaseOrderSerializer(order).data
-        })
-    except Exception as e:
-        return _handle_error(e)
-
-
-@api_view(["POST"])
-def purchase_request_reject(request: Request, request_id: int) -> Response:
-    """Reject a purchase request."""
-    serializer = RejectRequestSerializer(data=request.data)
-    if not serializer.is_valid():
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        pr = _procurement_service.reject_request(
-            request_id=request_id,
-            rejector_id=serializer.validated_data["rejector_id"],
-            reason=serializer.validated_data.get("reason")
-        )
-        return Response(PurchaseRequestSerializer(pr).data)
-    except Exception as e:
-        return _handle_error(e)
 
 
 @api_view(["POST"])

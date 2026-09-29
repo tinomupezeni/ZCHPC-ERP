@@ -2,7 +2,6 @@
 API serializers for the procurement module.
 """
 
-from decimal import Decimal
 from rest_framework import serializers
 
 
@@ -115,73 +114,6 @@ class UpdateBudgetCenterSerializer(serializers.Serializer):
     allocated_amount = serializers.DecimalField(
         max_digits=12, decimal_places=2, required=False
     )
-
-
-# ============================
-# Purchase Request Serializers
-# ============================
-
-class PurchaseRequestItemSerializer(serializers.Serializer):
-    """Serializer for purchase request item."""
-
-    id = serializers.IntegerField(read_only=True)
-    item_id = serializers.IntegerField()
-    item_name = serializers.CharField(read_only=True)
-    quantity = serializers.IntegerField(min_value=1)
-    price_per_unit = serializers.DecimalField(
-        max_digits=12, decimal_places=2, read_only=True
-    )
-    total_cost = serializers.DecimalField(
-        max_digits=12, decimal_places=2, read_only=True
-    )
-
-
-class PurchaseRequestSerializer(serializers.Serializer):
-    """Serializer for purchase request display."""
-
-    id = serializers.IntegerField(read_only=True)
-    requester_id = serializers.IntegerField()
-    requester_name = serializers.CharField()
-    supplier_id = serializers.IntegerField()
-    budget_center_id = serializers.IntegerField()
-    status = serializers.CharField()
-    total_amount = serializers.DecimalField(
-        max_digits=12, decimal_places=2, read_only=True
-    )
-    items = PurchaseRequestItemSerializer(many=True, read_only=True)
-    rejection_reason = serializers.CharField(allow_null=True, read_only=True)
-    level1_approver_id = serializers.IntegerField(allow_null=True, read_only=True)
-    level2_approver_id = serializers.IntegerField(allow_null=True, read_only=True)
-
-
-class CreateRequestItemSerializer(serializers.Serializer):
-    """Serializer for creating request items."""
-
-    item_id = serializers.IntegerField()
-    quantity = serializers.IntegerField(min_value=1)
-
-
-class CreatePurchaseRequestSerializer(serializers.Serializer):
-    """Serializer for creating a purchase request."""
-
-    requester_id = serializers.IntegerField()
-    requester_name = serializers.CharField(max_length=255)
-    supplier_id = serializers.IntegerField()
-    budget_center_id = serializers.IntegerField()
-    items = CreateRequestItemSerializer(many=True)
-
-
-class ApproveRequestSerializer(serializers.Serializer):
-    """Serializer for approving a request."""
-
-    approver_id = serializers.IntegerField()
-
-
-class RejectRequestSerializer(serializers.Serializer):
-    """Serializer for rejecting a request."""
-
-    rejector_id = serializers.IntegerField()
-    reason = serializers.CharField(required=False, allow_null=True)
 
 
 # ============================

@@ -151,13 +151,12 @@ class DepartmentDetailView(APIView):
             )
             department = service.update_department(command)
 
-            response_data = {
-                "id": department.id,
-                "name": department.name,
-                "description": department.description,
-            }
-
-            return Response(response_data)
+            # Re-fetch as the DTO so the response carries head_id/head_name
+            # (and employee_count) through the same serializer convention
+            # GET already uses, rather than hand-rolling a second response
+            # shape here.
+            response_dto = service.get_department(department.id)
+            return Response(DepartmentResponseSerializer(response_dto).data)
 
         except NotFoundError as e:
             return Response(

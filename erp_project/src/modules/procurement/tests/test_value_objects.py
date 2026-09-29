@@ -7,6 +7,8 @@ from decimal import Decimal
 
 from modules.procurement.domain.value_objects import (
     RequestStatus,
+    DecisionStage,
+    DecisionType,
     OrderStatus,
     Money,
     VendorRating,
@@ -19,28 +21,71 @@ from modules.procurement.domain.value_objects import (
 class TestRequestStatus:
     """Tests for RequestStatus enum."""
 
-    def test_pending_status(self):
-        status = RequestStatus.PENDING
-        assert status.value == "Pending"
-        assert status.is_pending
+    def test_draft_status(self):
+        status = RequestStatus.DRAFT
+        assert status.value == "DRAFT"
 
-    def test_level1_approved_status(self):
-        status = RequestStatus.LEVEL1_APPROVED
-        assert status.value == "Level1Approved"
-        assert status.is_approved_level1
+    def test_pending_department_head_status(self):
+        status = RequestStatus.PENDING_DEPARTMENT_HEAD
+        assert status.value == "PENDING_DEPARTMENT_HEAD"
 
-    def test_level2_approved_status(self):
-        status = RequestStatus.LEVEL2_APPROVED
-        assert status.is_approved_level2
-        assert status.is_fully_approved
+    def test_pending_accounts_status(self):
+        status = RequestStatus.PENDING_ACCOUNTS
+        assert status.value == "PENDING_ACCOUNTS"
+
+    def test_pending_gm_status(self):
+        status = RequestStatus.PENDING_GM
+        assert status.value == "PENDING_GM"
+
+    def test_pending_director_status(self):
+        status = RequestStatus.PENDING_DIRECTOR
+        assert status.value == "PENDING_DIRECTOR"
+
+    def test_pending_procurement_status(self):
+        status = RequestStatus.PENDING_PROCUREMENT
+        assert status.value == "PENDING_PROCUREMENT"
+
+    def test_processed_status(self):
+        status = RequestStatus.PROCESSED
+        assert status.value == "PROCESSED"
 
     def test_rejected_status(self):
         status = RequestStatus.REJECTED
-        assert status.is_rejected
+        assert status.value == "REJECTED"
 
-    def test_cancelled_status(self):
-        status = RequestStatus.CANCELLED
-        assert status.is_cancelled
+    def test_all_statuses_present(self):
+        expected = {
+            "DRAFT", "PENDING_DEPARTMENT_HEAD", "PENDING_ACCOUNTS",
+            "PENDING_GM", "PENDING_DIRECTOR", "PENDING_PROCUREMENT",
+            "PROCESSED", "REJECTED",
+        }
+        assert {s.value for s in RequestStatus} == expected
+
+
+class TestDecisionStage:
+    """Tests for DecisionStage enum."""
+
+    def test_all_stages(self):
+        assert DecisionStage.DEPARTMENT_HEAD.value == "DEPARTMENT_HEAD"
+        assert DecisionStage.ACCOUNTS.value == "ACCOUNTS"
+        assert DecisionStage.GM.value == "GM"
+        assert DecisionStage.DIRECTOR.value == "DIRECTOR"
+
+    def test_stage_count(self):
+        assert len(DecisionStage) == 4
+
+
+class TestDecisionType:
+    """Tests for DecisionType enum."""
+
+    def test_all_types(self):
+        assert DecisionType.APPROVED.value == "APPROVED"
+        assert DecisionType.VERIFIED.value == "VERIFIED"
+        assert DecisionType.RECOMMENDED.value == "RECOMMENDED"
+        assert DecisionType.REJECTED.value == "REJECTED"
+
+    def test_type_count(self):
+        assert len(DecisionType) == 4
 
 
 class TestOrderStatus:

@@ -4,16 +4,17 @@ Repository interfaces for the procurement module.
 
 from abc import ABC, abstractmethod
 from decimal import Decimal
-from typing import List, Optional
 
+from modules.procurement.domain.budget_code_rules import BudgetCode
 from modules.procurement.domain.entities import (
-    Supplier,
-    InventoryItem,
     BudgetCenter,
-    PurchaseRequest,
+    InventoryItem,
     PurchaseOrder,
+    PurchaseRequest,
+    PurchaseRequestCategory,
+    Supplier,
 )
-from modules.procurement.domain.value_objects import RequestStatus, OrderStatus
+from modules.procurement.domain.value_objects import OrderStatus, RequestStatus
 
 
 class ISupplierRepository(ABC):
@@ -25,22 +26,22 @@ class ISupplierRepository(ABC):
         ...
 
     @abstractmethod
-    def get_by_id(self, supplier_id: int) -> Optional[Supplier]:
+    def get_by_id(self, supplier_id: int) -> Supplier | None:
         """Get a supplier by ID."""
         ...
 
     @abstractmethod
-    def get_all(self, include_inactive: bool = False) -> List[Supplier]:
+    def get_all(self, include_inactive: bool = False) -> list[Supplier]:
         """Get all suppliers."""
         ...
 
     @abstractmethod
-    def get_active(self) -> List[Supplier]:
+    def get_active(self) -> list[Supplier]:
         """Get active suppliers."""
         ...
 
     @abstractmethod
-    def search(self, query: str) -> List[Supplier]:
+    def search(self, query: str) -> list[Supplier]:
         """Search suppliers by name."""
         ...
 
@@ -59,22 +60,22 @@ class IInventoryItemRepository(ABC):
         ...
 
     @abstractmethod
-    def get_by_id(self, item_id: int) -> Optional[InventoryItem]:
+    def get_by_id(self, item_id: int) -> InventoryItem | None:
         """Get an item by ID."""
         ...
 
     @abstractmethod
-    def get_by_sku(self, sku: str) -> Optional[InventoryItem]:
+    def get_by_sku(self, sku: str) -> InventoryItem | None:
         """Get an item by SKU."""
         ...
 
     @abstractmethod
-    def get_all(self, include_inactive: bool = False) -> List[InventoryItem]:
+    def get_all(self, include_inactive: bool = False) -> list[InventoryItem]:
         """Get all items."""
         ...
 
     @abstractmethod
-    def get_low_stock(self) -> List[InventoryItem]:
+    def get_low_stock(self) -> list[InventoryItem]:
         """Get items that need reordering."""
         ...
 
@@ -93,40 +94,32 @@ class IBudgetCenterRepository(ABC):
         ...
 
     @abstractmethod
-    def get_by_id(self, budget_center_id: int) -> Optional[BudgetCenter]:
+    def get_by_id(self, budget_center_id: int) -> BudgetCenter | None:
         """Get a budget center by ID."""
         ...
 
     @abstractmethod
-    def get_by_code(self, code: str) -> Optional[BudgetCenter]:
+    def get_by_code(self, code: str) -> BudgetCenter | None:
         """Get a budget center by code."""
         ...
 
     @abstractmethod
-    def get_all(self, include_inactive: bool = False) -> List[BudgetCenter]:
+    def get_all(self, include_inactive: bool = False) -> list[BudgetCenter]:
         """Get all budget centers."""
         ...
 
     @abstractmethod
-    def get_by_fiscal_year(self, year: int) -> List[BudgetCenter]:
+    def get_by_fiscal_year(self, year: int) -> list[BudgetCenter]:
         """Get budget centers for a fiscal year."""
         ...
 
     @abstractmethod
-    def allocate_budget(
-        self,
-        budget_center_id: int,
-        amount: Decimal
-    ) -> BudgetCenter:
+    def allocate_budget(self, budget_center_id: int, amount: Decimal) -> BudgetCenter:
         """Allocate budget from a budget center."""
         ...
 
     @abstractmethod
-    def release_budget(
-        self,
-        budget_center_id: int,
-        amount: Decimal
-    ) -> BudgetCenter:
+    def release_budget(self, budget_center_id: int, amount: Decimal) -> BudgetCenter:
         """Release allocated budget back to budget center."""
         ...
 
@@ -141,64 +134,139 @@ class IPurchaseRequestRepository(ABC):
 
     @abstractmethod
     def save(self, request: PurchaseRequest) -> PurchaseRequest:
-        """Save a purchase request with its items."""
+        """Save a purchase request with its items and decisions."""
         ...
 
     @abstractmethod
-    def get_by_id(self, request_id: int) -> Optional[PurchaseRequest]:
-        """Get a request by ID with all items."""
+    def get_by_id(self, request_id: int) -> PurchaseRequest | None:
+        """Get a request by ID with all items and decisions."""
         ...
 
     @abstractmethod
-    def get_all(self) -> List[PurchaseRequest]:
+    def get_all(self) -> list[PurchaseRequest]:
         """Get all requests."""
         ...
 
     @abstractmethod
-    def get_by_status(self, status: RequestStatus) -> List[PurchaseRequest]:
+    def get_by_status(self, status: RequestStatus) -> list[PurchaseRequest]:
         """Get requests by status."""
         ...
 
     @abstractmethod
-    def get_pending(self) -> List[PurchaseRequest]:
-        """Get pending requests."""
+    def get_pending_department_head(self) -> list[PurchaseRequest]:
+        """Get requests pending Department Head approval."""
         ...
 
     @abstractmethod
-    def get_pending_level1(self) -> List[PurchaseRequest]:
-        """Get requests pending Level 1 approval."""
+    def get_pending_accounts(self) -> list[PurchaseRequest]:
+        """Get requests pending Accounts verification."""
         ...
 
     @abstractmethod
-    def get_pending_level2(self) -> List[PurchaseRequest]:
-        """Get requests pending Level 2 approval."""
+    def get_pending_gm(self) -> list[PurchaseRequest]:
+        """Get requests pending GM recommendation."""
         ...
 
     @abstractmethod
-    def get_by_requester(self, requester_id: int) -> List[PurchaseRequest]:
+    def get_pending_director(self) -> list[PurchaseRequest]:
+        """Get requests pending Director approval."""
+        ...
+
+    @abstractmethod
+    def get_pending_procurement(self) -> list[PurchaseRequest]:
+        """Get requests pending Procurement processing."""
+        ...
+
+    @abstractmethod
+    def get_by_requester(self, requester_id: int) -> list[PurchaseRequest]:
         """Get requests by requester."""
         ...
 
     @abstractmethod
-    def get_by_budget_center(
-        self,
-        budget_center_id: int
-    ) -> List[PurchaseRequest]:
-        """Get requests by budget center."""
-        ...
+    def exists_by_purchase_order_number(self, purchase_order_number: str) -> bool:
+        """
+        Whether any request already carries this PO number (F23).
 
-    @abstractmethod
-    def update_status(
-        self,
-        request_id: int,
-        status: RequestStatus
-    ) -> PurchaseRequest:
-        """Update request status."""
+        Used by ProcessPurchaseRequestByProcurement to reject a duplicate
+        with a clear error before touching the domain; the database's own
+        unique constraint on this column remains the actual guarantee under
+        concurrent writes.
+        """
         ...
 
     @abstractmethod
     def delete(self, request_id: int) -> bool:
-        """Delete a request (only if pending)."""
+        """Delete a request (only if pending/draft)."""
+        ...
+
+
+class IPurchaseRequestCategoryRepository(ABC):
+    """
+    Interface for the employee-facing Purchase Request category lookup
+    (Slice F11-A). Read-only by design - creating/deactivating categories is
+    a Finance-curation activity outside this slice's scope, not an employee
+    or requester-facing operation.
+    """
+
+    @abstractmethod
+    def get_by_id(self, category_id: int) -> PurchaseRequestCategory | None:
+        """Get a category by ID, active or not - callers decide what to do with an inactive one."""
+        ...
+
+    @abstractmethod
+    def get_all_active(self) -> list[PurchaseRequestCategory]:
+        """Get every category currently selectable by an employee."""
+        ...
+
+    @abstractmethod
+    def get_by_ids(self, category_ids: set[int]) -> dict[int, PurchaseRequestCategory]:
+        """
+        Categories keyed by their own id, for the given ids. Returns active
+        and inactive categories - an item keeps its historical category.
+        """
+        ...
+
+    @abstractmethod
+    def get_by_account_chart_ids(self, account_chart_ids: set[int]) -> dict[int, PurchaseRequestCategory]:
+        """
+        Categories keyed by the AccountChart id they map to, for the given
+        ids (Slice 2).
+
+        Used to reverse-resolve which employee-facing category, if any, an
+        item's already-persisted budget_code_id corresponds to - so an edit
+        form can pre-select it. An id with no matching category (e.g. an
+        item created via the raw budget_code_id path) is simply absent from
+        the result, not an error. Returns both active and inactive
+        categories - callers decide what an inactive match means for them.
+        """
+        ...
+
+
+class IBudgetCodeRepository(ABC):
+    """
+    Read-only lookup of AccountChart rows Accounts may assign as a budget code.
+
+    Implementations must only ever return rows whose external_account_type is
+    in ALLOWED_BUDGET_CODE_EXTERNAL_TYPES.
+    """
+
+    @abstractmethod
+    def get_assignable(self) -> list[BudgetCode]:
+        """Every assignable budget code, ordered by code."""
+        ...
+
+    @abstractmethod
+    def get_assignable_by_id(self, budget_code_id: int) -> BudgetCode | None:
+        """The row if it exists AND is assignable; None otherwise."""
+        ...
+
+    @abstractmethod
+    def get_by_ids(self, budget_code_ids: set[int]) -> dict[int, BudgetCode]:
+        """
+        Display lookup: the AccountChart rows already assigned to items,
+        keyed by id. Deliberately NOT filtered to assignable types - an
+        item's existing code must be shown as it actually is.
+        """
         ...
 
 
@@ -211,37 +279,37 @@ class IPurchaseOrderRepository(ABC):
         ...
 
     @abstractmethod
-    def get_by_id(self, order_id: int) -> Optional[PurchaseOrder]:
+    def get_by_id(self, order_id: int) -> PurchaseOrder | None:
         """Get an order by ID."""
         ...
 
     @abstractmethod
-    def get_by_order_number(self, order_number: str) -> Optional[PurchaseOrder]:
+    def get_by_order_number(self, order_number: str) -> PurchaseOrder | None:
         """Get an order by order number."""
         ...
 
     @abstractmethod
-    def get_by_request_id(self, request_id: int) -> Optional[PurchaseOrder]:
+    def get_by_request_id(self, request_id: int) -> PurchaseOrder | None:
         """Get order by request ID."""
         ...
 
     @abstractmethod
-    def get_all(self) -> List[PurchaseOrder]:
+    def get_all(self) -> list[PurchaseOrder]:
         """Get all orders."""
         ...
 
     @abstractmethod
-    def get_by_status(self, status: OrderStatus) -> List[PurchaseOrder]:
+    def get_by_status(self, status: OrderStatus) -> list[PurchaseOrder]:
         """Get orders by status."""
         ...
 
     @abstractmethod
-    def get_by_supplier(self, supplier_id: int) -> List[PurchaseOrder]:
+    def get_by_supplier(self, supplier_id: int) -> list[PurchaseOrder]:
         """Get orders by supplier."""
         ...
 
     @abstractmethod
-    def get_pending_delivery(self) -> List[PurchaseOrder]:
+    def get_pending_delivery(self) -> list[PurchaseOrder]:
         """Get orders pending delivery."""
         ...
 

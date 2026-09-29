@@ -35,6 +35,17 @@ class Department(models.Model):
     # TODO: Add fields for Department model
     name = models.CharField(max_length=100, unique=True, default='IT')
     description = models.TextField(blank=True, default='')
+    # Authoritative record of who is responsible for this department.
+    # Nullable because a department may be between heads; string reference
+    # because Employees is declared further down this module.
+    head = models.ForeignKey(
+        'Employees',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='headed_departments',
+        help_text='Employee accountable for this department (e.g. approves its requisitions)',
+    )
     pass
 
 class EmployeeAllowance(models.Model):

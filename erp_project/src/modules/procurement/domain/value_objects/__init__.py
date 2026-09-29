@@ -4,6 +4,8 @@ Procurement domain value objects.
 
 from modules.procurement.domain.value_objects.procurement_types import (
     RequestStatus,
+    DecisionStage,
+    DecisionType,
     OrderStatus,
     Money,
     VendorRating,
@@ -14,6 +16,8 @@ from modules.procurement.domain.value_objects.procurement_types import (
 
 __all__ = [
     "RequestStatus",
+    "DecisionStage",
+    "DecisionType",
     "OrderStatus",
     "Money",
     "VendorRating",

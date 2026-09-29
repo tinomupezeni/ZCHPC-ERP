@@ -1,5 +1,5 @@
 """
-Role-based permissions configuration for the Identity module.
+Role-based permission helpers for the Identity module.
 
 Permissions use a pattern matching system where:
 - "*" means full access
@@ -7,6 +7,14 @@ Permissions use a pattern matching system where:
 - "module.endpoint" means access to a specific endpoint
 """
 from rest_framework.permissions import BasePermission
+
+# DEPRECATED: ROLE_PERMISSIONS is no longer an authorization input.
+#
+# Route access is now derived from ``hr.Role.permissions`` - the authoritative,
+# administrable permission store - via ``route_access`` and RBACMiddleware.
+# This map survives only as documentation of the grants that migration
+# hr/0017_seed_role_permissions copied into that store, and has no runtime
+# consumer. Do not add roles here; grant permissions on the role instead.
 
 # HR role permissions
 _HR_PERMISSIONS = [

@@ -62,6 +62,15 @@ class AccountChart(models.Model):
         related_name='children'
     )
     account_type = models.CharField(max_length=50, choices=ACCOUNT_TYPES)
+    # Account type exactly as exported by the external accounting system
+    # (e.g. Sage 200 Evolution "Other Expense"). Stored verbatim and never
+    # mapped onto account_type; blank for accounts that did not come from one.
+    external_account_type = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        help_text='Account type exactly as exported by the external accounting system',
+    )
     reconcile = models.BooleanField(default=False)
     currency = models.ForeignKey(Currency, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
