@@ -16,19 +16,34 @@ export interface SidebarItemConfig {
   permission: string[]; // A list of roles that can see this
   moduleIdentifier?: string; // Link to backend system module
   subItems?: SidebarItemConfig[];
+  /** Top-level grouping label (design refresh 2026-09-29). Only set on
+   *  top-level items; sub-items inherit their parent's group. */
+  section?: string;
 }
+
+/** Render order for sidebar sections. Groups with no visible items
+ *  (after permission/module filtering) are skipped, not shown empty. */
+export const NAV_SECTIONS = [
+  "Overview",
+  "People & Pay",
+  "Money",
+  "Operations",
+  "System",
+] as const;
 
 
 
 export const navItems: SidebarItemConfig[] = [
   {
     title: "Dashboard",
+    section: "Overview",
     icon: LayoutDashboard,
     path: "/dashboard",
     permission: ["admin"], // Now an array
   },
   {
     title: "HR",
+    section: "People & Pay",
     icon: Users,
     path: "/hr",
     permission: ["hr", "admin"], // Now an array
@@ -96,14 +111,17 @@ export const navItems: SidebarItemConfig[] = [
   },
   {
     title: "Payroll",
+    section: "People & Pay",
     icon: CreditCard,
     path: "/payroll",
     permission: ["hr", "accountant", "admin"], // Now an array with both permissions
     moduleIdentifier: "payroll",
     subItems: [
-      {
-        title: "Process Payroll",
-        path: "/payroll",
+  {
+    title: "Payroll",
+    icon: CreditCard,
+    section: "People & Pay",
+    path: "/payroll",
         permission: ["hr", "accountant"],
       },
       {
@@ -150,6 +168,7 @@ export const navItems: SidebarItemConfig[] = [
   },
   {
     title: "Sales",
+    section: "Money",
     icon: ShoppingCart,
     path: "/sales",
     permission: ["sales", "admin"],
@@ -157,6 +176,7 @@ export const navItems: SidebarItemConfig[] = [
   },
   {
     title: "Accounting",
+    section: "Money",
     icon: DollarSign,
     path: "/accounting",
     permission: ["accountant", "admin"],
@@ -201,6 +221,7 @@ export const navItems: SidebarItemConfig[] = [
   },
   {
     title: "Procurement",
+    section: "Operations",
     icon: FileText,
     path: "/procurement",
     permission: ["procurement", "admin"],
@@ -240,6 +261,7 @@ export const navItems: SidebarItemConfig[] = [
   },
   {
     title: "Inventory",
+    section: "Operations",
     icon: Package,
     path: "/inventory",
     permission: ["inventory", "admin"],
@@ -260,12 +282,14 @@ export const navItems: SidebarItemConfig[] = [
   },
   {
     title: "Settings",
+    section: "System",
     icon: Settings,
     path: "/settings",
     permission: ["admin"],
   },
   {
     title: "App Store",
+    section: "System",
     icon: Package,
     path: "/modules",
     permission: ["admin"],
