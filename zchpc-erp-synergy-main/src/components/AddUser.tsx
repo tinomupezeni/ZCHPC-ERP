@@ -8,6 +8,7 @@ import {
   addRole,
   addUser,
 } from "@/services/hr.services";
+import { getEmployees } from "@/services/employees.services";
 
 export default function AddUser({ setShowModal, onSuccess }) {
   const [step, setStep] = useState(1); // 1: Form, 2: Confirm, 3: Credentials
@@ -24,7 +25,9 @@ export default function AddUser({ setShowModal, onSuccess }) {
   // Data lists
   const [departments, setDepartments] = useState([]);
   const [dbRoles, setDbRoles] = useState([]);
+  const [employeesList, setEmployeesList] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [selectedEmpId, setSelectedEmpId] = useState("");
 
   // Inline Add states
   const [isAddingDept, setIsAddingDept] = useState(false);
@@ -34,12 +37,14 @@ export default function AddUser({ setShowModal, onSuccess }) {
 
   const fetchInitialData = async () => {
     try {
-      const [deptRes, roleRes] = await Promise.all([
+      const [deptRes, roleRes, empRes] = await Promise.all([
         getDepartment(),
         getRoles(),
+        getEmployees(),
       ]);
       setDepartments(deptRes.data);
       setDbRoles(roleRes); // Assuming role service returns .data already based on previous service update
+      setEmployeesList(empRes.data);
     } catch (err) {
       toast.error("Failed to load system data");
     }
@@ -100,10 +105,32 @@ export default function AddUser({ setShowModal, onSuccess }) {
     }
   };
 
-  const getDeptName = () =>
-    departments.find((d) => String(d.id) === String(employee.department))?.name;
+  const getDeptName = () => {
+    const dept = departments.find((d) => String(d.id) === String(employee.department));
+    return dept ? dept.name : employee.department;
+  };
   const getRoleName = () =>
     dbRoles.find((r) => String(r.id) === String(employee.role))?.display_name;
+
+  const handleEmployeeSelect = (e) => {
+    const empId = e.target.value;
+    setSelectedEmpId(empId);
+    if (!empId) {
+      setEmployee({ ...employee, first_name: "", last_name: "", email: "", department: "" });
+      return;
+    }
+    
+    const emp = employeesList.find((em) => String(em.id) === String(empId));
+    if (emp) {
+      setEmployee({
+        ...employee,
+        first_name: emp.first_name,
+        last_name: emp.surname || emp.last_name || "",
+        email: emp.email || "",
+        department: emp.department_id || emp.department || "",
+      });
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
@@ -134,28 +161,26 @@ export default function AddUser({ setShowModal, onSuccess }) {
                 setStep(2);
               }}
             >
-              <div className="grid grid-cols-2 gap-4">
-                <input
-                  placeholder="First Name"
-                  value={employee.first_name}
-                  onChange={(e) =>
-                    setEmployee({ ...employee, first_name: e.target.value })
-                  }
+              <div className="space-y-1">
+                <label className="text-[12px] font-bold text-slate-400 uppercase">
+                  Select Employee
+                </label>
+                <select
+                  value={selectedEmpId}
+                  onChange={handleEmployeeSelect}
                   required
-                  className="p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <input
-                  placeholder="Surname"
-                  value={employee.last_name}
-                  onChange={(e) =>
-                    setEmployee({ ...employee, last_name: e.target.value })
-                  }
-                  required
-                  className="p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                  className="w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select Employee...</option>
+                  {employeesList.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.first_name} {emp.surname} ({emp.employee_id}) - {emp.position}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 {/* Role Section */}
                 <div className="space-y-1">
                   <div className="flex justify-between items-center">
@@ -203,71 +228,12 @@ export default function AddUser({ setShowModal, onSuccess }) {
                         setEmployee({ ...employee, role: e.target.value })
                       }
                       required
-                      className="w-full p-2.5 border rounded-lg text-sm"
+                      className="w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="">Select Role</option>
                       {dbRoles?.map((r) => (
                         <option key={r.id} value={r.id}>
                           {r.display_name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-
-                {/* Dept Section */}
-                <div className="space-y-1">
-                  <div className="flex justify-between items-center">
-                    <label className="text-[12px] font-bold text-slate-400 uppercase">
-                      Department
-                    </label>
-                    {!isAddingDept && (
-                      <button
-                        type="button"
-                        onClick={() => setIsAddingDept(true)}
-                        className="text-[12px] text-blue-600 font-bold hover:underline"
-                      >
-                        Add New
-                      </button>
-                    )}
-                  </div>
-                  {isAddingDept ? (
-                    <div className="flex gap-1">
-                      <input
-                        autoFocus
-                        placeholder="Dept Name"
-                        value={newDeptName}
-                        onChange={(e) => setNewDeptName(e.target.value)}
-                        className="flex-1 p-2 text-sm border border-blue-300 rounded-lg outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleQuickAddDept}
-                        className="p-1.5 bg-blue-600 text-white rounded-lg"
-                      >
-                        <Check className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setIsAddingDept(false)}
-                        className="p-1.5 bg-slate-100 text-slate-400 rounded-lg"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <select
-                      value={employee.department}
-                      onChange={(e) =>
-                        setEmployee({ ...employee, department: e.target.value })
-                      }
-                      required
-                      className="w-full p-2.5 border rounded-lg text-sm"
-                    >
-                      <option value="">Select Dept</option>
-                      {departments.map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.name}
                         </option>
                       ))}
                     </select>

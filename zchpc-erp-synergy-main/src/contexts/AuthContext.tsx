@@ -26,7 +26,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = () => {
     authService.clearTokens();
     setUser(null);
-    if (window.location.pathname !== "/login") { window.location.href = "/login"; }
+    if (window.location.pathname !== "/login") {
+      window.location.href = "/login";
+    }
   };
 
   useEffect(() => {
