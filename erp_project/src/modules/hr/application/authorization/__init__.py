@@ -5,11 +5,13 @@ from modules.hr.application.authorization.employee_policy import (
     EmployeeAuthorizationPolicy,
 )
 from modules.hr.application.authorization.permissions import (
+    DepartmentManagementPermissions,
     EmployeeManagementPermissions,
     RoleManagementPermissions,
 )
 
 __all__ = [
+    "DepartmentManagementPermissions",
     "EmployeeAuthorizationPolicy",
     "EmployeeManagementPermissions",
     "RoleManagementPermissions",

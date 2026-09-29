@@ -20,6 +20,10 @@ Rules (confirmed REM-01 decisions - capability-based, no job-title hierarchy):
   decide which roles hold which capabilities.
 - Nobody may assign themselves a role granting anything they do not already
   hold. Self-demotion (e.g. an ADMIN taking a narrower role) stays allowed.
+- Changing an existing employee's role or department also needs authority
+  over that employee: the actor must hold every permission the target
+  currently holds (AUD-01 F2), so nobody can demote or move someone above
+  them.
 - Deactivating an employee needs ``hr.employee.deactivate``, may not target
   the actor themselves, and may not target anyone whose effective
   permissions the actor does not hold (so, for example, only a full-access
@@ -96,6 +100,27 @@ class EmployeeAuthorizationPolicy:
             "You cannot assign a role that grants permissions you do not hold.",
             code="EMPLOYEE_ROLE_EXCEEDS_ACTOR_AUTHORITY",
         )
+
+    def authorize_assignment_target(
+        self,
+        actor_permissions: PermissionSet,
+        *,
+        target_permissions: PermissionSet,
+    ) -> None:
+        """
+        Changing an existing employee's role or department also needs
+        authority over that employee as they stand: the actor must hold every
+        permission the target currently holds (AUD-01 F2). Without this, an
+        actor could demote or move anyone above them to a role within their
+        own ceiling. Acting on oneself always passes (an actor covers their
+        own permissions); authorize_assignment still stops self-escalation.
+        """
+        if not actor_permissions.covers(target_permissions):
+            raise AuthorizationError(
+                "You cannot change the role or department of an employee who "
+                "holds permissions you do not hold.",
+                code="EMPLOYEE_TARGET_EXCEEDS_ACTOR_AUTHORITY",
+            )
 
     def authorize_deactivate(self, actor_permissions: PermissionSet) -> None:
         """Capability check; runs before the target is loaded."""

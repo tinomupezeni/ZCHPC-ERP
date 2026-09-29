@@ -56,3 +56,17 @@ class RoleManagementPermissions:
     """Capability strings for role/permission administration."""
 
     MANAGE = "hr.role.manage"
+
+
+class DepartmentManagementPermissions:
+    """
+    Capability strings for department administration (AUD-01 F8).
+
+    Creating, renaming, deleting a department and recording its head all need
+    MANAGE. The head is security-relevant: procurement's department-head
+    approval authority is Department.head. Reaching the hr routes (any hr.*
+    grant, e.g. hr.employee.view) is not enough. Which roles hold it is the
+    organisation's decision, made through the Roles API.
+    """
+
+    MANAGE = "hr.department.manage"

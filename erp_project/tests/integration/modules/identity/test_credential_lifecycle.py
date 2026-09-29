@@ -405,6 +405,63 @@ class TestSurnamePasswordMigration:
         assert {u.pk: u.password for u in User.objects.all()} == hashes
 
 
+class TestFlaggedAccountRotation:
+    """
+    The deploy-time operator procedure for accounts migration 0005 flags:
+    disable, then re-enable, the login through the identity API. Re-enabling
+    issues a fresh temporary password; the surname stops working.
+    """
+
+    def test_rotation_retires_the_surname_password_end_to_end(self):
+        legacy = make_employee("Legacy", "portal.notification.view", password="Person")
+        operator = make_employee(
+            "Operator", EMP.DEACTIVATE, EMP.REACTIVATE, "portal.notification.view", "hr.employee.view"
+        )
+        _flag_migration.flag_surname_passwords(django_apps, None)
+        assert User.objects.get(pk=legacy.user.pk).must_change_password is True
+
+        # Before rotation the surname still authenticates (confined) - the gap
+        # this procedure closes.
+        before = login(legacy.email, "Person")
+        assert before.status_code == status.HTTP_200_OK
+        surname_access = before.data["access"]
+
+        user_url = f"{USERS_URL}{legacy.user_id}/"
+        ops = client_for(operator.user)
+        assert ops.patch(user_url, {"is_active": False}, format="json").status_code == 200
+        reactivated = ops.patch(user_url, {"is_active": True}, format="json")
+        assert reactivated.status_code == status.HTTP_200_OK, reactivated.data
+        temporary = reactivated.data["temporary_password"]
+        assert temporary and temporary != "Person"
+
+        # Surname retired on both login surfaces; its earlier token is revoked.
+        assert login(legacy.email, "Person").status_code == status.HTTP_401_UNAUTHORIZED
+        assert portal_login(legacy.employee_id, "Person").status_code == status.HTTP_401_UNAUTHORIZED
+        assert bearer(surname_access).get(ME_URL).status_code == status.HTTP_401_UNAUTHORIZED
+
+        # The HR record was never deactivated, so both surfaces accept the
+        # new credential, flagged and confined.
+        assert portal_login(legacy.employee_id, temporary).status_code == status.HTTP_200_OK
+        first = login(legacy.email, temporary)
+        assert first.status_code == status.HTTP_200_OK
+        assert first.data["user"]["must_change_password"] is True
+        assert User.objects.get(pk=legacy.user.pk).must_change_password is True
+        confined = bearer(first.data["access"])
+        blocked = confined.get("/api/v2/portal/notifications/")
+        assert blocked.status_code == status.HTTP_403_FORBIDDEN
+        assert blocked.json()["code"] == "PASSWORD_CHANGE_REQUIRED"
+
+        changed = confined.post(
+            CHANGE_URL, {"current_password": temporary, "new_password": NEW_PASSWORD}, format="json"
+        )
+        assert changed.status_code == status.HTTP_200_OK, changed.data
+        assert User.objects.get(pk=legacy.user.pk).must_change_password is False
+        # Tokens from before the change are revoked; the new ones work.
+        assert bearer(first.data["access"]).get(ME_URL).status_code == status.HTTP_401_UNAUTHORIZED
+        assert bearer(changed.data["access"]).get("/api/v2/portal/notifications/").status_code == 200
+        assert login(legacy.email, temporary).status_code == status.HTTP_401_UNAUTHORIZED
+
+
 # =============================================================================
 # Portal login: brute-force protection and audit
 # =============================================================================

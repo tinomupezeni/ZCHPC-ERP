@@ -325,8 +325,16 @@ class TestWildcardSemanticsArePinnedNotChanged:
 
 
 class TestAuthorizedHrRoleAdministratorCanAdministerRoles:
+    """
+    Positive cases. Since AUD-01 F1 a role administrator can only grant what
+    they hold, so this administrator also holds the permission it grants.
+    """
+
     def _hr_admin_client(self, suffix, role_name="HR_ROLE_ADMIN"):
-        role = make_role(f"{role_name}_{suffix}", [RoleManagementPermissions.MANAGE])
+        role = make_role(
+            f"{role_name}_{suffix}",
+            [RoleManagementPermissions.MANAGE, "procurement.purchase_request.view"],
+        )
         employee = make_employee("Helen", "Admin", suffix, role=role)
         return jwt_client_for(employee.user)
 
@@ -378,11 +386,23 @@ class TestAuthorizedHrRoleAdministratorCanAdministerRoles:
         client = jwt_client_for(hr_employee.user)
 
         target = make_role("TARGET_FOR_REAL_HR_B005", [])
-        response = client.patch(role_url(target.id), {"permissions": ["hr.employee.view"]}, format="json")
+        response = client.patch(
+            role_url(target.id),
+            {"description": "Maintained by HR", "permissions": [RoleManagementPermissions.MANAGE]},
+            format="json",
+        )
 
         assert response.status_code == status.HTTP_200_OK, response.data
         target.refresh_from_db()
-        assert target.permissions == ["hr.employee.view"]
+        assert target.description == "Maintained by HR"
+        assert target.permissions == [RoleManagementPermissions.MANAGE]
+
+        # As seeded it holds nothing else, so it can grant nothing else
+        # (AUD-01 F1): an administrator must first give HR what it is to
+        # administer.
+        response = client.patch(role_url(target.id), {"permissions": ["hr.employee.view"]}, format="json")
+        assert response.status_code == status.HTTP_403_FORBIDDEN, response.data
+        assert response.data["code"] == "ROLE_PERMISSIONS_EXCEED_ACTOR_AUTHORITY"
 
     def test_a_non_superuser_employee_holding_bare_wildcard_can_administer_roles(self):
         """

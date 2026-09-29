@@ -391,7 +391,9 @@ class EmployeeService:
         Raises:
             AuthorizationError: If the command changes role_id or
                 department_id without EmployeeManagementPermissions
-                .MANAGE_ASSIGNMENTS, or assigns a role the actor may not grant.
+                .MANAGE_ASSIGNMENTS, assigns a role the actor may not grant,
+                or changes the role/department of an employee who holds
+                permissions the actor does not.
             NotFoundError: If employee not found
             ValidationError: If validation fails (including an unknown role_id)
         """
@@ -406,6 +408,16 @@ class EmployeeService:
         employee = self._employees.get_by_id(command.employee_id)
         if not employee:
             raise NotFoundError(f"Employee with ID {command.employee_id} not found")
+
+        # Target authority (AUD-01 F2): judged on the employee as they stand,
+        # and only when the role or department actually changes.
+        if (command.role_id is not None and command.role_id != employee.role_id) or (
+            command.department_id is not None and command.department_id != employee.department_id
+        ):
+            self._policy.authorize_assignment_target(
+                actor_permissions,
+                target_permissions=self._effective_permissions(employee),
+            )
 
         changes = []
 

@@ -83,7 +83,9 @@ class DepartmentListCreateView(APIView):
 
         try:
             command = CreateDepartmentCommand(**serializer.validated_data)
-            department = service.create_department(command)
+            department = service.create_department(
+                command, resolve_actor_permissions(request.user)
+            )
 
             response_data = {
                 "id": department.id,
@@ -93,6 +95,11 @@ class DepartmentListCreateView(APIView):
 
             return Response(response_data, status=status.HTTP_201_CREATED)
 
+        except AuthorizationError as e:
+            return Response(
+                {"error": e.message, "code": e.code},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         except ValidationError as e:
             return Response(
                 {"error": e.message, "code": e.code},
@@ -153,7 +160,9 @@ class DepartmentDetailView(APIView):
                 department_id=department_id,
                 **serializer.validated_data,
             )
-            department = service.update_department(command)
+            department = service.update_department(
+                command, resolve_actor_permissions(request.user)
+            )
 
             # Re-fetch as the DTO so the response carries head_id/head_name
             # (and employee_count) through the same serializer convention
@@ -162,6 +171,11 @@ class DepartmentDetailView(APIView):
             response_dto = service.get_department(department.id)
             return Response(DepartmentResponseSerializer(response_dto).data)
 
+        except AuthorizationError as e:
+            return Response(
+                {"error": e.message, "code": e.code},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         except NotFoundError as e:
             return Response(
                 {"error": str(e)},
@@ -178,12 +192,19 @@ class DepartmentDetailView(APIView):
         service = get_department_service()
 
         try:
-            deleted = service.delete_department(department_id)
+            deleted = service.delete_department(
+                department_id, resolve_actor_permissions(request.user)
+            )
             if deleted:
                 return Response(status=status.HTTP_204_NO_CONTENT)
             return Response(
                 {"error": "Failed to delete department"},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+        except AuthorizationError as e:
+            return Response(
+                {"error": e.message, "code": e.code},
+                status=status.HTTP_403_FORBIDDEN,
             )
         except NotFoundError as e:
             return Response(
@@ -490,6 +511,11 @@ class RoleDetailView(APIView):
             return Response(
                 {"error": str(e)},
                 status=status.HTTP_404_NOT_FOUND,
+            )
+        except ValidationError as e:
+            return Response(
+                {"error": e.message, "code": e.code},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         return Response({
