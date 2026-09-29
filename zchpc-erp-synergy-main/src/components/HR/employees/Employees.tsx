@@ -10,6 +10,9 @@ const Employees = () => {
   const [allEmployees, setAllEmployees] = useState([]);
   const [filteredEmployees, setFilteredEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
+  // A failed fetch must say so - an empty list is not the same as zero
+  // employees, and "No employees found" sent testers chasing filters.
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Modal States
   const [showAddModal, setShowAddModal] = useState(false);
@@ -21,12 +24,20 @@ const Employees = () => {
 
   const fetchEmployees = () => {
     setLoading(true);
+    setLoadError(null);
     getEmployees()
       .then((response) => {
         setAllEmployees(response.data);
         setFilteredEmployees(response.data);
       })
-      .catch((error) => console.error("Fetch error:", error))
+      .catch((error) => {
+        const status = error?.response?.status;
+        setLoadError(
+          status
+            ? `Could not load employees (server returned ${status}). Try again or contact support.`
+            : "Could not reach the server. Check your connection and try again."
+        );
+      })
       .finally(() => setLoading(false));
   };
 
@@ -104,11 +115,23 @@ const Employees = () => {
       </div>
 
       {/* Table */}
-      <EmployeeList 
-        employees={filteredEmployees} 
-        loading={loading} 
-        onView={(emp) => setSelectedEmployee(emp)} 
-      />
+      {loadError ? (
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-red-200 text-center">
+          <p className="text-sm font-medium text-red-700">{loadError}</p>
+          <button
+            onClick={fetchEmployees}
+            className="mt-3 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
+      ) : (
+        <EmployeeList
+          employees={filteredEmployees}
+          loading={loading}
+          onView={(emp) => setSelectedEmployee(emp)}
+        />
+      )}
 
       {/* Modals */}
       {showAddModal && (
