@@ -19,7 +19,7 @@ class LeaveRequest(AggregateRoot[int]):
 
     def __init__(
         self,
-        id: int,
+        id: int | None,
         employee_id: int,
         leave_type_id: int,
         period: LeavePeriod,
@@ -61,7 +61,7 @@ class LeaveRequest(AggregateRoot[int]):
     @classmethod
     def create(
         cls,
-        id: int,
+        id: int | None,
         employee_id: int,
         leave_type_id: int,
         start_date: date,

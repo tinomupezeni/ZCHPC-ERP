@@ -39,17 +39,15 @@ class IJobRepository(ABC):
 
     @abstractmethod
     def save(self, job: Job) -> Job:
-        """Save job."""
+        """
+        Persist a job. A new job (id None) is inserted and receives a
+        database-assigned id; an existing one updates only its own row.
+        """
         ...
 
     @abstractmethod
     def delete(self, job_id: int) -> None:
         """Delete job."""
-        ...
-
-    @abstractmethod
-    def get_next_id(self) -> int:
-        """Get next available ID."""
         ...
 
     @abstractmethod
@@ -87,7 +85,10 @@ class ICandidateRepository(ABC):
 
     @abstractmethod
     def save(self, candidate: Candidate) -> Candidate:
-        """Save candidate."""
+        """
+        Persist a candidate. A new candidate (id None) is inserted and receives a
+        database-assigned id; an existing one updates only its own row.
+        """
         ...
 
     @abstractmethod
@@ -95,10 +96,6 @@ class ICandidateRepository(ABC):
         """Delete candidate."""
         ...
 
-    @abstractmethod
-    def get_next_id(self) -> int:
-        """Get next available ID."""
-        ...
 
 
 class IApplicationRepository(ABC):
@@ -146,17 +143,15 @@ class IApplicationRepository(ABC):
 
     @abstractmethod
     def save(self, application: Application) -> Application:
-        """Save application."""
+        """
+        Persist a application. A new application (id None) is inserted and receives a
+        database-assigned id; an existing one updates only its own row.
+        """
         ...
 
     @abstractmethod
     def delete(self, application_id: int) -> None:
         """Delete application."""
-        ...
-
-    @abstractmethod
-    def get_next_id(self) -> int:
-        """Get next available ID."""
         ...
 
     @abstractmethod

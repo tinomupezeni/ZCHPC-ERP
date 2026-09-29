@@ -60,11 +60,6 @@ class IAttendanceRepository(ABC):
         """Delete attendance record."""
         ...
 
-    @abstractmethod
-    def get_next_id(self) -> int:
-        """Get next available ID."""
-        ...
-
 
 class IQRTokenRepository(ABC):
     """Interface for QR token repository."""
@@ -97,9 +92,4 @@ class IQRTokenRepository(ABC):
         Returns:
             Number of tokens deactivated
         """
-        ...
-
-    @abstractmethod
-    def get_next_id(self) -> int:
-        """Get next available ID."""
         ...

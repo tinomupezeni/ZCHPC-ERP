@@ -16,6 +16,8 @@ export interface Employee {
   employee_type: string;
   is_active: boolean;
   leave_days_entitled: number;
+  /** REM-07: the account holds a temporary password that must be replaced. */
+  must_change_password?: boolean;
 }
 
 export interface LoginCredentials {
@@ -27,6 +29,19 @@ export interface LoginResponse {
   access: string;
   refresh: string;
   employee: Employee;
+  must_change_password: boolean;
+}
+
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+}
+
+export interface ChangePasswordResponse {
+  detail: string;
+  must_change_password: boolean;
+  access: string;
+  refresh: string;
 }
 
 export interface TokenRefreshResponse {
@@ -45,4 +60,5 @@ export interface AuthContextType extends AuthState {
   login: (credentials: LoginCredentials) => Promise<void>;
   logout: () => Promise<void>;
   refreshAccessToken: () => Promise<string | null>;
+  changePassword: (request: ChangePasswordRequest) => Promise<void>;
 }

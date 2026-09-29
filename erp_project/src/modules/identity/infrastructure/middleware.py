@@ -6,7 +6,7 @@ from django.urls import resolve
 from django.http import JsonResponse
 from .route_access import (
     grants_module_access,
-    module_for_app,
+    module_for_route,
     permission_set_for_user,
 )
 
@@ -55,7 +55,10 @@ class RBACMiddleware:
 
     # Paths that are entirely public or handled by other systems
     EXEMPT_PATHS = [
-        "/api/v2/auth/",  # Login/Token endpoints
+        # Login and token refresh only (token/, token/refresh/). The rest of
+        # /api/v2/auth/ - user administration, audit logs, modules - is
+        # ordinary protected API (REM-08).
+        "/api/v2/auth/token/",
         "/api/v2/portal/auth/",  # Portal login
         "/api/v2/portal/public/",  # Public job listings (portal module)
         "/api/v2/recruitment/public/",  # Public job listings/applications (recruitment module)
@@ -80,6 +83,16 @@ class RBACMiddleware:
     # notifications.
     PERSONAL_RESOURCE_PATHS = [
         "/api/v2/portal/notifications",
+        "/api/v2/auth/users/me/",  # the caller's own login profile
+        "/api/v2/auth/password/change/",  # the caller's own password
+    ]
+
+    # REM-07: all an account holding an issued temporary password
+    # (must_change_password) may reach, besides the exempt login/refresh and
+    # portal auth routes, until its owner replaces the password.
+    PASSWORD_CHANGE_PATHS = [
+        "/api/v2/auth/users/me/",
+        "/api/v2/auth/password/change/",
     ]
 
     def __init__(self, get_response):
@@ -101,6 +114,21 @@ class RBACMiddleware:
         # 1. Allow fully public/system paths
         if self._is_exempt(path):
             return self.get_response(request)
+
+        # 1b. First-login confinement (REM-07): an account holding an issued
+        # temporary password may only replace it. Checked before every other
+        # branch (media, personal resources, the superuser bypass) so none of
+        # them widens it.
+        if getattr(request.user, "must_change_password", False) and not any(
+            path.startswith(p) for p in self.PASSWORD_CHANGE_PATHS
+        ):
+            return JsonResponse(
+                {
+                    "detail": "You must change your temporary password before continuing.",
+                    "code": "PASSWORD_CHANGE_REQUIRED",
+                },
+                status=403,
+            )
 
         # 2. Handle /media/ specifically (Require auth, but bypass strict RBAC roles)
         # This allows employees to download their own payslips without needing 'HR' role.
@@ -160,7 +188,7 @@ class RBACMiddleware:
                 return JsonResponse({"detail": "Permission denied."}, status=403)
 
             # 6. Coarse check: does the user hold anything in this module?
-            if grants_module_access(permissions, module_for_app(app_name)):
+            if grants_module_access(permissions, module_for_route(app_name, url_name)):
                 return self.get_response(request)
 
             # FAIL-CLOSED: Deny if no permission covers this route family

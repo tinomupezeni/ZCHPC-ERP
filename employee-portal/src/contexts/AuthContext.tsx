@@ -8,7 +8,12 @@ import {
 } from 'react';
 import { authService } from '@/services/auth.service';
 import { getAccessToken, getRefreshToken, setTokens, clearTokens } from '@/services/api';
-import type { Employee, LoginCredentials, AuthContextType } from '@/types/auth.types';
+import type {
+  AuthContextType,
+  ChangePasswordRequest,
+  Employee,
+  LoginCredentials,
+} from '@/types/auth.types';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -55,12 +60,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setIsLoading(true);
     try {
       const response = await authService.login(credentials);
-      setEmployee(response.employee);
+      setEmployee({ ...response.employee, must_change_password: response.must_change_password });
       setAccessToken(response.access);
       setRefreshToken(response.refresh);
     } finally {
       setIsLoading(false);
     }
+  }, []);
+
+  const changePassword = useCallback(async (request: ChangePasswordRequest) => {
+    const response = await authService.changePassword(request);
+    setAccessToken(response.access);
+    setRefreshToken(response.refresh);
+    setEmployee((current) =>
+      current ? { ...current, must_change_password: response.must_change_password } : current
+    );
   }, []);
 
   const logout = useCallback(async () => {
@@ -102,6 +116,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     login,
     logout,
     refreshAccessToken,
+    changePassword,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

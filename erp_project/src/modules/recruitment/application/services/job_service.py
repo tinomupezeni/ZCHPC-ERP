@@ -9,7 +9,16 @@ from typing import Sequence
 
 from shared.domain.exceptions import NotFoundError, ValidationError
 
-from modules.recruitment.application.interfaces import IApplicationRepository, IJobRepository, JobDTO
+from modules.recruitment.application.authorization import (
+    RecruitmentActor,
+    RecruitmentAuthorizationPolicy,
+)
+from modules.recruitment.application.interfaces import (
+    IApplicationRepository,
+    IJobRepository,
+    JobDTO,
+    PublicJobDTO,
+)
 from modules.recruitment.domain.entities import Job
 from modules.recruitment.domain.events import JobClosed, JobPosted, JobReopened
 from modules.recruitment.domain.value_objects import JobStatus, SalaryRange
@@ -64,18 +73,26 @@ class UpdateJobCommand:
 class JobService:
     """
     Application service for job operations.
+
+    Internal operations take the acting RecruitmentActor and are authorized
+    (REM-04) before anything is read or changed. The public careers reads
+    (get_public_jobs / get_public_job) take no actor: they are public by
+    design and return only the PublicJobDTO allowlist.
     """
 
     def __init__(
         self,
         job_repository: IJobRepository,
         application_repository: IApplicationRepository,
+        authorization_policy: RecruitmentAuthorizationPolicy | None = None,
     ) -> None:
         self._job_repo = job_repository
         self._app_repo = application_repository
+        self._policy = authorization_policy or RecruitmentAuthorizationPolicy()
 
-    def create_job(self, command: CreateJobCommand) -> JobDTO:
+    def create_job(self, command: CreateJobCommand, actor: RecruitmentActor) -> JobDTO:
         """Create a new job posting."""
+        self._policy.authorize_manage_jobs(actor)
         salary_range = SalaryRange(
             usd_min=command.salary_usd_min,
             usd_max=command.salary_usd_max,
@@ -86,7 +103,7 @@ class JobService:
         status = JobStatus.from_string(command.status)
 
         job = Job(
-            id=self._job_repo.get_next_id(),
+            id=None,  # assigned by the database on insert
             title=command.title,
             department_id=command.department_id,
             position_id=command.position_id,
@@ -104,22 +121,22 @@ class JobService:
             notes=command.notes,
         )
 
+        saved = self._job_repo.save(job)
         if status == JobStatus.OPEN:
-            job.add_domain_event(
+            saved.add_domain_event(
                 JobPosted(
-                    job_id=job.id,
-                    title=job.title,
-                    department_id=job.department_id,
-                    is_internal=job.is_internal,
+                    job_id=saved.id,
+                    title=saved.title,
+                    department_id=saved.department_id,
+                    is_internal=saved.is_internal,
                     posted_at=datetime.now(),
                 )
             )
-
-        saved = self._job_repo.save(job)
         return self._to_dto(saved)
 
-    def update_job(self, command: UpdateJobCommand) -> JobDTO:
+    def update_job(self, command: UpdateJobCommand, actor: RecruitmentActor) -> JobDTO:
         """Update an existing job."""
+        self._policy.authorize_manage_jobs(actor)
         job = self._job_repo.get_by_id(command.job_id)
         if not job:
             raise NotFoundError(f"Job with ID {command.job_id} not found")
@@ -159,8 +176,9 @@ class JobService:
         saved = self._job_repo.save(job)
         return self._to_dto(saved)
 
-    def publish_job(self, job_id: int) -> JobDTO:
+    def publish_job(self, job_id: int, actor: RecruitmentActor) -> JobDTO:
         """Publish a job (change status to Open)."""
+        self._policy.authorize_manage_jobs(actor)
         job = self._job_repo.get_by_id(job_id)
         if not job:
             raise NotFoundError(f"Job with ID {job_id} not found")
@@ -179,8 +197,9 @@ class JobService:
         saved = self._job_repo.save(job)
         return self._to_dto(saved)
 
-    def close_job(self, job_id: int) -> JobDTO:
+    def close_job(self, job_id: int, actor: RecruitmentActor) -> JobDTO:
         """Close a job posting."""
+        self._policy.authorize_manage_jobs(actor)
         job = self._job_repo.get_by_id(job_id)
         if not job:
             raise NotFoundError(f"Job with ID {job_id} not found")
@@ -197,8 +216,9 @@ class JobService:
         saved = self._job_repo.save(job)
         return self._to_dto(saved)
 
-    def reopen_job(self, job_id: int) -> JobDTO:
+    def reopen_job(self, job_id: int, actor: RecruitmentActor) -> JobDTO:
         """Reopen a closed job."""
+        self._policy.authorize_manage_jobs(actor)
         job = self._job_repo.get_by_id(job_id)
         if not job:
             raise NotFoundError(f"Job with ID {job_id} not found")
@@ -215,8 +235,9 @@ class JobService:
         saved = self._job_repo.save(job)
         return self._to_dto(saved)
 
-    def get_job(self, job_id: int) -> JobDTO:
-        """Get a job by ID."""
+    def get_job(self, job_id: int, actor: RecruitmentActor) -> JobDTO:
+        """Get a job by ID (internal view: any status)."""
+        self._policy.authorize_view_jobs(actor)
         job = self._job_repo.get_by_id(job_id)
         if not job:
             raise NotFoundError(f"Job with ID {job_id} not found")
@@ -227,8 +248,11 @@ class JobService:
         status: str | None = None,
         department_id: int | None = None,
         is_internal: bool | None = None,
+        *,
+        actor: RecruitmentActor,
     ) -> Sequence[JobDTO]:
         """Get all jobs with optional filters."""
+        self._policy.authorize_view_jobs(actor)
         job_status = JobStatus.from_string(status) if status else None
         jobs = self._job_repo.get_all(
             status=job_status,
@@ -237,28 +261,47 @@ class JobService:
         )
         return [self._to_dto(j) for j in jobs]
 
-    def get_open_jobs(self, is_internal: bool | None = None) -> Sequence[JobDTO]:
-        """Get all open jobs."""
+    def get_open_jobs(
+        self, is_internal: bool | None = None, *, actor: RecruitmentActor
+    ) -> Sequence[JobDTO]:
+        """Get all open jobs (internal view, including applicant counts)."""
+        self._policy.authorize_view_jobs(actor)
         jobs = self._job_repo.get_open_jobs(is_internal=is_internal)
         return [self._to_dto(j) for j in jobs]
 
-    def get_public_jobs(self) -> Sequence[JobDTO]:
+    def get_public_jobs(self) -> Sequence[PublicJobDTO]:
         """Get all open jobs shown on the public careers page (internal and external)."""
         jobs = self._job_repo.get_public_jobs()
-        return [self._to_dto(j) for j in jobs]
+        return [self._to_public_dto(j) for j in jobs]
+
+    def get_public_job(self, job_id: int) -> PublicJobDTO:
+        """
+        Get one job for the public careers page.
+
+        Only Open jobs are public (internal or not); any other status is
+        reported exactly like a job that does not exist.
+        """
+        job = self._job_repo.get_by_id(job_id)
+        if not job or job.status != JobStatus.OPEN:
+            raise NotFoundError("Job not found")
+        return self._to_public_dto(job)
 
     def search_jobs(
         self,
         query: str,
         status: str | None = None,
+        *,
+        actor: RecruitmentActor,
     ) -> Sequence[JobDTO]:
         """Search jobs by title or description."""
+        self._policy.authorize_view_jobs(actor)
         job_status = JobStatus.from_string(status) if status else None
         jobs = self._job_repo.search(query=query, status=job_status)
         return [self._to_dto(j) for j in jobs]
 
-    def delete_job(self, job_id: int) -> None:
+    def delete_job(self, job_id: int, actor: RecruitmentActor) -> None:
         """Delete a job."""
+        self._policy.authorize_manage_jobs(actor)
         job = self._job_repo.get_by_id(job_id)
         if not job:
             raise NotFoundError(f"Job with ID {job_id} not found")
@@ -272,6 +315,32 @@ class JobService:
             )
 
         self._job_repo.delete(job_id)
+
+    def _to_public_dto(self, job: Job) -> PublicJobDTO:
+        """Convert entity to the public allowlist DTO."""
+        return PublicJobDTO(
+            id=job.id,
+            title=job.title,
+            department_id=job.department_id,
+            department_name="",  # Will be populated by infrastructure
+            position_id=job.position_id,
+            position_title=None,  # Will be populated by infrastructure
+            status=job.status.value,
+            location=job.location,
+            reports_to=job.reports_to,
+            salary_usd_min=job.salary_range.usd_min,
+            salary_usd_max=job.salary_range.usd_max,
+            salary_zig_min=job.salary_range.zig_min,
+            salary_zig_max=job.salary_range.zig_max,
+            is_internal=job.is_internal,
+            description=job.description,
+            responsibilities=list(job.responsibilities),
+            qualifications=list(job.qualifications),
+            competencies=list(job.competencies),
+            application_process=job.application_process,
+            contact_email=job.contact_email,
+            posted_date=job.posted_date,
+        )
 
     def _to_dto(self, job: Job) -> JobDTO:
         """Convert entity to DTO."""

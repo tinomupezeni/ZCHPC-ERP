@@ -9,16 +9,25 @@ from uuid import UUID
 
 from django.db import transaction
 
-from shared.domain.exceptions import ValidationError, NotFoundError
+from shared.domain.exceptions import AuthorizationError, ValidationError, NotFoundError
 from shared.domain.value_objects import Email, NationalId, PhoneNumber, EmployeeId
 from shared.infrastructure import EventBus
 
+from modules.hr.application.authorization import (
+    EmployeeAuthorizationPolicy,
+    resolve_actor_permissions,
+)
 from modules.hr.application.interfaces import (
     IEmployeeRepository,
     IDepartmentRepository,
     IPositionRepository,
     EmployeeDTO,
     SalaryDTO,
+)
+from modules.identity.domain.value_objects import PermissionSet
+from modules.payroll.application.authorization import (
+    PayrollActor,
+    PayrollAuthorizationPolicy,
 )
 from modules.hr.domain.entities import Employee
 from modules.hr.domain.value_objects import (
@@ -127,20 +136,132 @@ class EmployeeService:
         self._departments = department_repository
         self._positions = position_repository
         self._event_bus = event_bus or EventBus.get_instance()
+        self._policy = EmployeeAuthorizationPolicy()
 
-    def create_employee(self, command: CreateEmployeeCommand) -> Employee:
+    def _role_permissions(self, role_id: int | None) -> PermissionSet | None:
+        """
+        The permissions of role ``role_id``, or None if it does not exist.
+
+        Read from hr.Role directly, as RoleService and permission_set_for_user
+        do: the identity Role entity rejects names the Roles API accepts
+        (e.g. hyphens), so it cannot be used to look up arbitrary roles.
+        """
+        if role_id is None:
+            return None
+        from modules.hr.infrastructure.persistence.models import Role
+
+        role = Role.objects.filter(pk=role_id).only("permissions").first()
+        if role is None:
+            return None
+        return PermissionSet.from_list(list(role.permissions or []))
+
+    def _authorize_assignment(
+        self,
+        actor_permissions: PermissionSet,
+        *,
+        role_id: int | None,
+        department_id: int | None,
+        is_self: bool,
+    ) -> None:
+        """
+        The one role/department assignment boundary, shared by create and
+        update (see EmployeeAuthorizationPolicy.authorize_assignment).
+
+        Reaching this service at all already means the caller passed
+        RBACMiddleware's coarse "does this role hold anything in the hr
+        module" gate - that gate was never meant to be the boundary for a
+        specific, sensitive field change. Every other field is unaffected.
+        """
+        self._policy.authorize_assignment(
+            actor_permissions,
+            role_id=role_id,
+            department_id=department_id,
+            role_permissions=self._role_permissions(role_id),
+            is_self=is_self,
+        )
+
+    @staticmethod
+    def _authorize_payroll_data_changes(
+        command: "CreateEmployeeCommand | UpdateEmployeeCommand",
+        actor_permissions: PermissionSet | None,
+        target_employee_id: int | None,
+    ) -> None:
+        """
+        Salary, bank and statutory data live in payroll's tables and are
+        governed by payroll's authorization policy (REM-02): reaching the hr
+        module and being allowed to edit an employee is not, by itself,
+        authority to write this data. Runs before anything is loaded or saved.
+
+        ``actor_permissions=None`` is treated as holding nothing.
+        """
+        salary = (
+            command.usd_salary is not None
+            or command.zig_salary is not None
+            or (isinstance(command, UpdateEmployeeCommand) and command.pay_frequency is not None)
+        )
+        bank = bool(command.bank_name or command.bank_account)
+        statutory = bool(
+            command.nssa_number
+            or command.zimra_number
+            or command.paye_number
+            or command.pension_fund
+            or (isinstance(command, UpdateEmployeeCommand) and command.pays_aids_levy is not None)
+        )
+        if not (salary or bank or statutory):
+            return
+
+        policy = PayrollAuthorizationPolicy()
+        actor = PayrollActor.from_permissions(actor_permissions or PermissionSet.empty())
+        if salary:
+            policy.authorize_manage_payroll_profile(actor, target_employee_id)
+        if bank:
+            policy.authorize_manage_bank_accounts(actor, target_employee_id)
+        if statutory:
+            policy.authorize_manage_statutory_profile(actor, target_employee_id)
+
+    def create_employee(
+        self,
+        command: CreateEmployeeCommand,
+        actor_permissions: PermissionSet | None = None,
+        actor_email: str | None = None,
+    ) -> Employee:
         """
         Create a new employee.
 
         Args:
             command: Create employee command
+            actor_permissions: The creating actor's permissions. None holds
+                nothing. Creation needs hr.employee.create; a role_id also
+                goes through the role-assignment boundary, and salary, bank
+                or statutory data need the matching payroll capabilities.
+            actor_email: The creating actor's login email, from the
+                authenticated request. The new record is linked to an
+                existing login with the same email (modules.hr.signals), so
+                a matching email makes a role_id a self-assignment.
 
         Returns:
             Created employee
 
         Raises:
-            ValidationError: If validation fails
+            AuthorizationError: If the actor lacks a required capability or
+                may not assign the requested role.
+            ValidationError: If validation fails (including an unknown role_id)
         """
+        actor_permissions = actor_permissions or PermissionSet.empty()
+        self._policy.authorize_create(actor_permissions)
+        # Initial department placement is part of creating the record (the
+        # admin UI always sends it); only the role is an assignment here.
+        self._authorize_assignment(
+            actor_permissions,
+            role_id=command.role_id,
+            department_id=None,
+            is_self=bool(
+                actor_email
+                and command.email
+                and actor_email.strip().lower() == command.email.strip().lower()
+            ),
+        )
+        self._authorize_payroll_data_changes(command, actor_permissions, None)
         # Validate email uniqueness
         if command.email and self._employees.exists_by_email(command.email):
             raise ValidationError(
@@ -243,23 +364,60 @@ class EmployeeService:
 
         return employee
 
-    def update_employee(self, command: UpdateEmployeeCommand) -> Employee:
+    def update_employee(
+        self,
+        command: UpdateEmployeeCommand,
+        actor_permissions: PermissionSet,
+        actor_employee_id: int | None = None,
+    ) -> Employee:
         """
         Update an existing employee.
 
         Args:
             command: Update employee command
+            actor_permissions: The permissions held by the employee making
+                this request, per ``hr.Role.permissions`` (see
+                ``modules.identity.infrastructure.route_access
+                .permission_set_for_user``). Required so this method - not
+                just the coarse per-module HTTP gate - can enforce who may
+                reassign an employee's role or department.
+            actor_employee_id: The acting employee's own record id, from the
+                authenticated request, so a role change on it is judged as a
+                self-assignment.
 
         Returns:
             Updated employee
 
         Raises:
+            AuthorizationError: If the command changes role_id or
+                department_id without EmployeeManagementPermissions
+                .MANAGE_ASSIGNMENTS, assigns a role the actor may not grant,
+                or changes the role/department of an employee who holds
+                permissions the actor does not.
             NotFoundError: If employee not found
-            ValidationError: If validation fails
+            ValidationError: If validation fails (including an unknown role_id)
         """
+        self._authorize_assignment(
+            actor_permissions,
+            role_id=command.role_id,
+            department_id=command.department_id,
+            is_self=actor_employee_id is not None and actor_employee_id == command.employee_id,
+        )
+        self._authorize_payroll_data_changes(command, actor_permissions, command.employee_id)
+
         employee = self._employees.get_by_id(command.employee_id)
         if not employee:
             raise NotFoundError(f"Employee with ID {command.employee_id} not found")
+
+        # Target authority (AUD-01 F2): judged on the employee as they stand,
+        # and only when the role or department actually changes.
+        if (command.role_id is not None and command.role_id != employee.role_id) or (
+            command.department_id is not None and command.department_id != employee.department_id
+        ):
+            self._policy.authorize_assignment_target(
+                actor_permissions,
+                target_permissions=self._effective_permissions(employee),
+            )
 
         changes = []
 
@@ -346,23 +504,54 @@ class EmployeeService:
 
         return employee
 
-    def deactivate_employee(self, employee_id: int, reason: str = "") -> Employee:
+    def deactivate_employee(
+        self,
+        employee_id: int,
+        reason: str = "",
+        actor_permissions: PermissionSet | None = None,
+        actor_employee_id: int | None = None,
+    ) -> Employee:
         """
-        Deactivate an employee (soft delete).
+        Deactivate an employee (soft delete) and disable their login.
 
         Args:
             employee_id: Employee ID
             reason: Reason for deactivation
+            actor_permissions: The acting user's permissions. None holds
+                nothing. Needs hr.employee.deactivate, checked before the
+                target is loaded, and must cover the target's own effective
+                permissions.
+            actor_employee_id: The acting employee's own record id, from the
+                authenticated request; deactivating it is refused.
 
         Returns:
             Deactivated employee
+
+        Raises:
+            AuthorizationError: If the actor may not deactivate this employee.
+            NotFoundError: If employee not found
         """
+        actor_permissions = actor_permissions or PermissionSet.empty()
+        self._policy.authorize_deactivate(actor_permissions)
+
         employee = self._employees.get_by_id(employee_id)
         if not employee:
             raise NotFoundError(f"Employee with ID {employee_id} not found")
 
+        self._policy.authorize_deactivate_target(
+            actor_permissions,
+            target_permissions=self._effective_permissions(employee),
+            is_self=actor_employee_id is not None and actor_employee_id == employee.id,
+        )
+
+        # The employee record and its login go inactive together or not at
+        # all. SimpleJWT rejects an inactive user on every request and on
+        # token refresh, so this also ends any session already issued.
         employee.deactivate()
-        self._employees.update(employee)
+        with transaction.atomic():
+            self._employees.update(employee)
+            if employee.user_id is not None:
+                self._disable_login(employee.user_id)
 
         self._event_bus.publish(
             EmployeeTerminatedEvent(
@@ -374,32 +563,57 @@ class EmployeeService:
 
         return employee
 
-    def get_employee(self, employee_id: int) -> EmployeeDTO | None:
-        """Get employee DTO by ID."""
+    def get_employee(
+        self, employee_id: int, actor_permissions: PermissionSet | None = None
+    ) -> EmployeeDTO | None:
+        """
+        Get employee DTO by ID.
+
+        Salary/bank fields are populated only for an actor holding the matching
+        payroll view capability; otherwise they are None (see _to_dto).
+        """
         employee = self._employees.get_by_id(employee_id)
         if not employee:
             return None
-        return self._to_dto(employee)
+        return self._to_dto(employee, actor_permissions)
 
-    def get_employee_by_employee_id(self, employee_id: str) -> EmployeeDTO | None:
+    def get_employee_by_employee_id(
+        self, employee_id: str, actor_permissions: PermissionSet | None = None
+    ) -> EmployeeDTO | None:
         """Get employee DTO by employee number."""
         employee = self._employees.get_by_employee_id(employee_id)
         if not employee:
             return None
-        return self._to_dto(employee)
+        return self._to_dto(employee, actor_permissions)
 
-    def get_active_employees(self) -> list[EmployeeDTO]:
+    def get_active_employees(
+        self, actor_permissions: PermissionSet | None = None
+    ) -> list[EmployeeDTO]:
         """Get all active employees."""
         employees = self._employees.get_all(include_inactive=False)
-        return [self._to_dto(e) for e in employees]
+        return [self._to_dto(e, actor_permissions) for e in employees]
 
-    def get_employees_by_department(self, department_id: int) -> list[EmployeeDTO]:
+    def get_employees_by_department(
+        self, department_id: int, actor_permissions: PermissionSet | None = None
+    ) -> list[EmployeeDTO]:
         """Get employees in a department."""
         employees = self._employees.get_by_department(department_id)
-        return [self._to_dto(e) for e in employees]
+        return [self._to_dto(e, actor_permissions) for e in employees]
 
-    def get_employee_salary(self, employee_id: int) -> SalaryDTO | None:
-        """Get employee salary information."""
+    def get_employee_salary(
+        self, employee_id: int, actor_permissions: PermissionSet | None
+    ) -> SalaryDTO | None:
+        """
+        Get employee salary information.
+
+        Requires the payroll profile-view capability, checked before anything
+        about the employee is loaded (so a caller without it cannot tell
+        whether the employee exists).
+        """
+        PayrollAuthorizationPolicy().authorize_view_payroll_profile(
+            PayrollActor.from_permissions(actor_permissions or PermissionSet.empty()),
+            employee_id,
+        )
         employee = self._employees.get_by_id(employee_id)
         if not employee:
             return None
@@ -499,6 +713,26 @@ class EmployeeService:
             statutory.pension_fund = command.pension_fund
         statutory.save()
 
+    def _effective_permissions(self, employee: Employee) -> PermissionSet:
+        """
+        What this employee's login can actually do: resolved the same way as
+        for an acting user (resolve_actor_permissions, so a linked superuser
+        is full access), or from their role alone when they have no login.
+        """
+        if employee.user_id is not None:
+            from modules.identity.infrastructure.persistence.models import CustomUser
+
+            user = CustomUser.objects.filter(pk=employee.user_id).first()
+            if user is not None:
+                return resolve_actor_permissions(user)
+        return self._role_permissions(employee.role_id) or PermissionSet.empty()
+
+    def _disable_login(self, user_id: UUID) -> None:
+        """Deactivate the identity account linked to an employee."""
+        from modules.identity.infrastructure.persistence.models import CustomUser
+
+        CustomUser.objects.filter(pk=user_id).update(is_active=False)
+
     def _save_leave_profile(self, employee_id: int, leave_days_entitled: int) -> None:
         """Create or update the employee's LeaveProfile row."""
         from modules.leave.infrastructure.persistence.models import LeaveProfile
@@ -508,8 +742,50 @@ class EmployeeService:
             defaults={"leave_days_entitled": leave_days_entitled},
         )
 
-    def _to_dto(self, employee: Employee) -> EmployeeDTO:
-        """Convert employee entity to DTO."""
+    @staticmethod
+    def _permitted(authorize, actor: PayrollActor, employee_id: int) -> bool:
+        try:
+            authorize(actor, employee_id)
+        except AuthorizationError:
+            return False
+        return True
+
+    def _payroll_fields_for(
+        self, employee_id: int, actor_permissions: PermissionSet | None
+    ) -> dict:
+        """
+        Salary/bank values for a DTO, redacted to None unless the actor holds
+        the matching payroll view capability (REM-02). Nothing is read from
+        payroll's tables when neither is held. None permissions hold nothing.
+        """
+        policy = PayrollAuthorizationPolicy()
+        actor = PayrollActor.from_permissions(actor_permissions or PermissionSet.empty())
+        may_profile = self._permitted(policy.authorize_view_payroll_profile, actor, employee_id)
+        may_bank = self._permitted(policy.authorize_view_bank_accounts, actor, employee_id)
+
+        info = {
+            "usd_salary": None,
+            "zig_salary": None,
+            "pay_frequency": None,
+            "bank_name": None,
+            "bank_account": None,
+        }
+        if not (may_profile or may_bank):
+            return info
+
+        payroll_info = self._get_payroll_info(employee_id)
+        if may_profile:
+            for key in ("usd_salary", "zig_salary", "pay_frequency"):
+                info[key] = payroll_info[key]
+        if may_bank:
+            for key in ("bank_name", "bank_account"):
+                info[key] = payroll_info[key]
+        return info
+
+    def _to_dto(
+        self, employee: Employee, actor_permissions: PermissionSet | None = None
+    ) -> EmployeeDTO:
+        """Convert employee entity to DTO (payroll fields redacted by default)."""
         dept_name = None
         if employee.department_id:
             dept = self._departments.get_by_id(employee.department_id)
@@ -522,7 +798,7 @@ class EmployeeService:
             if pos:
                 pos_title = pos.title
 
-        payroll_info = self._get_payroll_info(employee.id)
+        payroll_info = self._payroll_fields_for(employee.id, actor_permissions)
 
         return EmployeeDTO(
             id=employee.id,

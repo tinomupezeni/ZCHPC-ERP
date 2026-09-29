@@ -21,6 +21,7 @@ import { JobDetailPage } from '@/pages/JobDetailPage';
 import { JobApplicationPage } from '@/pages/JobApplicationPage';
 import { ApplicationStatusPage } from '@/pages/ApplicationStatusPage';
 import { QRDisplayPage } from '@/pages/QRDisplayPage';
+import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
 import { Toaster } from 'sonner';
 
 function App() {
@@ -41,6 +42,19 @@ function App() {
             element={
               <ProtectedRoute>
                 <PurchaseRequestPrintPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/*
+            REM-07: replacing a temporary password. Authenticated, outside
+            MainLayout (whose data calls a confined account cannot make).
+          */}
+          <Route
+            path="/portal/change-password"
+            element={
+              <ProtectedRoute>
+                <ChangePasswordPage />
               </ProtectedRoute>
             }
           />

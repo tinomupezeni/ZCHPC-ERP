@@ -10,6 +10,7 @@ from django.utils import timezone
 from modules.attendance.application.interfaces import IQRTokenRepository
 from modules.attendance.domain.entities import QRToken
 from modules.attendance.domain.value_objects import TokenExpiry, TokenValue
+from shared.infrastructure.persistence import insert_or_update
 
 
 class DjangoQRTokenRepository(IQRTokenRepository):
@@ -27,7 +28,10 @@ class DjangoQRTokenRepository(IQRTokenRepository):
     def model(self):
         """Lazy load the Django model to avoid circular imports."""
         if self._model is None:
-            from employee_portal.models import AttendanceQRToken
+            # The model lives in the portal module (table
+            # employee_portal_attendanceqrtoken); the old import named a
+            # package that does not exist, so this repository could not run.
+            from modules.portal.infrastructure.persistence.models import AttendanceQRToken
 
             self._model = AttendanceQRToken
         return self._model
@@ -65,44 +69,28 @@ class DjangoQRTokenRepository(IQRTokenRepository):
         return None
 
     def save(self, token: QRToken) -> QRToken:
-        """Save QR token."""
-        if token.id:
-            # Update existing
-            updated = self.model.objects.filter(pk=token.id).update(
-                token=token.token_value,
-                expires_at=token.expires_at,
-                is_active=token.is_active,
-                used_count=token.used_count,
-            )
-            if updated == 0:
-                # Token doesn't exist, create it
-                db_token = self.model.objects.create(
-                    token=token.token_value,
-                    expires_at=token.expires_at,
-                    is_active=token.is_active,
-                    used_count=token.used_count,
-                )
-                token = self._to_entity(db_token)
-        else:
-            # Create new
-            db_token = self.model.objects.create(
-                token=token.token_value,
-                expires_at=token.expires_at,
-                is_active=token.is_active,
-                used_count=token.used_count,
-            )
-            token = self._to_entity(db_token)
+        """
+        Save QR token.
 
-        return token
+        A new token (id None) is inserted with a database-assigned id; a token
+        with an id updates exactly that row, and an unknown id raises
+        NotFoundError rather than inserting (REM-06).
+        """
+        db_token = insert_or_update(
+            self.model,
+            token.id,
+            {
+                "token": token.token_value,
+                "expires_at": token.expires_at,
+                "is_active": token.is_active,
+                "used_count": token.used_count,
+            },
+        )
+        return self._to_entity(db_token)
 
     def deactivate_all(self) -> int:
         """Deactivate all active tokens."""
         return self.model.objects.filter(is_active=True).update(is_active=False)
-
-    def get_next_id(self) -> int:
-        """Get next available ID."""
-        last = self.model.objects.order_by("-id").first()
-        return (last.id + 1) if last else 1
 
     def _to_entity(self, db_token) -> QRToken:
         """Convert Django model to domain entity."""

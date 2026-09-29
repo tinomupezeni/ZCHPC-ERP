@@ -26,6 +26,10 @@ from modules.payroll.domain.services import (
     PayslipGenerator,
     EmployeeSalaryInfo,
 )
+from modules.payroll.application.authorization import (
+    PayrollActor,
+    PayrollAuthorizationPolicy,
+)
 from modules.payroll.application.interfaces import (
     IPayrollRepository,
     IPayslipRepository,
@@ -71,7 +75,8 @@ class PayrollService:
         allowance_repository: IEmployeeAllowanceRepository,
         deduction_repository: IEmployeeDeductionRepository,
         employee_provider: IEmployeePayrollInfoProvider,
-        payslip_generator: PayslipGenerator = None
+        payslip_generator: PayslipGenerator = None,
+        policy: PayrollAuthorizationPolicy = None,
     ):
         self.payroll_repo = payroll_repository
         self.payslip_repo = payslip_repository
@@ -81,9 +86,10 @@ class PayrollService:
         self.deduction_repo = deduction_repository
         self.employee_provider = employee_provider
         self.generator = payslip_generator or PayslipGenerator()
+        self.policy = policy or PayrollAuthorizationPolicy()
 
     def get_or_create_payroll(self, period: PayrollPeriod) -> Payroll:
-        """Get existing payroll or create new one."""
+        """Get existing payroll or create new one (internal; callers authorize first)."""
         existing = self.payroll_repo.get_by_period(period)
         if existing:
             return existing
@@ -91,16 +97,24 @@ class PayrollService:
         payroll = Payroll.create(period)
         return self.payroll_repo.save(payroll)
 
-    def process_payroll(self, command: ProcessPayrollCommand) -> ProcessPayrollResult:
+    def process_payroll(
+        self, command: ProcessPayrollCommand, actor: PayrollActor
+    ) -> ProcessPayrollResult:
         """
         Process payroll for all active employees.
 
         Args:
             command: ProcessPayrollCommand with period and user info
+            actor: The acting user; must hold the payslip-process capability
 
         Returns:
             ProcessPayrollResult with processing details
+
+        Raises:
+            AuthorizationError: Before any repository is touched.
         """
+        self.policy.authorize_process_payroll(actor)
+
         # Get or create payroll
         payroll = self.get_or_create_payroll(command.period)
 
@@ -244,8 +258,9 @@ class PayrollService:
 
         return summary
 
-    def close_payroll(self, payroll_id: int, user_id: int) -> Payroll:
+    def close_payroll(self, payroll_id: int, user_id: int, actor: PayrollActor) -> Payroll:
         """Close a payroll period."""
+        self.policy.authorize_process_payroll(actor)
         payroll = self.payroll_repo.get_by_id(payroll_id)
         if not payroll:
             raise NotFoundError(f"Payroll {payroll_id} not found")
@@ -253,8 +268,9 @@ class PayrollService:
         payroll.close(user_id)
         return self.payroll_repo.save(payroll)
 
-    def reopen_payroll(self, payroll_id: int) -> Payroll:
+    def reopen_payroll(self, payroll_id: int, actor: PayrollActor) -> Payroll:
         """Reopen a closed payroll."""
+        self.policy.authorize_process_payroll(actor)
         payroll = self.payroll_repo.get_by_id(payroll_id)
         if not payroll:
             raise NotFoundError(f"Payroll {payroll_id} not found")
@@ -262,33 +278,48 @@ class PayrollService:
         payroll.reopen()
         return self.payroll_repo.save(payroll)
 
-    def get_payroll(self, payroll_id: int) -> Optional[Payroll]:
-        """Get payroll by ID."""
+    def get_payroll(self, payroll_id: int, actor: PayrollActor) -> Optional[Payroll]:
+        """Get payroll by ID (carries period totals)."""
+        self.policy.authorize_view_summary(actor)
         return self.payroll_repo.get_by_id(payroll_id)
 
-    def get_payroll_by_period(self, period: PayrollPeriod) -> Optional[Payroll]:
-        """Get payroll for a specific period."""
+    def get_payroll_by_period(
+        self, period: PayrollPeriod, actor: PayrollActor
+    ) -> Optional[Payroll]:
+        """Get payroll for a specific period (carries period totals)."""
+        self.policy.authorize_view_summary(actor)
         return self.payroll_repo.get_by_period(period)
 
-    def get_payslips_for_period(self, period: PayrollPeriod) -> List[Payslip]:
-        """Get all payslips for a period."""
-        return self.payslip_repo.get_by_period(period)
+    def get_payslips_for_period(
+        self, period: PayrollPeriod, actor: PayrollActor
+    ) -> List[Payslip]:
+        """Payslips for a period that the actor may view."""
+        self.policy.authorize_list_payslips(actor)
+        return self.policy.filter_viewable_payslips(
+            actor, self.payslip_repo.get_by_period(period)
+        )
 
-    def get_payslip(self, payslip_id: int) -> Optional[Payslip]:
+    def get_payslip(self, payslip_id: int, actor: PayrollActor) -> Optional[Payslip]:
         """Get payslip by ID."""
-        return self.payslip_repo.get_by_id(payslip_id)
+        self.policy.authorize_list_payslips(actor)  # capability before any lookup
+        payslip = self.payslip_repo.get_by_id(payslip_id)
+        self.policy.authorize_view_payslip(actor, payslip)
+        return payslip
 
-    def approve_payslip(self, payslip_id: int) -> Payslip:
+    def approve_payslip(self, payslip_id: int, actor: PayrollActor) -> Payslip:
         """Approve a payslip."""
+        self.policy.authorize_approve_payslip(actor, None)  # capability before any lookup
         payslip = self.payslip_repo.get_by_id(payslip_id)
         if not payslip:
             raise NotFoundError(f"Payslip {payslip_id} not found")
+        self.policy.authorize_approve_payslip(actor, payslip)
 
         payslip.approve()
         return self.payslip_repo.save(payslip)
 
-    def mark_payslip_paid(self, payslip_id: int) -> Payslip:
+    def mark_payslip_paid(self, payslip_id: int, actor: PayrollActor) -> Payslip:
         """Mark a payslip as paid."""
+        self.policy.authorize_process_payroll(actor)
         payslip = self.payslip_repo.get_by_id(payslip_id)
         if not payslip:
             raise NotFoundError(f"Payslip {payslip_id} not found")

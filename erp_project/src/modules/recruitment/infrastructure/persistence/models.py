@@ -96,6 +96,14 @@ class JobApplication(models.Model):
     cover_letter = models.TextField(blank=True)
     applied_on = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
+    # What the applicant submitted with this application (REM-04). Kept on
+    # the application so a resubmission never rewrites the Candidate record.
+    resume = models.FileField(upload_to='recruitment/resumes/', null=True, blank=True)
+    phone = models.CharField(max_length=20, blank=True, default='')
+    address = models.TextField(blank=True, default='')
+    qualifications = models.TextField(blank=True, default='')
+    experience = models.TextField(blank=True, default='')
+    updated_at = models.DateTimeField(auto_now=True, null=True)
 
     class Meta:
         db_table = 'human_resources_jobapplication'

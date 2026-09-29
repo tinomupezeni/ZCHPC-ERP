@@ -385,7 +385,12 @@ class Command(BaseCommand):
                 employee_type="Full-time",
             )
             try:
-                entity = service.create_employee(command)
+                # Operator-run seed script (no request actor): explicitly full
+                # access, as seed_test_employees does, so the creation and
+                # role-assignment checks pass.
+                entity = service.create_employee(
+                    command, actor_permissions=PermissionSet.full_access()
+                )
             except ValidationError as exc:
                 raise CommandError(
                     f"Failed to create {spec['label']} ({spec['email']}): {exc.message}"
@@ -416,6 +421,12 @@ class Command(BaseCommand):
         if not user.is_active:
             user.is_active = True
             user_changed_fields.append("is_active")
+        if user.must_change_password:
+            # These dev/test logins deliberately use the published
+            # TEST_PASSWORD, not the temporary one issued at provisioning
+            # (REM-07), so they must not be confined to a password change.
+            user.must_change_password = False
+            user_changed_fields.append("must_change_password")
         if user_changed_fields:
             user.save(update_fields=user_changed_fields)
 

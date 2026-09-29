@@ -167,8 +167,13 @@ class IEmployeeProvider(ABC):
         self,
         ec_number: str,
         password: str,
+        ip_address: str = "0.0.0.0",
+        user_agent: str = "",
     ) -> Optional[EmployeeDTO]:
-        """Authenticate employee by EC number and password."""
+        """
+        Authenticate employee by EC number and password, with the same
+        lockout and audit logging as the main login.
+        """
         ...
 
 

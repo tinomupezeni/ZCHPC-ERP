@@ -7,6 +7,7 @@ from typing import Sequence
 
 from django.db.models import Q
 
+from shared.infrastructure.persistence import insert_or_update
 from modules.recruitment.infrastructure.persistence.models import Job as JobModel
 
 from modules.recruitment.application.interfaces import IJobRepository
@@ -65,10 +66,11 @@ class DjangoJobRepository(IJobRepository):
         return [self._to_entity(model) for model in queryset]
 
     def save(self, job: Job) -> Job:
-        """Save job."""
-        model, created = JobModel.objects.update_or_create(
-            id=job.id,
-            defaults={
+        """Insert a new job (id None) or update its existing row."""
+        model = insert_or_update(
+            JobModel,
+            job.id,
+            {
                 "title": job.title,
                 "department_id": job.department_id,
                 "position_id": job.position_id,
@@ -99,11 +101,6 @@ class DjangoJobRepository(IJobRepository):
     def delete(self, job_id: int) -> None:
         """Delete job."""
         JobModel.objects.filter(id=job_id).delete()
-
-    def get_next_id(self) -> int:
-        """Get next available ID."""
-        last = JobModel.objects.order_by("-id").first()
-        return (last.id + 1) if last else 1
 
     def search(
         self,

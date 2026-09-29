@@ -8,6 +8,10 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from shared.domain.exceptions import DomainException
+
+from modules.recruitment.api.actors import recruitment_actor_from_request
+from modules.recruitment.api.errors import error_response
 from modules.recruitment.api.serializers import (
     ApplicationResponseSerializer,
     ApplicationStatusCheckRequestSerializer,
@@ -17,9 +21,16 @@ from modules.recruitment.api.serializers import (
     CreateJobRequestSerializer,
     JobQuerySerializer,
     JobResponseSerializer,
+    PublicApplicationReceiptSerializer,
+    PublicJobResponseSerializer,
     SubmitApplicationRequestSerializer,
     UpdateApplicationStatusRequestSerializer,
     UpdateJobRequestSerializer,
+)
+from modules.recruitment.api.throttles import (
+    RecruitmentApplyThrottle,
+    RecruitmentCheckThrottle,
+    RecruitmentStatusThrottle,
 )
 from modules.recruitment.application.services import (
     ApplicationService,
@@ -32,6 +43,7 @@ from modules.recruitment.application.services import (
 from modules.recruitment.infrastructure.persistence.django_application_repository import DjangoApplicationRepository
 from modules.recruitment.infrastructure.persistence.django_candidate_repository import DjangoCandidateRepository
 from modules.recruitment.infrastructure.persistence.django_job_repository import DjangoJobRepository
+from modules.recruitment.infrastructure.storage.resume_storage import DjangoResumeStorage
 
 
 def get_job_service() -> JobService:
@@ -48,7 +60,14 @@ def get_application_service() -> ApplicationService:
         application_repository=DjangoApplicationRepository(),
         candidate_repository=DjangoCandidateRepository(),
         job_repository=DjangoJobRepository(),
+        resume_storage=DjangoResumeStorage(),
     )
+
+
+# Authorization (REM-04) is enforced in the recruitment application services,
+# which take the RecruitmentActor built here. Views only translate HTTP; every
+# service call catches DomainException through error_response *before* any
+# broader handler, so an AuthorizationError is never reported as a 400/404.
 
 
 # =============================================================================
@@ -72,19 +91,25 @@ class JobListView(APIView):
         query_serializer.is_valid(raise_exception=True)
 
         service = get_job_service()
+        actor = recruitment_actor_from_request(request)
 
-        search = query_serializer.validated_data.get("search")
-        if search:
-            jobs = service.search_jobs(
-                query=search,
-                status=query_serializer.validated_data.get("status"),
-            )
-        else:
-            jobs = service.get_all_jobs(
-                status=query_serializer.validated_data.get("status"),
-                department_id=query_serializer.validated_data.get("department"),
-                is_internal=query_serializer.validated_data.get("internal"),
-            )
+        try:
+            search = query_serializer.validated_data.get("search")
+            if search:
+                jobs = service.search_jobs(
+                    query=search,
+                    status=query_serializer.validated_data.get("status"),
+                    actor=actor,
+                )
+            else:
+                jobs = service.get_all_jobs(
+                    status=query_serializer.validated_data.get("status"),
+                    department_id=query_serializer.validated_data.get("department"),
+                    is_internal=query_serializer.validated_data.get("internal"),
+                    actor=actor,
+                )
+        except DomainException as e:
+            return error_response(e)
 
         return Response(
             [JobResponseSerializer(j).data for j in jobs],
@@ -99,11 +124,13 @@ class JobListView(APIView):
         service = get_job_service()
         try:
             command = CreateJobCommand(**serializer.validated_data)
-            job = service.create_job(command)
+            job = service.create_job(command, recruitment_actor_from_request(request))
             return Response(
                 JobResponseSerializer(job).data,
                 status=status.HTTP_201_CREATED,
             )
+        except DomainException as e:
+            return error_response(e)
         except Exception as e:
             return Response(
                 {"error": str(e)},
@@ -120,11 +147,13 @@ class JobDetailView(APIView):
         """Get a specific job."""
         service = get_job_service()
         try:
-            job = service.get_job(job_id)
+            job = service.get_job(job_id, recruitment_actor_from_request(request))
             return Response(
                 JobResponseSerializer(job).data,
                 status=status.HTTP_200_OK,
             )
+        except DomainException as e:
+            return error_response(e, default_status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(
                 {"error": str(e)},
@@ -142,11 +171,13 @@ class JobDetailView(APIView):
                 job_id=job_id,
                 **serializer.validated_data,
             )
-            job = service.update_job(command)
+            job = service.update_job(command, recruitment_actor_from_request(request))
             return Response(
                 JobResponseSerializer(job).data,
                 status=status.HTTP_200_OK,
             )
+        except DomainException as e:
+            return error_response(e)
         except Exception as e:
             return Response(
                 {"error": str(e)},
@@ -157,8 +188,10 @@ class JobDetailView(APIView):
         """Delete a job."""
         service = get_job_service()
         try:
-            service.delete_job(job_id)
+            service.delete_job(job_id, recruitment_actor_from_request(request))
             return Response(status=status.HTTP_204_NO_CONTENT)
+        except DomainException as e:
+            return error_response(e)
         except Exception as e:
             return Response(
                 {"error": str(e)},
@@ -175,11 +208,13 @@ class JobPublishView(APIView):
         """Publish (open) a job."""
         service = get_job_service()
         try:
-            job = service.publish_job(job_id)
+            job = service.publish_job(job_id, recruitment_actor_from_request(request))
             return Response(
                 JobResponseSerializer(job).data,
                 status=status.HTTP_200_OK,
             )
+        except DomainException as e:
+            return error_response(e)
         except Exception as e:
             return Response(
                 {"error": str(e)},
@@ -196,11 +231,13 @@ class JobCloseView(APIView):
         """Close a job."""
         service = get_job_service()
         try:
-            job = service.close_job(job_id)
+            job = service.close_job(job_id, recruitment_actor_from_request(request))
             return Response(
                 JobResponseSerializer(job).data,
                 status=status.HTTP_200_OK,
             )
+        except DomainException as e:
+            return error_response(e)
         except Exception as e:
             return Response(
                 {"error": str(e)},
@@ -222,11 +259,14 @@ class JobApplicationsView(APIView):
             applications = service.get_applications_for_job(
                 job_id=job_id,
                 status=status_filter,
+                actor=recruitment_actor_from_request(request),
             )
             return Response(
                 [ApplicationResponseSerializer(a).data for a in applications],
                 status=status.HTTP_200_OK,
             )
+        except DomainException as e:
+            return error_response(e)
         except Exception as e:
             return Response(
                 {"error": str(e)},
@@ -237,6 +277,11 @@ class JobApplicationsView(APIView):
 # =============================================================================
 # Public Jobs Views
 # =============================================================================
+#
+# The public careers surface (REM-04): open jobs (internal ones included, by
+# product decision) through the PublicJobResponseSerializer allowlist,
+# anonymous application, and status lookup. The three anonymous write/lookup
+# endpoints are rate limited.
 
 
 class PublicJobListView(APIView):
@@ -245,11 +290,11 @@ class PublicJobListView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        """Get all public (open, non-internal) jobs."""
+        """Get all open jobs, internal and external."""
         service = get_job_service()
         jobs = service.get_public_jobs()
         return Response(
-            [JobResponseSerializer(j).data for j in jobs],
+            [PublicJobResponseSerializer(j).data for j in jobs],
             status=status.HTTP_200_OK,
         )
 
@@ -260,25 +305,20 @@ class PublicJobDetailView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, job_id: int):
-        """Get a specific job (public view)."""
+        """Get a specific open job (public view)."""
         service = get_job_service()
         try:
-            job = service.get_job(job_id)
-            # Public careers page shows all open jobs, internal or not.
-            if job.status != "Open":
-                return Response(
-                    {"error": "Job not found"},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
+            job = service.get_public_job(job_id)
+        except DomainException:
+            # Draft, Pending, Closed and missing jobs are indistinguishable.
             return Response(
-                JobResponseSerializer(job).data,
-                status=status.HTTP_200_OK,
-            )
-        except Exception as e:
-            return Response(
-                {"error": str(e)},
+                {"error": "Job not found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        return Response(
+            PublicJobResponseSerializer(job).data,
+            status=status.HTTP_200_OK,
+        )
 
 
 class PublicApplyView(APIView):
@@ -286,20 +326,18 @@ class PublicApplyView(APIView):
 
     permission_classes = [AllowAny]
     parser_classes = [MultiPartParser, FormParser]
+    throttle_classes = [RecruitmentApplyThrottle]
 
     def post(self, request):
-        """Submit a job application, including a resume upload."""
+        """
+        Submit a job application, including a resume upload. Resubmitting for
+        the same job updates the existing application.
+        """
         serializer = SubmitApplicationRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         resume_file = request.FILES.get("resume")
         validate_resume_file(resume_file)
-
-        # Save the file and get a path back for the domain layer.
-        from django.core.files.storage import default_storage
-        saved_path = default_storage.save(
-            f"recruitment/resumes/{resume_file.name}", resume_file
-        )
 
         service = get_application_service()
         try:
@@ -318,16 +356,20 @@ class PublicApplyView(APIView):
                 qualifications=serializer.validated_data.get("qualifications", ""),
                 experience=serializer.validated_data.get("experience", ""),
                 cover_letter=serializer.validated_data.get("cover_letter", ""),
-                resume_path=saved_path,
+                resume_file=resume_file,
             )
-            application = service.submit_application(command)
+            result = service.submit_application(command)
             return Response(
                 {
                     "success": True,
-                    "message": "Application submitted successfully",
-                    "application": ApplicationResponseSerializer(application).data,
+                    "message": (
+                        "Application submitted successfully"
+                        if result.created
+                        else "Application updated successfully"
+                    ),
+                    "application": PublicApplicationReceiptSerializer(result.application).data,
                 },
-                status=status.HTTP_201_CREATED,
+                status=status.HTTP_201_CREATED if result.created else status.HTTP_200_OK,
             )
         except Exception as e:
             return Response(
@@ -337,22 +379,23 @@ class PublicApplyView(APIView):
 
 
 class CheckApplicationView(APIView):
-    """Check if candidate has applied."""
+    """Check if an applicant has applied to a job."""
 
     permission_classes = [AllowAny]
+    throttle_classes = [RecruitmentCheckThrottle]
 
     def post(self, request):
-        """Check if candidate has applied to a job."""
+        """Check if the holder of a national ID has applied to a job."""
         serializer = CheckApplicationRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         service = get_application_service()
-        result = service.check_application_by_national_id(
+        has_applied = service.has_applied(
             national_id=serializer.validated_data["id_number"],
             job_id=serializer.validated_data["job_id"],
         )
         return Response(
-            CheckApplicationResponseSerializer(result).data,
+            CheckApplicationResponseSerializer({"has_applied": has_applied}).data,
             status=status.HTTP_200_OK,
         )
 
@@ -361,25 +404,20 @@ class ApplicationStatusView(APIView):
     """Check application status by national ID."""
 
     permission_classes = [AllowAny]
+    throttle_classes = [RecruitmentStatusThrottle]
 
     def post(self, request):
-        """Get all applications for a candidate by national ID."""
+        """
+        Get all applications for a national ID. An unknown ID returns the same
+        empty list as an ID with no applications.
+        """
         serializer = ApplicationStatusCheckRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        candidate_repo = DjangoCandidateRepository()
-        candidate = candidate_repo.get_by_national_id(
+        service = get_application_service()
+        applications = service.lookup_application_status(
             serializer.validated_data["id_number"]
         )
-
-        if not candidate:
-            return Response(
-                {"error": "No applications found for this ID number"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        service = get_application_service()
-        applications = service.get_candidate_applications(candidate.id)
 
         return Response(
             [ApplicationStatusResponseSerializer(a).data for a in applications],
@@ -401,11 +439,15 @@ class ApplicationDetailView(APIView):
         """Get a specific application."""
         service = get_application_service()
         try:
-            application = service.get_application(application_id)
+            application = service.get_application(
+                application_id, recruitment_actor_from_request(request)
+            )
             return Response(
                 ApplicationResponseSerializer(application).data,
                 status=status.HTTP_200_OK,
             )
+        except DomainException as e:
+            return error_response(e, default_status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(
                 {"error": str(e)},
@@ -429,11 +471,15 @@ class ApplicationStatusUpdateView(APIView):
                 application_id=application_id,
                 new_status=serializer.validated_data["status"],
             )
-            application = service.update_status(command)
+            application = service.update_status(
+                command, recruitment_actor_from_request(request)
+            )
             return Response(
                 ApplicationResponseSerializer(application).data,
                 status=status.HTTP_200_OK,
             )
+        except DomainException as e:
+            return error_response(e)
         except Exception as e:
             return Response(
                 {"error": str(e)},

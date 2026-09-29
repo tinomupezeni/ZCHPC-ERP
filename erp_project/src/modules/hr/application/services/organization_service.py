@@ -4,9 +4,11 @@ Organization application service for departments and positions.
 
 from dataclasses import dataclass
 
-from shared.domain.exceptions import ValidationError, NotFoundError
+from shared.domain.exceptions import AuthorizationError, ValidationError, NotFoundError
 from shared.infrastructure import EventBus
 
+from modules.hr.application.authorization import DepartmentManagementPermissions
+from modules.identity.domain.value_objects import PermissionSet
 from modules.hr.application.interfaces import (
     IDepartmentRepository,
     IPositionRepository,
@@ -65,7 +67,27 @@ class UpdatePositionCommand:
 class DepartmentService:
     """
     Application service for department operations.
+
+    Every mutation - create, update (name, description, head) and delete -
+    requires DepartmentManagementPermissions.MANAGE (AUD-01 F8), checked at
+    the top of each method before the department is loaded, the same shape
+    as RoleService. RBACMiddleware's "holds anything in hr" gate only decides
+    who may reach these routes; reads stay governed by that gate alone.
     """
+
+    @staticmethod
+    def _authorize_department_administration(actor_permissions: PermissionSet | None) -> None:
+        """None means no actor context and holds nothing (fail closed)."""
+        if (actor_permissions or PermissionSet.empty()).has_permission(
+            DepartmentManagementPermissions.MANAGE
+        ):
+            return
+
+        raise AuthorizationError(
+            "Administering departments requires the "
+            f"'{DepartmentManagementPermissions.MANAGE}' permission.",
+            code="DEPARTMENT_ADMINISTRATION_NOT_AUTHORIZED",
+        )
 
     def __init__(
         self,
@@ -78,16 +100,24 @@ class DepartmentService:
         self._employees = employee_repository
         self._event_bus = event_bus or EventBus.get_instance()
 
-    def create_department(self, command: CreateDepartmentCommand) -> Department:
+    def create_department(
+        self, command: CreateDepartmentCommand, actor_permissions: PermissionSet | None = None
+    ) -> Department:
         """
         Create a new department.
 
         Args:
             command: Create department command
+            actor_permissions: The acting user's permissions (None holds nothing)
 
         Returns:
             Created department
+
+        Raises:
+            AuthorizationError: If the actor lacks DepartmentManagementPermissions.MANAGE.
         """
+        self._authorize_department_administration(actor_permissions)
+
         # Check uniqueness
         if self._departments.exists_by_name(command.name):
             raise ValidationError(
@@ -112,16 +142,25 @@ class DepartmentService:
 
         return department
 
-    def update_department(self, command: UpdateDepartmentCommand) -> Department:
+    def update_department(
+        self, command: UpdateDepartmentCommand, actor_permissions: PermissionSet | None = None
+    ) -> Department:
         """
-        Update an existing department.
+        Update an existing department, including its head.
 
         Args:
             command: Update department command
+            actor_permissions: The acting user's permissions (None holds nothing)
 
         Returns:
             Updated department
+
+        Raises:
+            AuthorizationError: If the actor lacks DepartmentManagementPermissions.MANAGE.
+            NotFoundError: If the department does not exist.
         """
+        self._authorize_department_administration(actor_permissions)
+
         department = self._departments.get_by_id(command.department_id)
         if not department:
             raise NotFoundError(f"Department with ID {command.department_id} not found")
@@ -174,16 +213,25 @@ class DepartmentService:
 
         return department
 
-    def delete_department(self, department_id: int) -> bool:
+    def delete_department(
+        self, department_id: int, actor_permissions: PermissionSet | None = None
+    ) -> bool:
         """
         Delete a department.
 
         Args:
             department_id: Department ID
+            actor_permissions: The acting user's permissions (None holds nothing)
 
         Returns:
             True if deleted
+
+        Raises:
+            AuthorizationError: If the actor lacks DepartmentManagementPermissions.MANAGE.
+            NotFoundError: If the department does not exist.
         """
+        self._authorize_department_administration(actor_permissions)
+
         department = self._departments.get_by_id(department_id)
         if not department:
             raise NotFoundError(f"Department with ID {department_id} not found")

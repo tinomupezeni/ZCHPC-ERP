@@ -79,6 +79,10 @@ class Employee(AggregateRoot[int]):
         self.emergency_contact = emergency_contact or EmergencyContact.empty()
         self.created_at = created_at or datetime.utcnow()
         self.updated_at = updated_at or datetime.utcnow()
+        # Set only on the instance that was just created, when a login was
+        # provisioned for it: the one-time temporary password for the
+        # authorized creator (REM-07). Never persisted or reloaded.
+        self.temporary_password: str | None = None
         self._validate_basic()
 
     def _validate_basic(self) -> None:

@@ -12,6 +12,7 @@ from modules.leave.infrastructure.persistence.models import LeaveRequest as Leav
 from modules.leave.application.interfaces import ILeaveRequestRepository
 from modules.leave.domain.entities import LeaveRequest
 from modules.leave.domain.value_objects import LeavePeriod, LeaveStatus
+from shared.infrastructure.persistence import insert_or_update
 
 
 class DjangoLeaveRequestRepository(ILeaveRequestRepository):
@@ -96,10 +97,17 @@ class DjangoLeaveRequestRepository(ILeaveRequestRepository):
         return [self._to_entity(model) for model in queryset]
 
     def save(self, request: LeaveRequest) -> LeaveRequest:
-        """Save request."""
-        model, created = LeaveRequestModel.objects.update_or_create(
-            id=request.id,
-            defaults={
+        """
+        Save request.
+
+        A new request (id None) is inserted with a database-assigned id; a
+        request with an id updates exactly that row, and an unknown id raises
+        NotFoundError rather than inserting (REM-06).
+        """
+        model = insert_or_update(
+            LeaveRequestModel,
+            request.id,
+            {
                 "employee_id": request.employee_id,
                 "leave_type_id": request.leave_type_id,
                 "start_date": request.start_date,
@@ -119,11 +127,6 @@ class DjangoLeaveRequestRepository(ILeaveRequestRepository):
     def delete(self, request_id: int) -> None:
         """Delete request."""
         LeaveRequestModel.objects.filter(id=request_id).delete()
-
-    def get_next_id(self) -> int:
-        """Get next available ID."""
-        last = LeaveRequestModel.objects.order_by("-id").first()
-        return (last.id + 1) if last else 1
 
     def _to_entity(self, model: LeaveRequestModel) -> LeaveRequest:
         """Convert Django model to domain entity."""

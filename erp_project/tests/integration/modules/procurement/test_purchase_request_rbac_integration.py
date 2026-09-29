@@ -121,6 +121,10 @@ class TestDepartmentManagerReachesTheApi:
     def test_a_role_with_no_procurement_permission_is_still_refused(self):
         """The gate did not simply open for everyone."""
         it = Department.objects.create(name="IT Department")
+        # hr.0019_seed_hr_role now seeds a real HUMAN_RESOURCES role as
+        # baseline data (REM-05); employee_client() creates its own role by
+        # this name, so the pre-existing one must be cleared first.
+        Role.objects.filter(name="HUMAN_RESOURCES").delete()
         client, _ = employee_client(
             "hronly@zchpc.test", "HUMAN_RESOURCES", ["hr.*"], it, "EMP7003"
         )
@@ -185,6 +189,9 @@ class TestPurchaseRequestPermissionSeedingMigration:
 
     @pytest.mark.parametrize("role_name", list(PURCHASE_REQUEST_ROLE_PERMISSIONS))
     def test_target_role_receives_exactly_its_mapped_grant(self, role_name):
+        # hr.0019_seed_hr_role now seeds a real HUMAN_RESOURCES role as
+        # baseline data (REM-05); a no-op for the other five names.
+        Role.objects.filter(name=role_name).delete()
         role = Role.objects.create(name=role_name, permissions=[])
 
         run_purchase_request_permission_seeding()
@@ -266,6 +273,10 @@ class TestPurchaseRequestPermissionSeedingMigration:
         exists - only exactly what DEFAULT_PURCHASE_REQUEST_ROLE_PERMISSIONS
         assigns it.
         """
+        # hr.0019_seed_hr_role now seeds a real HUMAN_RESOURCES role as
+        # baseline data (REM-05); this test wants to control the "before"
+        # state itself.
+        Role.objects.filter(name="HUMAN_RESOURCES").delete()
         role = Role.objects.create(name="HUMAN_RESOURCES", permissions=[])
 
         run_purchase_request_permission_seeding()

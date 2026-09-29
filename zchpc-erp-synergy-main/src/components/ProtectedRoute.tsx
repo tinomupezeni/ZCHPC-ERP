@@ -27,6 +27,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       return;
     }
 
+    // REM-07: a temporary password must be replaced before anything else
+    // (the backend enforces this; this keeps the user on the page that works).
+    if (user.must_change_password) {
+      navigate('/change-password', { replace: true });
+      return;
+    }
+
     // If permission is required but user doesn't have it
     if (requiredPermission && !checkPermission(requiredPermission)) {
       // FIXED: Redirect to a single, safe default page

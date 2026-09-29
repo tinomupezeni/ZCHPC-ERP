@@ -4,6 +4,7 @@ Recruitment application services.
 
 from modules.recruitment.application.services.application_service import (
     ApplicationService,
+    SubmissionResult,
     SubmitApplicationCommand,
     UpdateApplicationStatusCommand,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "UpdateJobCommand",
     "ApplicationService",
     "SubmitApplicationCommand",
+    "SubmissionResult",
     "UpdateApplicationStatusCommand",
     "RecruitmentProvider",
 ]

@@ -8,7 +8,6 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import List, Optional
 
-from django.contrib.auth import authenticate
 from django.db.models import Sum
 
 from modules.portal.application.interfaces import (
@@ -87,34 +86,41 @@ class DjangoEmployeeProvider(IEmployeeProvider):
         self,
         ec_number: str,
         password: str,
+        ip_address: str = "0.0.0.0",
+        user_agent: str = "",
     ) -> Optional[EmployeeDTO]:
+        """
+        Resolve the EC number to its login, then authenticate through the
+        identity AuthService - the same failed-attempt lockout, audit log
+        and inactive-account handling as /api/v2/auth/token/ (REM-07).
+        """
         from modules.hr.infrastructure.persistence.models import Employees
-
-        # Get employee by EC number
-        try:
-            employee = Employees.objects.select_related(
-                "department", "position", "user"
-            ).get(employee_id=ec_number)
-        except Employees.DoesNotExist:
-            return None
-
-        # Check if has linked user
-        if not employee.user:
-            return None
-
-        # Authenticate user
-        user = authenticate(
-            email=employee.user.email,
-            password=password,
+        from modules.identity.application.services import AuthService, LoginCommand
+        from modules.identity.infrastructure.persistence.audit_repository import (
+            DjangoAuditLogRepository,
+        )
+        from modules.identity.infrastructure.persistence.user_repository import (
+            DjangoUserRepository,
         )
 
-        if user is None:
-            return None
+        employee = (
+            Employees.objects.select_related("department", "position", "user")
+            .filter(employee_id=ec_number)
+            .first()
+        )
+        # An unknown EC number (or one without a login) is still attempted,
+        # under the EC number itself, so the failure is audited like any other.
+        identifier = employee.user.email if employee and employee.user else ec_number
 
-        if not user.is_active:
-            return None
-
-        if not employee.is_active:
+        result = AuthService(DjangoUserRepository(), DjangoAuditLogRepository()).authenticate(
+            LoginCommand(
+                email=identifier,
+                password=password,
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+        )
+        if not result.success or employee is None or not employee.is_active:
             return None
 
         return self._to_dto(employee)
@@ -444,69 +450,66 @@ class DjangoRecruitmentProvider(IRecruitmentProvider):
         except Job.DoesNotExist:
             return None
 
+    # Applying and status lookup go through the Recruitment application
+    # service - the single implementation of the public careers rules
+    # (applicant matching, same-job updates, never rewriting a Candidate from
+    # an anonymous request, no existence disclosure on lookup). REM-04.
+
+    @staticmethod
+    def _application_service():
+        from modules.recruitment.application.services import ApplicationService
+        from modules.recruitment.infrastructure.persistence.django_application_repository import (
+            DjangoApplicationRepository,
+        )
+        from modules.recruitment.infrastructure.persistence.django_candidate_repository import (
+            DjangoCandidateRepository,
+        )
+        from modules.recruitment.infrastructure.persistence.django_job_repository import (
+            DjangoJobRepository,
+        )
+
+        return ApplicationService(
+            application_repository=DjangoApplicationRepository(),
+            candidate_repository=DjangoCandidateRepository(),
+            job_repository=DjangoJobRepository(),
+        )
+
     def apply_for_job(
         self,
         job_id: int,
         candidate_data: dict,
     ) -> int:
-        from modules.recruitment.infrastructure.persistence.models import Candidate, JobApplication
-        from django.db import transaction
+        from modules.recruitment.application.services import SubmitApplicationCommand
 
-        with transaction.atomic():
-            # Get or create candidate
-            candidate, _ = Candidate.objects.update_or_create(
+        date_of_birth = candidate_data.get("date_of_birth")
+        result = self._application_service().submit_application(
+            SubmitApplicationCommand(
+                job_id=job_id,
                 national_id=candidate_data["national_id"],
-                defaults={
-                    "first_name": candidate_data["first_name"],
-                    "last_name": candidate_data["last_name"],
-                    "email": candidate_data["email"],
-                    "phone": candidate_data["phone"],
-                    "date_of_birth": candidate_data.get("date_of_birth"),
-                    "qualifications": candidate_data.get("qualifications", ""),
-                    "experience": candidate_data.get("experience", ""),
-                },
+                first_name=candidate_data["first_name"],
+                last_name=candidate_data["last_name"],
+                email=candidate_data["email"],
+                phone=candidate_data.get("phone") or "",
+                date_of_birth=str(date_of_birth) if date_of_birth else None,
+                qualifications=candidate_data.get("qualifications") or "",
+                experience=candidate_data.get("experience") or "",
+                cover_letter=candidate_data.get("cover_letter") or "",
             )
-
-            # Check if already applied
-            if JobApplication.objects.filter(
-                job_id=job_id,
-                candidate=candidate,
-            ).exists():
-                raise ValueError("You have already applied for this position")
-
-            # Create application
-            application = JobApplication.objects.create(
-                job_id=job_id,
-                candidate=candidate,
-                cover_letter=candidate_data.get("cover_letter", ""),
-                status="Pending",
-            )
-
-            return application.id
+        )
+        return result.application.id
 
     def check_application_status(
         self,
         national_id: str,
     ) -> List[dict]:
-        from modules.recruitment.infrastructure.persistence.models import Candidate, JobApplication
-
-        try:
-            candidate = Candidate.objects.get(national_id=national_id)
-        except Candidate.DoesNotExist:
-            return []
-
-        applications = JobApplication.objects.filter(
-            candidate=candidate,
-        ).select_related("job")
-
         return [
             {
                 "job_id": app.job_id,
-                "job_title": app.job.title,
+                "job_title": app.job_title,
                 "applied_at": app.applied_at.isoformat(),
                 "status": app.status,
             }
-            for app in applications
+            for app in self._application_service().lookup_application_status(national_id)
         ]
 
 

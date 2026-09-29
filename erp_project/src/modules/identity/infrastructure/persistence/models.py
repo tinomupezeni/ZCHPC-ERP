@@ -75,6 +75,10 @@ class CustomUser(AbstractUser):
     # Security fields
     failed_attempts = models.IntegerField(default=0)
     lockout_until = models.DateTimeField(null=True, blank=True)
+    # REM-07: set while the account holds an issued temporary password;
+    # RBACMiddleware then allows only the password change (and "me") until
+    # the owner replaces it.
+    must_change_password = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'authentication_customuser'

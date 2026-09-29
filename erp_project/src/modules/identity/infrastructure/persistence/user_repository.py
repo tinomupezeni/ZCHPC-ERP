@@ -74,6 +74,7 @@ class DjangoUserRepository(IUserRepository):
             failed_attempts=user.failed_attempts,
             lockout_until=user.lockout_until,
             date_joined=user.date_joined,
+            must_change_password=user.must_change_password,
         )
         db_user.save()
 
@@ -90,6 +91,7 @@ class DjangoUserRepository(IUserRepository):
             is_superuser=user.is_superuser,
             failed_attempts=user.failed_attempts,
             lockout_until=user.lockout_until,
+            must_change_password=user.must_change_password,
         )
 
     @transaction.atomic
@@ -112,4 +114,5 @@ class DjangoUserRepository(IUserRepository):
             failed_attempts=db_user.failed_attempts,
             lockout_until=db_user.lockout_until,
             date_joined=db_user.date_joined,
+            must_change_password=db_user.must_change_password,
         )
