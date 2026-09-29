@@ -172,6 +172,43 @@ interface SidebarProps {
   onClose: () => void;
 }
 
+/**
+ * Design refresh (2026-09-29): group the flat per-role lists under a few
+ * labeled sections so an 8-13 item nav scans instead of scrolls. Sections
+ * are derived from paths (not annotated per item) so the six role lists
+ * above and the permission-gated reviewer inserts below keep working
+ * unchanged - anything unrecognized falls into MANAGE rather than
+ * disappearing.
+ */
+const SECTION_ORDER = ['Overview', 'Requests', 'Self service', 'Manage'] as const;
+type NavSection = (typeof SECTION_ORDER)[number];
+
+const REQUEST_PATHS = new Set([
+  PURCHASE_REQUESTS_PATH,
+  '/portal/purchase-requests/review',
+  '/portal/purchase-requests/accounts',
+  '/portal/purchase-requests/gm',
+  '/portal/purchase-requests/director',
+  '/portal/purchase-requests/procurement',
+  '/portal/fuel-requisitions',
+  '/portal/stores-requisitions',
+  '/portal/comparative-schedules',
+]);
+
+const SELF_SERVICE_PATHS = new Set([
+  '/portal/leave',
+  '/portal/payslips',
+  '/portal/attendance',
+  '/portal/expenses',
+]);
+
+function sectionFor(item: NavItem): NavSection {
+  if (item.path === '/portal' || item.path === '/portal/reports') return 'Overview';
+  if (REQUEST_PATHS.has(item.path)) return 'Requests';
+  if (SELF_SERVICE_PATHS.has(item.path)) return 'Self service';
+  return 'Manage';
+}
+
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { roleGroup } = useRole();
   const {
@@ -200,11 +237,17 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     navItems.splice(insertAt, 0, ...reviewerItems);
   }
 
+  const groupedNavItems = SECTION_ORDER.map((section) => ({
+    section,
+    items: navItems.filter((item) => sectionFor(item) === section),
+  })).filter((group) => group.items.length > 0);
+
   return (
     <>
-      {/* Overlay for mobile */}
+      {/* Overlay for mobile - decorative; the X button is the keyboard path */}
       {isOpen && (
         <div
+          aria-hidden="true"
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 md:hidden"
           onClick={onClose}
         />
@@ -237,12 +280,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           </Button>
         </div>
 
-        {/* Navigation - scrollable */}
-        <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-          <p className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            Menu
-          </p>
-          {navItems.map((item) => (
+        {/* Navigation - scrollable, grouped into labeled sections */}
+        <nav className="flex-1 overflow-y-auto p-3 space-y-1" aria-label="Primary">
+          {groupedNavItems.map((group) => (
+            <div key={group.section}>
+              <p className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                {group.section}
+              </p>
+              {group.items.map((item) => (
             <NavLink
               key={item.path + item.label}
               to={item.path}
@@ -252,8 +297,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 cn(
                   'flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200',
                   isActive
-                    ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25'
-                    : 'text-slate-600 hover:bg-blue-50 hover:text-blue-700'
+                    ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/25'
+                    : 'text-slate-600 hover:bg-accent hover:text-primary'
                 )
               }
             >
@@ -266,7 +311,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                     )}
                   >
                     <item.icon
-                      className={cn('h-5 w-5', isActive ? 'text-white' : 'text-slate-500')}
+                      className={cn('h-5 w-5', isActive ? 'text-primary-foreground' : 'text-slate-500')}
                     />
                   </div>
                   <div className="min-w-0">
@@ -298,6 +343,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 </>
               )}
             </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
 
