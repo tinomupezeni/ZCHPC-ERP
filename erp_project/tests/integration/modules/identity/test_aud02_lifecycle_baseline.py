@@ -137,9 +137,17 @@ def client_for(user, raise_exceptions=True):
 
 
 def set_state(employee, *, user_active, employee_active):
-    """Put the two flags into a combination directly, bypassing the services."""
+    """
+    Put the two flags into a combination directly, bypassing the services.
+
+    Since Slice 2 Employees.is_active mirrors lifecycle_status (a database
+    constraint), so the inactive employee state is written as DEACTIVATED.
+    """
     User.objects.filter(pk=employee.user_id).update(is_active=user_active)
-    Employees.objects.filter(pk=employee.pk).update(is_active=employee_active)
+    Employees.objects.filter(pk=employee.pk).update(
+        lifecycle_status="ACTIVE" if employee_active else "DEACTIVATED",
+        is_active=employee_active,
+    )
 
 
 def flags(employee):
@@ -852,11 +860,21 @@ class TestNoArchiveStateExists:
         "account_status",
     )
 
-    @pytest.mark.parametrize("model", [User, Employees])
-    def test_models_carry_no_lifecycle_field_other_than_is_active(self, model):
+    @pytest.mark.parametrize(
+        "model,lifecycle_fields",
+        [
+            (User, []),
+            # Slice 2 introduced the lifecycle model; nothing else exists yet
+            # (no archive date, reason or actor).
+            (Employees, ["lifecycle_status"]),
+        ],
+    )
+    def test_models_carry_no_other_lifecycle_field(self, model, lifecycle_fields):
         names = [field.name for field in model._meta.get_fields()]
         assert "is_active" in names
-        assert [n for n in names if any(word in n for word in self.LIFECYCLE_WORDS)] == []
+        assert [
+            n for n in names if any(word in n for word in self.LIFECYCLE_WORDS)
+        ] == lifecycle_fields
 
     def test_no_archive_or_restore_route_exists(self):
         from django.urls import get_resolver

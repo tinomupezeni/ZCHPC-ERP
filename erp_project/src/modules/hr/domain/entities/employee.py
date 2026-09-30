@@ -13,6 +13,7 @@ from shared.domain.value_objects import Email, NationalId, PhoneNumber, Employee
 from modules.hr.domain.value_objects import (
     BankAccount,
     EmergencyContact,
+    EmployeeLifecycleStatus,
     EmploymentType,
     Gender,
     MaritalStatus,
@@ -50,7 +51,7 @@ class Employee(AggregateRoot[int]):
         date_joined: date | None = None,
         contract_from: date | None = None,
         contract_to: date | None = None,
-        is_active: bool = True,
+        lifecycle_status: EmployeeLifecycleStatus = EmployeeLifecycleStatus.ACTIVE,
         emergency_contact: EmergencyContact | None = None,
         created_at: datetime | None = None,
         updated_at: datetime | None = None,
@@ -75,7 +76,7 @@ class Employee(AggregateRoot[int]):
         self.date_joined = date_joined or date.today()
         self.contract_from = contract_from
         self.contract_to = contract_to
-        self.is_active = is_active
+        self.lifecycle_status = EmployeeLifecycleStatus(lifecycle_status)
         self.emergency_contact = emergency_contact or EmergencyContact.empty()
         self.created_at = created_at or datetime.utcnow()
         self.updated_at = updated_at or datetime.utcnow()
@@ -102,6 +103,21 @@ class Employee(AggregateRoot[int]):
     def full_name(self) -> str:
         """Get employee's full name."""
         return f"{self.first_name} {self.surname}"
+
+    @property
+    def is_active(self) -> bool:
+        """Whether the employee is in normal employment (derived, read-only)."""
+        return self.lifecycle_status is EmployeeLifecycleStatus.ACTIVE
+
+    @property
+    def is_deactivated(self) -> bool:
+        """Whether the employee is temporarily suspended."""
+        return self.lifecycle_status is EmployeeLifecycleStatus.DEACTIVATED
+
+    @property
+    def is_archived(self) -> bool:
+        """Whether this employment lifecycle is permanently closed."""
+        return self.lifecycle_status is EmployeeLifecycleStatus.ARCHIVED
 
     @property
     def is_on_contract(self) -> bool:
@@ -211,14 +227,24 @@ class Employee(AggregateRoot[int]):
         self.updated_at = datetime.utcnow()
 
     def deactivate(self) -> None:
-        """Deactivate the employee (soft delete)."""
-        self.is_active = False
+        """Deactivate the employee (temporary suspension)."""
+        self._ensure_not_archived("deactivated")
+        self.lifecycle_status = EmployeeLifecycleStatus.DEACTIVATED
         self.updated_at = datetime.utcnow()
 
     def reactivate(self) -> None:
         """Reactivate a deactivated employee."""
-        self.is_active = True
+        self._ensure_not_archived("reactivated")
+        self.lifecycle_status = EmployeeLifecycleStatus.ACTIVE
         self.updated_at = datetime.utcnow()
+
+    def _ensure_not_archived(self, action: str) -> None:
+        """An archived employment lifecycle is closed and is not reopened."""
+        if self.is_archived:
+            raise ValidationError(
+                message=f"An archived employee cannot be {action}",
+                code="EMPLOYEE_ARCHIVED",
+            )
 
     def link_user(self, user_id: UUID) -> None:
         """Link employee to a user account."""

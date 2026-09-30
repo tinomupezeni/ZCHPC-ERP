@@ -2,6 +2,8 @@ import uuid
 from django.db import models
 from django.conf import settings # For AUTH_USER_MODEL
 
+from modules.hr.domain.value_objects import EmployeeLifecycleStatus
+
 class Address(models.Model):
     # TODO: Add fields for Address model
     pass
@@ -105,7 +107,42 @@ class Employees(models.Model):
     position = models.ForeignKey('Position', on_delete=models.SET_NULL, null=True, blank=True)
     role = models.ForeignKey('Role', on_delete=models.SET_NULL, null=True, blank=True)
     employee_type = models.CharField(max_length=50, default='Full-time')
+    # Employment lifecycle (AUD-02). lifecycle_status is the one authoritative
+    # statement of employment state. is_active is kept only as a stored
+    # compatibility mirror for the code that still filters on it; the
+    # database constraints below force it to equal
+    # (lifecycle_status == ACTIVE), so the two can never disagree. Write
+    # lifecycle_status, and set is_active to match in the same statement.
+    lifecycle_status = models.CharField(
+        max_length=20,
+        choices=[(status.value, status.value.title()) for status in EmployeeLifecycleStatus],
+        default=EmployeeLifecycleStatus.ACTIVE.value,
+        # Also a database default, so an insert that does not name the column
+        # (older code during a deploy, historical migration states) still
+        # produces a valid ACTIVE row rather than a NOT NULL failure.
+        db_default=EmployeeLifecycleStatus.ACTIVE.value,
+    )
     is_active = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    lifecycle_status__in=[status.value for status in EmployeeLifecycleStatus]
+                ),
+                name='hr_employees_lifecycle_status_valid',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(lifecycle_status=EmployeeLifecycleStatus.ACTIVE.value, is_active=True)
+                    | (
+                        ~models.Q(lifecycle_status=EmployeeLifecycleStatus.ACTIVE.value)
+                        & models.Q(is_active=False)
+                    )
+                ),
+                name='hr_employees_is_active_matches_lifecycle',
+            ),
+        ]
 
     # Personal information
     national_id = models.CharField(max_length=50, null=True, blank=True)

@@ -14,6 +14,7 @@ from modules.hr.domain.entities import Employee
 from modules.hr.domain.value_objects import (
     BankAccount,
     EmergencyContact,
+    EmployeeLifecycleStatus,
     EmploymentType,
     Gender,
     MaritalStatus,
@@ -165,6 +166,7 @@ class DjangoEmployeeRepository(IEmployeeRepository):
             date_joined=employee.date_joined,
             contract_from=employee.contract_from,
             contract_to=employee.contract_to,
+            lifecycle_status=employee.lifecycle_status.value,
             is_active=employee.is_active,
             emergency_contact_name=employee.emergency_contact.name,
             emergency_contact_number=employee.emergency_contact.number,
@@ -199,6 +201,7 @@ class DjangoEmployeeRepository(IEmployeeRepository):
             date_joined=employee.date_joined,
             contract_from=employee.contract_from,
             contract_to=employee.contract_to,
+            lifecycle_status=employee.lifecycle_status.value,
             is_active=employee.is_active,
             emergency_contact_name=employee.emergency_contact.name,
             emergency_contact_number=employee.emergency_contact.number,
@@ -269,7 +272,7 @@ class DjangoEmployeeRepository(IEmployeeRepository):
             date_joined=db_employee.date_joined,
             contract_from=db_employee.contract_from,
             contract_to=db_employee.contract_to,
-            is_active=db_employee.is_active,
+            lifecycle_status=EmployeeLifecycleStatus.from_string(db_employee.lifecycle_status),
             emergency_contact=EmergencyContact(
                 name=db_employee.emergency_contact_name or "",
                 number=db_employee.emergency_contact_number or "",

@@ -31,6 +31,33 @@ class EmploymentType(str, Enum):
         raise ValueError(f"Invalid employment type: {value}")
 
 
+class EmployeeLifecycleStatus(str, Enum):
+    """
+    Where an employee stands in their employment lifecycle (AUD-02).
+
+    The single authoritative statement of employment state; exactly one
+    value applies at a time.
+
+    - ACTIVE: normal employment.
+    - DEACTIVATED: temporary suspension. The employment relationship and its
+      role assignment remain; the state is reversible.
+    - ARCHIVED: the employment lifecycle is permanently closed. Identity and
+      history are retained; it is not reopened by reactivation.
+    """
+
+    ACTIVE = "ACTIVE"
+    DEACTIVATED = "DEACTIVATED"
+    ARCHIVED = "ARCHIVED"
+
+    @classmethod
+    def from_string(cls, value: str) -> "EmployeeLifecycleStatus":
+        """Convert a stored value to EmployeeLifecycleStatus."""
+        try:
+            return cls(value)
+        except ValueError:
+            raise ValueError(f"Invalid employee lifecycle status: {value}") from None
+
+
 class PayFrequency(str, Enum):
     """How often an employee is paid."""
 

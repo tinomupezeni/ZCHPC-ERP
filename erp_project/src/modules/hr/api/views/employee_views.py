@@ -238,6 +238,12 @@ class EmployeeDetailView(APIView):
                 {"error": str(e)},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        except ValidationError as e:
+            # e.g. the employee is archived (AUD-02): not a deactivation target
+            return Response(
+                {"error": e.message, "code": e.code},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class EmployeeSalaryView(APIView):

@@ -4,6 +4,7 @@ HR domain value objects.
 
 from modules.hr.domain.value_objects.employment import (
     BankAccount,
+    EmployeeLifecycleStatus,
     EmploymentType,
     Gender,
     MaritalStatus,
@@ -18,6 +19,7 @@ from modules.hr.domain.value_objects.statutory import (
 __all__ = [
     # Employment
     "EmploymentType",
+    "EmployeeLifecycleStatus",
     "PayFrequency",
     "Gender",
     "MaritalStatus",

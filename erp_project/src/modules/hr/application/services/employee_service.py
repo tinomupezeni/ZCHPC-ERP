@@ -328,7 +328,6 @@ class EmployeeService:
             date_joined=command.date_joined or date.today(),
             contract_from=command.contract_from,
             contract_to=command.contract_to,
-            is_active=True,
             emergency_contact=EmergencyContact(
                 name=command.emergency_contact_name or "",
                 number=command.emergency_contact_number or "",

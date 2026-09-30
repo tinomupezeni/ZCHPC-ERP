@@ -214,6 +214,8 @@ class TestHandlePurchaseRequestAwaitingReview:
             surname=name.split()[-1],
             email=f"{name.lower().replace(' ', '.')}@example.com",
             role=role,
+            # is_active mirrors lifecycle_status (AUD-02); set both.
+            lifecycle_status="ACTIVE" if is_active else "DEACTIVATED",
             is_active=is_active,
         )
 
