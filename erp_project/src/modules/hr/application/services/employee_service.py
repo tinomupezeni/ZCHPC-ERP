@@ -17,6 +17,10 @@ from modules.hr.application.authorization import (
     EmployeeAuthorizationPolicy,
     resolve_actor_permissions,
 )
+from modules.hr.application.services.employee_lifecycle_service import (
+    EmployeeLifecycleService,
+    LifecycleTransitionResult,
+)
 from modules.hr.application.interfaces import (
     IEmployeeRepository,
     IDepartmentRepository,
@@ -38,7 +42,6 @@ from modules.hr.domain.value_objects import (
 )
 from modules.hr.domain.events import (
     EmployeeHiredEvent,
-    EmployeeTerminatedEvent,
     EmployeeUpdatedEvent,
     SalaryChangedEvent,
 )
@@ -130,6 +133,7 @@ class EmployeeService:
         department_repository: IDepartmentRepository,
         position_repository: IPositionRepository,
         event_bus: EventBus | None = None,
+        lifecycle_service: EmployeeLifecycleService | None = None,
     ):
         """Initialize service with repositories."""
         self._employees = employee_repository
@@ -137,6 +141,10 @@ class EmployeeService:
         self._positions = position_repository
         self._event_bus = event_bus or EventBus.get_instance()
         self._policy = EmployeeAuthorizationPolicy()
+        # The one transition authority for lifecycle state (AUD-02).
+        self._lifecycle = lifecycle_service or EmployeeLifecycleService(
+            employee_repository=employee_repository, event_bus=self._event_bus
+        )
 
     def _role_permissions(self, role_id: int | None) -> PermissionSet | None:
         """
@@ -544,23 +552,53 @@ class EmployeeService:
         )
 
         # The employee record and its login go inactive together or not at
-        # all. SimpleJWT rejects an inactive user on every request and on
-        # token refresh, so this also ends any session already issued.
-        employee.deactivate()
-        with transaction.atomic():
-            self._employees.update(employee)
-            if employee.user_id is not None:
-                self._disable_login(employee.user_id)
+        # all, through the one transition authority (AUD-02).
+        return self._lifecycle.deactivate(employee.id, reason).employee
 
-        self._event_bus.publish(
-            EmployeeTerminatedEvent(
-                employee_id=employee.id,
-                employee_number=str(employee.employee_id),
-                reason=reason,
-            )
+    def reactivate_employee(
+        self,
+        employee_id: int,
+        actor_permissions: PermissionSet | None = None,
+        actor_employee_id: int | None = None,
+    ) -> LifecycleTransitionResult:
+        """
+        Reactivate a deactivated employee and re-enable their login.
+
+        The same employee record returns to ACTIVE: identity, EC number,
+        role and department are untouched. A re-enabled login is issued a
+        temporary password (REM-07), carried on the result.
+
+        Args:
+            employee_id: Employee ID
+            actor_permissions: The acting user's permissions. None holds
+                nothing. Needs hr.employee.reactivate, checked before the
+                target is loaded, and must cover the target's own (dormant)
+                permissions.
+            actor_employee_id: The acting employee's own record id, from the
+                authenticated request; reactivating it is refused.
+
+        Returns:
+            The transition result (employee, and any temporary password)
+
+        Raises:
+            AuthorizationError: If the actor may not reactivate this employee.
+            NotFoundError: If employee not found
+            ValidationError: If the employee is archived
+        """
+        actor_permissions = actor_permissions or PermissionSet.empty()
+        self._policy.authorize_reactivate(actor_permissions)
+
+        employee = self._employees.get_by_id(employee_id)
+        if not employee:
+            raise NotFoundError(f"Employee with ID {employee_id} not found")
+
+        self._policy.authorize_reactivate_target(
+            actor_permissions,
+            target_permissions=self._effective_permissions(employee),
+            is_self=actor_employee_id is not None and actor_employee_id == employee.id,
         )
 
-        return employee
+        return self._lifecycle.reactivate(employee.id)
 
     def get_employee(
         self, employee_id: int, actor_permissions: PermissionSet | None = None
@@ -725,12 +763,6 @@ class EmployeeService:
             if user is not None:
                 return resolve_actor_permissions(user)
         return self._role_permissions(employee.role_id) or PermissionSet.empty()
-
-    def _disable_login(self, user_id: UUID) -> None:
-        """Deactivate the identity account linked to an employee."""
-        from modules.identity.infrastructure.persistence.models import CustomUser
-
-        CustomUser.objects.filter(pk=user_id).update(is_active=False)
 
     def _save_leave_profile(self, employee_id: int, leave_days_entitled: int) -> None:
         """Create or update the employee's LeaveProfile row."""

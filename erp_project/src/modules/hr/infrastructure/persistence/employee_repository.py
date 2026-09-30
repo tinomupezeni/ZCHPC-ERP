@@ -53,6 +53,14 @@ class DjangoEmployeeRepository(IEmployeeRepository):
         except self.model.DoesNotExist:
             return None
 
+    def get_by_id_for_update(self, employee_id: int) -> Employee | None:
+        """
+        Get employee by database ID, holding its row lock until the
+        surrounding transaction ends. Must be called inside one.
+        """
+        db_employee = self.model.objects.select_for_update().filter(id=employee_id).first()
+        return self._to_entity(db_employee) if db_employee else None
+
     def get_by_employee_id(self, employee_id: EmployeeId | str) -> Employee | None:
         """Get employee by employee number (EMP0001)."""
         emp_id_str = str(employee_id)

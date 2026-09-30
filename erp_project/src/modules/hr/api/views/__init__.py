@@ -5,6 +5,7 @@ HR API views.
 from modules.hr.api.views.employee_views import (
     EmployeeDetailView,
     EmployeeListCreateView,
+    EmployeeReactivateView,
     EmployeeSalaryView,
 )
 from modules.hr.api.views.organization_views import (
@@ -33,6 +34,7 @@ __all__ = [
     # Employee
     "EmployeeListCreateView",
     "EmployeeDetailView",
+    "EmployeeReactivateView",
     "EmployeeSalaryView",
     # Department
     "DepartmentListCreateView",

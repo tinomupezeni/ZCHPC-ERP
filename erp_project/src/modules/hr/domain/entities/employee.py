@@ -226,17 +226,31 @@ class Employee(AggregateRoot[int]):
             self.contract_to = contract_to
         self.updated_at = datetime.utcnow()
 
-    def deactivate(self) -> None:
-        """Deactivate the employee (temporary suspension)."""
-        self._ensure_not_archived("deactivated")
-        self.lifecycle_status = EmployeeLifecycleStatus.DEACTIVATED
-        self.updated_at = datetime.utcnow()
+    def deactivate(self) -> bool:
+        """
+        ACTIVE -> DEACTIVATED (temporary suspension).
 
-    def reactivate(self) -> None:
-        """Reactivate a deactivated employee."""
-        self._ensure_not_archived("reactivated")
-        self.lifecycle_status = EmployeeLifecycleStatus.ACTIVE
+        Returns True if the state changed, False if the employee was already
+        deactivated (nothing is touched). An archived employee is refused.
+        """
+        return self._move_to(EmployeeLifecycleStatus.DEACTIVATED, "deactivated")
+
+    def reactivate(self) -> bool:
+        """
+        DEACTIVATED -> ACTIVE.
+
+        Returns True if the state changed, False if the employee was already
+        active (nothing is touched). An archived employee is refused.
+        """
+        return self._move_to(EmployeeLifecycleStatus.ACTIVE, "reactivated")
+
+    def _move_to(self, target: EmployeeLifecycleStatus, action: str) -> bool:
+        self._ensure_not_archived(action)
+        if self.lifecycle_status is target:
+            return False
+        self.lifecycle_status = target
         self.updated_at = datetime.utcnow()
+        return True
 
     def _ensure_not_archived(self, action: str) -> None:
         """An archived employment lifecycle is closed and is not reopened."""

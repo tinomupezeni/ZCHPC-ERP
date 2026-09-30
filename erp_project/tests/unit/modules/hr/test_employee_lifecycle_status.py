@@ -92,3 +92,23 @@ class TestExistingTransitionsUseTheLifecycleState:
             getattr(employee, transition)()
         assert exc.value.code == "EMPLOYEE_ARCHIVED"
         assert employee.lifecycle_status is Status.ARCHIVED
+
+
+class TestTransitionsReportWhetherAnythingChanged:
+    """Slice 3: asking for the state already held is a no-op, not a rewrite."""
+
+    def test_deactivate(self):
+        employee = make_employee()
+        assert employee.deactivate() is True
+        updated_at = employee.updated_at
+        assert employee.deactivate() is False
+        assert employee.lifecycle_status is Status.DEACTIVATED
+        assert employee.updated_at == updated_at
+
+    def test_reactivate(self):
+        employee = make_employee(lifecycle_status=Status.DEACTIVATED)
+        assert employee.reactivate() is True
+        updated_at = employee.updated_at
+        assert employee.reactivate() is False
+        assert employee.lifecycle_status is Status.ACTIVE
+        assert employee.updated_at == updated_at

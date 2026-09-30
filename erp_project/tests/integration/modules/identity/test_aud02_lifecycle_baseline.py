@@ -228,19 +228,30 @@ def history_counts(employee_pk):
 
 @pytest.mark.parametrize("user_active,employee_active", STATE_COMBINATIONS)
 class TestActiveStateCombinations:
-    """What each (login active, employee active) combination can do today."""
+    """
+    What each (login active, employee active) combination can do today.
+
+    Changed by Slice 3: authentication and everything behind it now need
+    BOTH the login to be enabled and the employee to be ACTIVE (one rule,
+    identity.infrastructure.account_access). Before Slice 3 the main login,
+    earlier tokens, refresh and role capabilities looked at the login flag
+    alone, so an enabled login on an inactive employee kept full access.
+    The lifecycle service no longer produces the two disagreeing
+    combinations; they are still exercised here because older data may hold
+    them, and they must fail closed.
+    """
 
     def _target(self, user_active, employee_active):
         target = make_employee("Subject", "hr.employee.create", REVIEW_CAPABILITY)
         set_state(target, user_active=user_active, employee_active=employee_active)
         return target
 
-    def test_main_login_depends_only_on_the_login_flag(self, user_active, employee_active):
+    def test_main_login_needs_both_flags(self, user_active, employee_active):
         target = self._target(user_active, employee_active)
         response = APIClient().post(
             LOGIN_URL, {"email": target.email, "password": PASSWORD}, format="json"
         )
-        assert response.status_code == (200 if user_active else 401)
+        assert response.status_code == (200 if user_active and employee_active else 401)
 
     def test_portal_login_needs_both_flags(self, user_active, employee_active):
         target = self._target(user_active, employee_active)
@@ -251,36 +262,29 @@ class TestActiveStateCombinations:
         )
         assert response.status_code == (200 if user_active and employee_active else 401)
 
-    def test_access_token_issued_earlier_depends_only_on_the_login_flag(
-        self, user_active, employee_active
-    ):
+    def test_access_token_issued_earlier_needs_both_flags(self, user_active, employee_active):
         target = make_employee("Subject", "hr.employee.view")
         client = client_for(target.user)  # issued while fully active
         set_state(target, user_active=user_active, employee_active=employee_active)
         response = client.get(EMPLOYEES_URL)
-        assert response.status_code == (200 if user_active else 401)
+        assert response.status_code == (200 if user_active and employee_active else 401)
 
-    def test_refresh_token_issued_earlier_depends_only_on_the_login_flag(
-        self, user_active, employee_active
-    ):
+    def test_refresh_token_issued_earlier_needs_both_flags(self, user_active, employee_active):
         target = make_employee("Subject", "hr.employee.view")
         refresh = str(RefreshToken.for_user(target.user))
         set_state(target, user_active=user_active, employee_active=employee_active)
         response = APIClient().post(REFRESH_URL, {"refresh": refresh}, format="json")
-        assert response.status_code == (200 if user_active else 401)
+        assert response.status_code == (200 if user_active and employee_active else 401)
 
-    def test_role_capabilities_ignore_the_employee_flag(self, user_active, employee_active):
-        """
-        UNSAFE when (True, False): a login whose employee record is inactive
-        still exercises every capability of its role.
-        """
+    def test_role_capabilities_need_both_flags(self, user_active, employee_active):
+        """The role stays attached but is dormant unless the employee is active."""
         target = self._target(user_active, employee_active)
         response = client_for(target.user).post(
             USERS_URL,
             {"email": f"made{next(_numbers)}@zchpc.test", "first_name": "M", "last_name": "A"},
             format="json",
         )
-        assert response.status_code == (201 if user_active else 401)
+        assert response.status_code == (201 if user_active and employee_active else 401)
 
     def test_default_employee_listing_follows_the_employee_flag(
         self, user_active, employee_active
@@ -321,15 +325,19 @@ class TestDeactivationPaths:
         assert response.status_code == 200
         assert flags(target) == (False, False)
 
-    def test_identity_deactivation_disables_only_the_login(self):
-        """UNSAFE (F2): the employee record stays active."""
+    def test_identity_deactivation_disables_employee_and_login_together(self):
+        """
+        Changed by Slice 3 (F2): this endpoint used to disable only the
+        login, leaving the employee active (False, True). It now goes
+        through the same lifecycle transition as the HR endpoint.
+        """
         admin = make_administrator()
         target = make_employee("Target", "hr.employee.view")
         response = client_for(admin.user).patch(
             user_url(target.user_id), {"is_active": False}, format="json"
         )
         assert response.status_code == 200
-        assert flags(target) == (False, True)
+        assert flags(target) == (False, False)
 
     def test_deactivation_keeps_role_department_and_position_attached(self):
         admin = make_administrator()
@@ -379,15 +387,19 @@ class TestReactivationPaths:
         assert client_for(admin.user).delete(employee_url(target.pk)).status_code == 200
         return target
 
-    def test_identity_reactivation_restores_only_the_login(self):
-        """UNSAFE (F2): the employee record stays inactive."""
+    def test_identity_reactivation_restores_employee_and_login_together(self):
+        """
+        Changed by Slice 3 (F2): this endpoint used to re-enable only the
+        login, leaving the employee inactive (True, False). It now goes
+        through the lifecycle transition and reactivates both.
+        """
         admin = make_administrator()
         target = self._deactivated(admin)
         response = client_for(admin.user).patch(
             user_url(target.user_id), {"is_active": True}, format="json"
         )
         assert response.status_code == 200
-        assert flags(target) == (True, False)
+        assert flags(target) == (True, True)
 
     def test_reactivation_issues_a_temporary_password_and_forces_a_change(self):
         admin = make_administrator()
@@ -402,8 +414,12 @@ class TestReactivationPaths:
         )
         assert old.status_code == 401
 
-    def test_no_api_reactivates_the_employee_record(self):
-        """``is_active`` on the employee update is accepted and ignored."""
+    def test_employee_update_does_not_reactivate(self):
+        """
+        ``is_active`` on the employee update is accepted and ignored.
+        (Since Slice 3 reactivation has its own paths: the HR reactivate
+        endpoint and the identity user update.)
+        """
         admin = make_administrator()
         target = self._deactivated(admin)
         response = client_for(admin.user).patch(

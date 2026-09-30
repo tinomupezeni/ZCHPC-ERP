@@ -211,6 +211,9 @@ class UserDetailView(APIView):
                 {"detail": e.message},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        except ValidationError as e:
+            # e.g. the account's employee is archived (AUD-02)
+            return _error(e, status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, user_id: str):
         """Permanently delete a user (needs hr.employee.delete, checked by UserService)."""

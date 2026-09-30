@@ -19,6 +19,13 @@ class IEmployeeRepository(ABC):
         """Get employee by database ID."""
         ...
 
+    def get_by_id_for_update(self, employee_id: int) -> Employee | None:
+        """
+        Get employee by database ID for a read-modify-write inside a
+        transaction. Implementations backed by a database should lock the row.
+        """
+        return self.get_by_id(employee_id)
+
     @abstractmethod
     def get_by_employee_id(self, employee_id: EmployeeId | str) -> Employee | None:
         """Get employee by employee number (EMP0001)."""

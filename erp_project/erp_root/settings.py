@@ -131,7 +131,9 @@ ROOT_URLCONF = "erp_root.urls"
 # Any endpoint that should be public MUST explicitly set permission_classes = [AllowAny]
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        # SimpleJWT's JWTAuthentication, which also refuses the token of a
+        # login whose employee is not in active employment (AUD-02).
+        "modules.identity.infrastructure.jwt_authentication.EmployeeLifecycleJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     # Rates for the views that opt into throttling (no global default). The
@@ -267,9 +269,12 @@ CORS_EXPOSE_HEADERS = ["Content-Type", "X-CSRFToken"]
 # --- Authentication ---
 AUTH_USER_MODEL = "identity.CustomUser"  # New modular location
 
+# EmailBackend is a ModelBackend (email login, permissions, session user
+# lookup) that also refuses a login whose employee is not in active
+# employment (AUD-02). Django's plain ModelBackend is deliberately not listed
+# as a fallback: it would authenticate such a login on is_active alone.
 AUTHENTICATION_BACKENDS = [
     "modules.identity.infrastructure.authentication.EmailBackend",  # New modular location
-    "django.contrib.auth.backends.ModelBackend",
 ]
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -301,6 +306,11 @@ SIMPLE_JWT = {
     # (and refreshes of earlier refresh tokens, which copy the stale claim).
     # Tokens issued before this setting lack the claim and stop working once.
     "CHECK_REVOKE_TOKEN": True,
+    # AUD-02: a refresh token is honoured only while the login is enabled and
+    # its employee, if any, is in active employment.
+    "USER_AUTHENTICATION_RULE": (
+        "modules.identity.infrastructure.account_access.account_may_authenticate"
+    ),
 }
 
 # --- Internationalization ---

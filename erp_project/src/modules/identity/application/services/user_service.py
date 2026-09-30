@@ -99,6 +99,39 @@ def generate_temp_password(length: int = 12) -> str:
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
+def disable_login(user_repository: IUserRepository, user_id: UUID) -> bool:
+    """
+    Switch a login off. Returns True if it was on.
+
+    SimpleJWT refuses a disabled login on every request and on refresh, so
+    this also ends every token already issued to it.
+    """
+    user = user_repository.get_by_id(user_id)
+    if user is None or not user.is_active:
+        return False
+    user.deactivate()
+    user_repository.update(user)
+    return True
+
+
+def enable_login(user_repository: IUserRepository, user_id: UUID) -> str | None:
+    """
+    Switch a disabled login back on (REM-07).
+
+    The previous password is never restored: a new temporary one is issued
+    and returned once, and the owner must replace it. Returns None, and
+    changes nothing, if the login is missing or already enabled.
+    """
+    user = user_repository.get_by_id(user_id)
+    if user is None or user.is_active:
+        return None
+    temporary_password = generate_temp_password()
+    user.issue_temporary_password(temporary_password)
+    user.activate()
+    user_repository.update(user)
+    return temporary_password
+
+
 class UserService:
     """
     Application service for user management.
@@ -261,6 +294,11 @@ class UserService:
         hr.employee.reactivate; both refuse the actor's own account and
         anyone holding permissions the actor lacks.
 
+        Disabling or re-enabling the login of an employee is an employee
+        lifecycle transition (AUD-02): the employee record moves with it
+        (ACTIVE <-> DEACTIVATED) through EmployeeLifecycleService, so the two
+        cannot be left disagreeing. An archived employee is refused.
+
         Re-enabling a disabled login never restores its previous password: a
         new temporary one is issued, returned once, and must be replaced by
         the owner (REM-07).
@@ -277,6 +315,7 @@ class UserService:
         Raises:
             AuthorizationError: If the actor may not make this change
             NotFoundError: If user not found
+            ValidationError: If the account's employee is archived
         """
         actor_permissions = actor_permissions or PermissionSet.empty()
         is_self = actor_user_id is not None and actor_user_id == command.user_id
@@ -305,26 +344,62 @@ class UserService:
                 is_self=is_self,
             )
 
-        # Apply updates
-        if command.first_name is not None:
-            user.first_name = command.first_name.strip()
-
-        if command.last_name is not None:
-            user.last_name = command.last_name.strip()
-
+        # Enabling or disabling access is an employee lifecycle transition
+        # (AUD-02): the login and the employee record change together, in
+        # this transaction, or not at all.
         temp_password = None
-        if command.is_active is not None:
-            if command.is_active:
-                if not user.is_active:
-                    temp_password = generate_temp_password()
-                    user.issue_temporary_password(temp_password)
-                user.activate()
-            else:
-                user.deactivate()
+        with transaction.atomic():
+            if command.is_active is not None:
+                temp_password = self._set_access(user.id, command.is_active)
+                user = self._get(user.id)
 
-        self._user_repo.update(user)
+            if renames:
+                if command.first_name is not None:
+                    user.first_name = command.first_name.strip()
+                if command.last_name is not None:
+                    user.last_name = command.last_name.strip()
+                self._user_repo.update(user)
 
         return UpdateUserResult(user=self._to_dto(user), temp_password=temp_password)
+
+    def _set_access(self, user_id: UUID, active: bool) -> str | None:
+        """
+        Enable or disable this account through the one transition authority.
+
+        A login that belongs to an employee goes through
+        EmployeeLifecycleService, which moves the employee and the login
+        together. A login with no employee record (e.g. a bootstrap
+        superuser) has no employment lifecycle; only its switch changes.
+
+        Returns the temporary password issued if a login was re-enabled.
+        """
+        from modules.hr.infrastructure.persistence.models import Employees
+
+        employee_id = (
+            Employees.objects.filter(user_id=user_id).values_list("pk", flat=True).first()
+        )
+        if employee_id is None:
+            if active:
+                return enable_login(self._user_repo, user_id)
+            disable_login(self._user_repo, user_id)
+            return None
+
+        lifecycle = self._lifecycle_service()
+        if active:
+            return lifecycle.reactivate(employee_id).temporary_password
+        lifecycle.deactivate(employee_id)
+        return None
+
+    def _lifecycle_service(self):
+        from modules.hr.application.services import EmployeeLifecycleService
+        from modules.hr.infrastructure.persistence.employee_repository import (
+            DjangoEmployeeRepository,
+        )
+
+        return EmployeeLifecycleService(
+            employee_repository=DjangoEmployeeRepository(),
+            user_repository=self._user_repo,
+        )
 
     def delete_user(
         self,

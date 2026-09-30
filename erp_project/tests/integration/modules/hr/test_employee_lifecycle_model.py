@@ -5,9 +5,9 @@ Employees.lifecycle_status (ACTIVE / DEACTIVATED / ARCHIVED) is the one
 authoritative statement of employment state. Employees.is_active remains as
 a stored compatibility mirror that the database forces to agree with it.
 
-This slice establishes the model only. Tests marked ``NOT YET ENFORCED``
-record where the state is not applied yet (authentication, authorization,
-transitions into ARCHIVED); later slices are expected to change them.
+Slice 2 established the model; Slice 3 made it drive authentication and the
+deactivate/reactivate transitions. There is still no transition into
+ARCHIVED (marked ``NOT YET IMPLEMENTED``).
 """
 
 from itertools import count
@@ -213,31 +213,36 @@ class TestIsActiveReadersFollowTheLifecycleState:
 
 
 @pytest.mark.django_db
-class TestLifecycleStateIsNotYetEnforced:
-    """What Slice 2 deliberately leaves for later slices."""
+class TestLifecycleStateAndTheLogin:
+    """
+    Slice 3 made the state drive behaviour (the transition contract is in
+    test_employee_lifecycle_transitions.py). Before it, these recorded that
+    identity deactivation left the employee ACTIVE and that login ignored
+    the lifecycle state.
+    """
 
-    def test_identity_deactivation_does_not_touch_the_lifecycle_state(self):
-        """NOT YET ENFORCED (F2): the login is disabled, the employee stays ACTIVE."""
+    def test_identity_deactivation_moves_the_employee_to_deactivated(self):
         root = make_employee("Root", superuser=True)
         target = make_employee("Target", "hr.employee.view")
         response = client_for(root.user).patch(
             f"/api/v2/auth/users/{target.user_id}/", {"is_active": False}, format="json"
         )
         assert response.status_code == 200
-        assert stored(target) == ("ACTIVE", True)
+        assert stored(target) == ("DEACTIVATED", False)
         assert User.objects.get(pk=target.user_id).is_active is False
 
     @pytest.mark.parametrize("status", [Status.DEACTIVATED, Status.ARCHIVED])
-    def test_login_is_not_blocked_by_the_lifecycle_state(self, status):
-        """NOT YET ENFORCED: authentication still reads only CustomUser.is_active."""
+    def test_login_is_blocked_by_the_lifecycle_state(self, status):
+        """Even if the login switch itself was left on."""
         target = store_state(make_employee("Target", "hr.employee.view"), status)
+        assert User.objects.get(pk=target.user_id).is_active is True
         response = APIClient().post(
             LOGIN_URL, {"email": target.email, "password": PASSWORD}, format="json"
         )
-        assert response.status_code == 200
+        assert response.status_code == 401
 
     def test_no_api_moves_an_employee_to_archived(self):
-        """NOT YET ENFORCED: lifecycle_status is not accepted by the update API."""
+        """NOT YET IMPLEMENTED: lifecycle_status is not accepted by the update API."""
         root = make_employee("Root", superuser=True)
         target = make_employee("Target", "hr.employee.view")
         response = client_for(root.user).patch(

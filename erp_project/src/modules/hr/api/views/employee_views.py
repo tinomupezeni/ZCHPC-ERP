@@ -246,6 +246,58 @@ class EmployeeDetailView(APIView):
             )
 
 
+class EmployeeReactivateView(APIView):
+    """
+    Reactivate a deactivated employee (AUD-02).
+
+    POST: DEACTIVATED -> ACTIVE, re-enabling the employee's login
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, employee_id: int):
+        """Reactivate an employee (needs hr.employee.reactivate, checked by EmployeeService)."""
+        service = get_employee_service()
+
+        try:
+            result = service.reactivate_employee(
+                employee_id,
+                actor_permissions=resolve_actor_permissions(request.user),
+                actor_employee_id=_actor_employee_id(request),
+            )
+        except AuthorizationError as e:
+            return Response(
+                {"error": e.message, "code": e.code},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except NotFoundError as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except ValidationError as e:
+            return Response(
+                {"error": e.message, "code": e.code},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        employee = result.employee
+        return Response(
+            {
+                "id": employee.id,
+                "employee_id": str(employee.employee_id),
+                "full_name": employee.full_name,
+                "is_active": employee.is_active,
+                "lifecycle_status": employee.lifecycle_status.value,
+                # One-time temporary password of the re-enabled login (null
+                # if no login was re-enabled); the owner must replace it at
+                # first sign-in. REM-07.
+                "temporary_password": result.temporary_password,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
 class EmployeeSalaryView(APIView):
     """
     Get or update employee salary.
