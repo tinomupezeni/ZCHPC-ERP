@@ -125,6 +125,50 @@ class EmployeeAuthorizationPolicy:
                 code="EMPLOYEE_TARGET_EXCEEDS_ACTOR_AUTHORITY",
             )
 
+    def authorize_rename_target(
+        self,
+        actor_permissions: PermissionSet,
+        *,
+        target_permissions: PermissionSet,
+    ) -> None:
+        """
+        Renaming another login (AUD-02 F7) also needs authority over it as it
+        stands. Renaming yourself needs neither, and callers do not ask.
+        """
+        self._require_covers(
+            actor_permissions,
+            target_permissions,
+            "You cannot rename an account that holds permissions you do not hold.",
+        )
+
+    def authorize_login_attachment_target(
+        self,
+        actor_permissions: PermissionSet,
+        *,
+        target_permissions: PermissionSet,
+    ) -> None:
+        """
+        Creating an employee whose email matches an existing login attaches
+        the new record to that login (AUD-02 F7): it gains an employee
+        record, a department, any role given, and an employment lifecycle
+        that from then on decides whether it may log in. That needs
+        authority over the login as it stands. A login that holds nothing
+        is covered by anyone allowed to create employees.
+        """
+        self._require_covers(
+            actor_permissions,
+            target_permissions,
+            "You cannot attach an employee record to an existing account that "
+            "holds permissions you do not hold.",
+        )
+
+    @staticmethod
+    def _require_covers(
+        actor_permissions: PermissionSet, target_permissions: PermissionSet, message: str
+    ) -> None:
+        if not actor_permissions.covers(target_permissions):
+            raise AuthorizationError(message, code="EMPLOYEE_TARGET_EXCEEDS_ACTOR_AUTHORITY")
+
     def authorize_deactivate(self, actor_permissions: PermissionSet) -> None:
         """Capability check; runs before the target is loaded."""
         self._require(

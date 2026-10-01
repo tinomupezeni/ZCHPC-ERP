@@ -312,7 +312,9 @@ class UserService:
         Update a user.
 
         Anyone may change their own name. Changing another user's name needs
-        hr.employee.create (authority over provisioning logins). Disabling a
+        hr.employee.create (authority over provisioning logins) and authority
+        over that user (AUD-02 F7), and an archived employee's login cannot be
+        renamed at all. Disabling a
         login needs hr.employee.deactivate and re-enabling one needs
         hr.employee.reactivate; both refuse the actor's own account and
         anyone holding permissions the actor lacks.
@@ -338,7 +340,8 @@ class UserService:
         Raises:
             AuthorizationError: If the actor may not make this change
             NotFoundError: If user not found
-            ValidationError: If the account's employee is archived
+            ValidationError: If the account's employee is archived and the
+                request renames it or changes its access
         """
         actor_permissions = actor_permissions or PermissionSet.empty()
         is_self = actor_user_id is not None and actor_user_id == command.user_id
@@ -354,6 +357,18 @@ class UserService:
             self._policy.authorize_create(actor_permissions)
 
         user = self._get(command.user_id)
+
+        if renames and not is_self:
+            # Renaming another login also needs authority over it (AUD-02 F7).
+            self._policy.authorize_rename_target(
+                actor_permissions, target_permissions=self._account_permissions(user.id)
+            )
+        if renames and self.is_archived_account(user.id):
+            # An archived employee's identity is closed (AUD-02 Slice 6).
+            raise ValidationError(
+                "An archived employee's account cannot be renamed",
+                code="EMPLOYEE_ARCHIVED",
+            )
 
         if command.is_active is not None:
             authorize_target = (

@@ -270,6 +270,7 @@ class EmployeeService:
             ),
         )
         self._authorize_payroll_data_changes(command, actor_permissions, None)
+        self._authorize_login_attachment(command, actor_permissions)
         # Validate email uniqueness
         if command.email and self._employees.exists_by_email(command.email):
             raise ValidationError(
@@ -398,6 +399,36 @@ class EmployeeService:
                 )
             return requested
         return SequentialEmployeeIdGenerator(self._employees.get_max_employee_id).next_id()
+
+    def _authorize_login_attachment(
+        self, command: CreateEmployeeCommand, actor_permissions: PermissionSet
+    ) -> None:
+        """
+        Establish, before anything is created, whether the new employee would
+        be attached to an existing login, and that the actor may do that
+        (AUD-02 F7).
+
+        modules.hr.signals attaches a new employee to the login whose email
+        equals the employee's stored (normalized) email, when that login has
+        no employee record yet. The same login is resolved here, so the
+        authorization decision and the link the signal then makes cannot
+        disagree. A caller that supplies user_id names the login itself
+        (identity's create_user, for the login it has just created).
+        """
+        if command.user_id is not None or not command.email:
+            return
+
+        from modules.identity.infrastructure.persistence.models import CustomUser
+
+        login = (
+            CustomUser.objects.filter(email=Email(command.email).value, employee_profile__isnull=True)
+            .first()
+        )
+        if login is None:
+            return
+        self._policy.authorize_login_attachment_target(
+            actor_permissions, target_permissions=resolve_actor_permissions(login)
+        )
 
     def update_employee(
         self,
