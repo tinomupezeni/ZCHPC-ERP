@@ -91,12 +91,6 @@ class IEmployeeRepository(ABC):
         """Update an existing employee."""
         ...
 
-    @abstractmethod
-    def delete(self, employee_id: int) -> bool:
-        """Hard delete an employee. Returns True if deleted."""
-        ...
-
-
 class IDepartmentRepository(ABC):
     """
     Repository interface for Department aggregate.

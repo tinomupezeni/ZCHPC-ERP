@@ -13,7 +13,7 @@ Every request carries a real JWT, so RBACMiddleware is on the path.
 Sections:
     A. The four CustomUser.is_active x Employees.is_active combinations
     B. Deactivation and reactivation paths
-    C. Hard deletion
+    C. User deletion (refused since Slice 4)
     D. Employee (EC) identifier reuse
     E. Structural assignments (department head, reports_to, reviewers)
     F. Listing and inactive visibility
@@ -25,7 +25,6 @@ from itertools import count
 
 import pytest
 from django.contrib.auth import get_user_model
-from django.db.models import ProtectedError
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
@@ -440,82 +439,81 @@ class TestReactivationPaths:
 
 
 # =============================================================================
-# C. Hard deletion
+# C. User deletion is refused
 # =============================================================================
 
 
-class TestHardDeletion:
-    def test_deleting_a_user_removes_login_and_employee(self):
+class TestUserDeletionIsRefused:
+    """
+    Changed by Slice 4 (F3). DELETE /api/v2/auth/users/<id>/ used to hard-
+    delete the login, which cascaded to the employee and nine employee-owned
+    tables, nulled the department head, reports_to and reviewer references,
+    left no record of itself, and failed with HTTP 500 when payroll history
+    protected the row. It is now refused with 405 Method Not Allowed before
+    anything is read or written.
+    """
+
+    def test_delete_is_method_not_allowed(self):
         admin = make_administrator()
         target = make_employee("Target", "hr.employee.view")
         response = client_for(admin.user).delete(user_url(target.user_id))
-        assert response.status_code == 204
-        assert not User.objects.filter(pk=target.user_id).exists()
-        assert not Employees.objects.filter(pk=target.pk).exists()
+        assert response.status_code == 405
+        assert "DELETE" not in response["Allow"]
 
-    def test_deleting_a_user_cascades_through_employee_owned_records(self):
-        """UNSAFE (F3): personnel, payroll, leave and attendance rows are lost."""
+    def test_refused_delete_leaves_login_and_employee(self):
+        admin = make_administrator()
+        target = make_employee("Target", "hr.employee.view")
+        client_for(admin.user).delete(user_url(target.user_id))
+        assert User.objects.filter(pk=target.user_id).exists()
+        assert Employees.objects.filter(pk=target.pk).exists()
+
+    def test_refused_delete_leaves_every_employee_owned_record(self):
         admin = make_administrator()
         target = make_employee("Target", "hr.employee.view")
         give_history(target)
+        client_for(admin.user).delete(user_url(target.user_id))
         assert set(history_counts(target.pk).values()) == {1}
 
-        assert client_for(admin.user).delete(user_url(target.user_id)).status_code == 204
-        assert set(history_counts(target.pk).values()) == {0}
-
-    def test_login_audit_rows_survive_without_their_user(self):
+    def test_login_audit_rows_stay_linked_to_their_user(self):
         admin = make_administrator()
         target = make_employee("Target", "hr.employee.view")
         AuditLog.objects.create(
             user=target.user, username_attempted=target.email, event_type="SUCCESS"
         )
         client_for(admin.user).delete(user_url(target.user_id))
-        row = AuditLog.objects.get(username_attempted=target.email)
-        assert row.user_id is None
+        assert AuditLog.objects.get(username_attempted=target.email).user_id == target.user_id
 
-    def test_deletion_leaves_no_database_record_of_itself(self):
-        admin = make_administrator()
-        target = make_employee("Target", "hr.employee.view")
-        audit_rows_before = AuditLog.objects.count()
-        client_for(admin.user).delete(user_url(target.user_id))
-        assert AuditLog.objects.count() == audit_rows_before
-
-    def test_payroll_history_turns_the_delete_into_a_server_error(self):
-        """UNSAFE (F3): ProtectedError escapes the view as HTTP 500."""
+    def test_payroll_history_no_longer_produces_a_server_error(self):
         admin = make_administrator()
         target = make_employee("Paid", "hr.employee.view")
         Payroll.objects.create(employee=target, period=date(2026, 8, 1))
-
         response = client_for(admin.user, raise_exceptions=False).delete(
             user_url(target.user_id)
         )
-        assert response.status_code == 500
-        with pytest.raises(ProtectedError):
-            client_for(admin.user).delete(user_url(target.user_id))
-
-    def test_blocked_delete_removes_nothing(self):
-        admin = make_administrator()
-        target = make_employee("Paid", "hr.employee.view")
-        give_history(target)
-        Payroll.objects.create(employee=target, period=date(2026, 8, 1))
-
-        client_for(admin.user, raise_exceptions=False).delete(user_url(target.user_id))
-        assert User.objects.filter(pk=target.user_id).exists()
+        assert response.status_code == 405
+        assert Payroll.objects.filter(employee=target).exists()
         assert Employees.objects.filter(pk=target.pk).exists()
-        assert set(history_counts(target.pk).values()) == {1}
 
-    def test_inactive_account_can_be_deleted(self):
+    def test_inactive_account_is_refused_too(self):
         admin = make_administrator()
         target = make_employee("Target", "hr.employee.view")
         set_state(target, user_active=False, employee_active=False)
-        assert client_for(admin.user).delete(user_url(target.user_id)).status_code == 204
+        assert client_for(admin.user).delete(user_url(target.user_id)).status_code == 405
+        assert Employees.objects.filter(pk=target.pk).exists()
 
-    def test_deleting_twice_is_not_found(self):
+    def test_unknown_account_gets_the_same_answer(self):
+        """No existence disclosure: 405 whether or not the id exists."""
+        admin = make_administrator()
+        missing = "00000000-0000-0000-0000-000000000000"
+        assert client_for(admin.user).delete(user_url(missing)).status_code == 405
+
+    def test_refused_delete_is_not_a_deactivation(self):
         admin = make_administrator()
         target = make_employee("Target", "hr.employee.view")
-        client = client_for(admin.user)
-        assert client.delete(user_url(target.user_id)).status_code == 204
-        assert client.delete(user_url(target.user_id)).status_code == 404
+        target_client = client_for(target.user)
+        client_for(admin.user).delete(user_url(target.user_id))
+        assert flags(target) == (True, True)
+        assert target_client.get(EMPLOYEES_URL).status_code == 200
 
     def test_employee_endpoint_delete_is_a_deactivation_not_a_deletion(self):
         admin = make_administrator()
@@ -524,17 +522,19 @@ class TestHardDeletion:
         assert Employees.objects.filter(pk=target.pk).exists()
         assert User.objects.filter(pk=target.user_id).exists()
 
-    def test_deleted_email_can_be_recreated_as_a_different_identity(self):
+    def test_email_of_an_existing_identity_cannot_be_taken_over(self):
+        """Before Slice 4, deleting freed the email for a new identity."""
         admin = make_administrator()
         target = make_employee("Target", "hr.employee.view")
-        email, old_id = target.email, target.user_id
         client = client_for(admin.user)
-        assert client.delete(user_url(old_id)).status_code == 204
+        client.delete(user_url(target.user_id))
         response = client.post(
-            USERS_URL, {"email": email, "first_name": "Re", "last_name": "Made"}, format="json"
+            USERS_URL,
+            {"email": target.email, "first_name": "Re", "last_name": "Made"},
+            format="json",
         )
-        assert response.status_code == 201
-        assert str(response.data["id"]) != str(old_id)
+        assert response.status_code == 409
+        assert response.data["code"] == "DUPLICATE_EMAIL"
 
 
 # =============================================================================
@@ -543,6 +543,14 @@ class TestHardDeletion:
 
 
 class TestEmployeeIdentifier:
+    """
+    The generator issues the highest existing number plus one, and the API
+    accepts any client-supplied number no current row holds. Before Slice 4,
+    deleting an employee removed their row, so their number could be issued
+    again or claimed. Deletion is now refused, so every issued number stays
+    held by its employee. (The final EC identifier policy is a later slice.)
+    """
+
     @pytest.fixture
     def client(self):
         root = make_employee("Root", superuser=True, employee_id="EMP0001")
@@ -564,34 +572,38 @@ class TestEmployeeIdentifier:
         return response.data
 
     @staticmethod
-    def _delete(client, hire):
+    def _attempt_delete(client, hire):
         user_id = Employees.objects.get(pk=hire["id"]).user_id
-        assert client.delete(user_url(user_id)).status_code == 204
+        assert client.delete(user_url(user_id)).status_code == 405
 
     def test_numbers_are_issued_as_highest_existing_plus_one(self, client):
         assert self._hire(client, "Alpha")["employee_id"] == "EMP0002"
         assert self._hire(client, "Bravo")["employee_id"] == "EMP0003"
 
-    def test_highest_number_is_reissued_after_its_holder_is_deleted(self, client):
-        """UNSAFE (F3): a different person receives the deleted person's number."""
+    def test_number_is_not_reissued_after_a_refused_delete(self, client):
+        """Changed by Slice 4: the highest number used to be reissued."""
         first = self._hire(client, "Alpha")
-        self._delete(client, first)
+        self._attempt_delete(client, first)
         second = self._hire(client, "Bravo")
-        assert second["employee_id"] == first["employee_id"] == "EMP0002"
+        assert (first["employee_id"], second["employee_id"]) == ("EMP0002", "EMP0003")
 
-    def test_number_below_the_highest_is_not_reissued_automatically(self, client):
+    def test_number_cannot_be_claimed_after_a_refused_delete(self, client):
+        """Changed by Slice 4: a deleted number used to be claimable."""
         first = self._hire(client, "Alpha")
         self._hire(client, "Bravo")
-        self._delete(client, first)
-        assert self._hire(client, "Charlie")["employee_id"] == "EMP0004"
-
-    def test_deleted_number_can_be_claimed_explicitly(self, client):
-        """UNSAFE (F3): the API accepts a client-supplied, previously issued number."""
-        first = self._hire(client, "Alpha")
-        self._hire(client, "Bravo")
-        self._delete(client, first)
-        claimed = self._hire(client, "Claimant", employee_id=first["employee_id"])
-        assert claimed["employee_id"] == first["employee_id"]
+        self._attempt_delete(client, first)
+        response = client.post(
+            EMPLOYEES_URL,
+            {
+                "first_name": "Claimant",
+                "surname": "Hire",
+                "email": "claimant@zchpc.test",
+                "employee_id": first["employee_id"],
+            },
+            format="json",
+        )
+        assert response.status_code == 400
+        assert response.data["code"] == "DUPLICATE_EMPLOYEE_ID"
 
     def test_number_of_a_deactivated_employee_is_not_reissued(self, client):
         first = self._hire(client, "Alpha")
@@ -635,20 +647,19 @@ class TestDepartmentHead:
         department = Department.objects.create(name=f"Dept{next(_numbers)}", head=head)
         return head, department
 
-    def test_deleting_the_head_clears_the_department_head(self):
-        """UNSAFE (F3): the operation is not blocked and nobody is warned."""
+    def test_refused_delete_leaves_the_department_head(self):
+        """Changed by Slice 4: deleting the head used to clear it silently."""
         admin = make_administrator()
         head, department = self._headed_department()
-        assert client_for(admin.user).delete(user_url(head.user_id)).status_code == 204
+        assert client_for(admin.user).delete(user_url(head.user_id)).status_code == 405
         department.refresh_from_db()
-        assert department.head_id is None
+        assert department.head_id == head.pk
+        assert department_head_authority(head, department) == "ALLOWED"
 
     def test_department_without_a_head_has_no_approver(self):
-        """Procurement fails closed: nobody else inherits the authority."""
-        admin = make_administrator()
-        head, department = self._headed_department()
+        """Procurement fails closed: nobody else holds the authority."""
+        department = Department.objects.create(name=f"Dept{next(_numbers)}")
         colleague = make_employee("Colleague", "hr.employee.view", department=department)
-        client_for(admin.user).delete(user_url(head.user_id))
         assert department_head_authority(colleague, department) == "DEPARTMENT_HEAD_NOT_RECORDED"
 
     def test_deactivating_the_head_leaves_them_recorded_as_head(self):
@@ -691,13 +702,14 @@ class TestDepartmentHead:
 
 
 class TestReportsTo:
-    def test_deleting_a_manager_clears_reports_to_on_their_reports(self):
+    def test_refused_delete_leaves_reports_to(self):
+        """Changed by Slice 4: deleting a manager used to null their reports' line."""
         admin = make_administrator()
         manager = make_employee("Manager", "hr.employee.view")
         report = make_employee("Report", "hr.employee.view", reports_to=manager)
         client_for(admin.user).delete(user_url(manager.user_id))
         report.refresh_from_db()
-        assert report.reports_to_id is None
+        assert report.reports_to_id == manager.pk
 
     def test_deactivating_a_manager_leaves_reports_to_intact(self):
         admin = make_administrator()
@@ -744,34 +756,34 @@ class TestReviewerAndAssigneeReferences:
             assigned_to=assignee,
         )
 
-    def test_deleting_a_leave_reviewer_erases_who_approved(self):
-        """UNSAFE (F3): the approved request survives without its approver."""
+    def test_refused_delete_keeps_who_approved_a_leave_request(self):
+        """Changed by Slice 4: deleting the reviewer used to erase the approver."""
         admin = make_administrator()
         owner = make_employee("Owner", "hr.employee.view")
         reviewer = make_employee("Reviewer", "hr.employee.view")
         request = self._leave_request(owner, reviewer)
         client_for(admin.user).delete(user_url(reviewer.user_id))
         request.refresh_from_db()
-        assert request.status == "Approved"
-        assert request.reviewed_by_id is None
+        assert (request.status, request.reviewed_by_id) == ("Approved", reviewer.pk)
 
-    def test_deleting_a_leave_requester_deletes_their_requests(self):
+    def test_refused_delete_keeps_a_requesters_leave_requests(self):
+        """Changed by Slice 4: deleting the requester used to delete their requests."""
         admin = make_administrator()
         owner = make_employee("Owner", "hr.employee.view")
         reviewer = make_employee("Reviewer", "hr.employee.view")
         request = self._leave_request(owner, reviewer)
         client_for(admin.user).delete(user_url(owner.user_id))
-        assert not LeaveRequest.objects.filter(pk=request.pk).exists()
+        assert LeaveRequest.objects.filter(pk=request.pk).exists()
 
-    def test_deleting_a_ticket_assignee_leaves_the_ticket_unassigned(self):
+    def test_refused_delete_keeps_a_ticket_assigned(self):
+        """Changed by Slice 4: deleting the assignee used to unassign the ticket."""
         admin = make_administrator()
         owner = make_employee("Owner", "hr.employee.view")
         assignee = make_employee("Assignee", "hr.employee.view")
         ticket = self._ticket(owner, assignee)
         client_for(admin.user).delete(user_url(assignee.user_id))
         ticket.refresh_from_db()
-        assert ticket.assigned_to_id is None
-        assert ticket.status == "Open"
+        assert ticket.assigned_to_id == assignee.pk
 
     def test_deactivating_a_ticket_assignee_leaves_the_ticket_with_them(self):
         """UNSAFE: open work stays with someone who cannot log in."""

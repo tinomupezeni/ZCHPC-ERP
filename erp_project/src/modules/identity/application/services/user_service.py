@@ -13,8 +13,12 @@ application login is an employee's login, so there is one policy for both:
   through REM-01's assignment rules (manage_assignments, role must exist,
   no role above the actor's own permissions, no self-escalation);
 - disable a login: hr.employee.deactivate; re-enable or unlock one:
-  hr.employee.reactivate; permanently delete one: hr.employee.delete - each
-  refusing the actor's own account and anyone holding more than the actor.
+  hr.employee.reactivate - each refusing the actor's own account and anyone
+  holding more than the actor.
+
+There is no delete (AUD-02): a login and the employee record behind it are
+never destroyed through the application. Access ends through the employee
+lifecycle (update_user is_active=False -> EmployeeLifecycleService).
 
 Staff and superuser status are never written here. They are platform-level
 flags granted only by operator bootstrap (createsuperuser, seed_admin,
@@ -28,7 +32,6 @@ replaces it (change_password). Reactivation never restores the previous
 password; it issues a new temporary one.
 """
 
-import logging
 import secrets
 import string
 
@@ -48,7 +51,6 @@ from modules.identity.application.interfaces import (
 from modules.identity.domain.entities import User
 from modules.identity.domain.value_objects import PermissionSet
 
-logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -400,49 +402,6 @@ class UserService:
             employee_repository=DjangoEmployeeRepository(),
             user_repository=self._user_repo,
         )
-
-    def delete_user(
-        self,
-        user_id: UUID,
-        actor_permissions: PermissionSet | None = None,
-        actor_user_id: UUID | None = None,
-    ) -> bool:
-        """
-        Permanently delete a user. Employees.user cascades, so this also
-        deletes the linked employee record and everything that cascades
-        from it; it therefore needs its own capability, hr.employee.delete.
-
-        Args:
-            user_id: User's UUID
-            actor_permissions: The acting user's permissions (None holds nothing)
-            actor_user_id: The acting user's id, from the authenticated request
-
-        Returns:
-            True if deleted
-
-        Raises:
-            AuthorizationError: If the actor may not delete this account
-            NotFoundError: If user not found
-        """
-        actor_permissions = actor_permissions or PermissionSet.empty()
-        self._policy.authorize_delete(actor_permissions)
-
-        user = self._get(user_id)
-        self._policy.authorize_delete_target(
-            actor_permissions,
-            target_permissions=self._account_permissions(user.id),
-            is_self=actor_user_id is not None and actor_user_id == user.id,
-        )
-
-        # AuditLog only records login events, so the deletion is recorded in
-        # the application log.
-        logger.warning(
-            "Account %s (%s) permanently deleted by user %s",
-            user.id,
-            user.email.value,
-            actor_user_id,
-        )
-        return self._user_repo.delete(user_id)
 
     def unlock_user(
         self,

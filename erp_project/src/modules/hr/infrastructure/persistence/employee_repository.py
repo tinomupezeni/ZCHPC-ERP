@@ -216,12 +216,6 @@ class DjangoEmployeeRepository(IEmployeeRepository):
             emergency_contact_relationship=employee.emergency_contact.relationship,
         )
 
-    @transaction.atomic
-    def delete(self, employee_id: int) -> bool:
-        """Hard delete an employee. Returns True if deleted."""
-        deleted, _ = self.model.objects.filter(id=employee_id).delete()
-        return deleted > 0
-
     def _to_entity(self, db_employee) -> Employee:
         """Convert Django model to domain entity."""
         # Build value objects

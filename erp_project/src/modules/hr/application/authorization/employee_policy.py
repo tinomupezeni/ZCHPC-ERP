@@ -30,9 +30,9 @@ Rules (confirmed REM-01 decisions - capability-based, no job-title hierarchy):
   actor can deactivate a full-access one).
 - Account operations on an employee's login through the identity API
   (REM-08) follow the same shape: re-enabling or unlocking a login needs
-  ``hr.employee.reactivate``, permanently deleting one needs
-  ``hr.employee.delete``, and both refuse the actor themselves and anyone
-  holding permissions the actor lacks.
+  ``hr.employee.reactivate``, and refuses the actor themselves and anyone
+  holding permissions the actor lacks. There is no delete operation to
+  authorize (AUD-02).
 
 Superusers resolve to PermissionSet.full_access() via
 resolve_actor_permissions, so they pass every capability and "covers" check
@@ -168,30 +168,6 @@ class EmployeeAuthorizationPolicy:
             is_self,
             "reactivate",
             self_code="EMPLOYEE_SELF_REACTIVATION",
-        )
-
-    def authorize_delete(self, actor_permissions: PermissionSet) -> None:
-        """Capability to permanently delete a login and its employee record (REM-08)."""
-        self._require(
-            actor_permissions,
-            EmployeeManagementPermissions.DELETE,
-            "Deleting an account",
-            "EMPLOYEE_DELETE_NOT_AUTHORIZED",
-        )
-
-    def authorize_delete_target(
-        self,
-        actor_permissions: PermissionSet,
-        *,
-        target_permissions: PermissionSet,
-        is_self: bool,
-    ) -> None:
-        self._require_target(
-            actor_permissions,
-            target_permissions,
-            is_self,
-            "delete",
-            self_code="EMPLOYEE_SELF_DELETION",
         )
 
     @staticmethod

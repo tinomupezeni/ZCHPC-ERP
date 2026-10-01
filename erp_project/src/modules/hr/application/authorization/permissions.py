@@ -49,6 +49,9 @@ class EmployeeManagementPermissions:
     # every legacy role, so any identity.* capability would be held by
     # ordinary staff through that wildcard.
     REACTIVATE = "hr.employee.reactivate"
+    # No operation requires this since AUD-02 removed account deletion; it is
+    # kept because roles may already hold it. Whether the archive transition
+    # reuses it is decided with that transition.
     DELETE = "hr.employee.delete"
 
 
