@@ -891,10 +891,13 @@ class TestNoArchiveStateExists:
     @pytest.mark.parametrize(
         "model,lifecycle_fields",
         [
-            (User, []),
-            # Slice 2 introduced the lifecycle model; nothing else exists yet
-            # (no archive date, reason or actor).
-            (Employees, ["lifecycle_status"]),
+            # Slice 7A: the reverse relation to the lifecycle events a login
+            # performed (hr.EmployeeLifecycleEvent.actor).
+            (User, ["employee_lifecycle_actions"]),
+            # Slice 2 introduced lifecycle_status, the only lifecycle state
+            # field. Slice 7A added the event history (lifecycle_events), where
+            # who/when/why live - not as fields on the employee.
+            (Employees, ["lifecycle_events", "lifecycle_status"]),
         ],
     )
     def test_models_carry_no_other_lifecycle_field(self, model, lifecycle_fields):

@@ -1,6 +1,7 @@
 import uuid
 from django.db import models
 from django.conf import settings # For AUTH_USER_MODEL
+from django.utils import timezone
 
 from modules.hr.domain.value_objects import EmployeeLifecycleStatus
 
@@ -222,6 +223,95 @@ class Role(models.Model):
     description = models.TextField(blank=True, default='')
     permissions = models.JSONField(default=list) # Assuming a JSONField for permissions
     pass
+
+class _AppendOnlyQuerySet(models.QuerySet):
+    """Bulk update and delete are refused: lifecycle history is append-only."""
+
+    def update(self, **kwargs):
+        raise PermissionError("Employee lifecycle events are immutable and cannot be updated.")
+
+    def delete(self):
+        raise PermissionError("Employee lifecycle events cannot be deleted.")
+
+
+class EmployeeLifecycleEvent(models.Model):
+    """
+    Durable record of one employee lifecycle transition (AUD-02).
+
+    Written by EmployeeLifecycleService in the same transaction as the
+    transition, so a transition never commits without its record and a
+    rolled-back one leaves none. Append-only, like identity's AuditLog: an
+    existing record cannot be saved again or deleted, through the model or a
+    queryset. The employee and actor references are PROTECT, so the ORM will
+    not delete either while this history refers to them.
+    """
+
+    EVENT_TYPE_CHOICES = [
+        ('DEACTIVATE', 'Deactivated'),
+        ('REACTIVATE', 'Reactivated'),
+        ('ARCHIVE', 'Archived'),
+    ]
+
+    employee = models.ForeignKey(
+        'Employees', on_delete=models.PROTECT, related_name='lifecycle_events',
+    )
+    # EC number at the time: permanent and never reused (Slice 5), so the
+    # record names its employee on its own.
+    employee_number = models.CharField(max_length=20)
+    event_type = models.CharField(max_length=20, choices=EVENT_TYPE_CHOICES)
+    from_status = models.CharField(
+        max_length=20,
+        choices=[(status.value, status.value.title()) for status in EmployeeLifecycleStatus],
+    )
+    to_status = models.CharField(
+        max_length=20,
+        choices=[(status.value, status.value.title()) for status in EmployeeLifecycleStatus],
+    )
+    # The authenticated login that made the change; null when the lifecycle
+    # service was called with no authenticated actor (scripts, maintenance).
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='employee_lifecycle_actions',
+    )
+    actor_email = models.CharField(max_length=254, blank=True, default='')
+    reason = models.TextField(blank=True, default='')
+    # Which API made the change, e.g. "hr.employee.archive".
+    source = models.CharField(max_length=64, blank=True, default='')
+    # What accompanied the transition: the login's change, and for an
+    # archive the department headships it vacated.
+    details = models.JSONField(default=dict, blank=True)
+    occurred_at = models.DateTimeField(default=timezone.now)
+
+    objects = _AppendOnlyQuerySet.as_manager()
+
+    class Meta:
+        db_table = 'hr_employee_lifecycle_event'
+        ordering = ['occurred_at', 'id']
+        indexes = [
+            models.Index(fields=['employee', 'occurred_at'], name='hr_lifecycle_event_emp_idx'),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(event_type__in=['DEACTIVATE', 'REACTIVATE', 'ARCHIVE']),
+                name='hr_lifecycle_event_type_valid',
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(from_status=models.F('to_status')),
+                name='hr_lifecycle_event_changes_state',
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise PermissionError("Employee lifecycle events are immutable and cannot be updated.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise PermissionError("Employee lifecycle events cannot be deleted.")
+
 
 class TrainingCertification(models.Model):
     # TODO: Add fields for TrainingCertification model

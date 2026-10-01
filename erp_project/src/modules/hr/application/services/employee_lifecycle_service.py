@@ -24,6 +24,12 @@ whose login was somehow left enabled disables that login, and reactivating
 one whose login was left disabled re-enables it. Asking for the state an
 employee and login are both already in changes nothing.
 
+Every transition that changes the employee's state is recorded durably
+(hr.EmployeeLifecycleEvent): who, which employee, from and to which state,
+why, through which API, and what accompanied it. The record is written last,
+inside the same transaction, so the change and its record commit together or
+not at all. A request that changes no state records nothing.
+
 This service does no authorization. Its callers do, before calling it:
 EmployeeService (the hr employees API) and identity's UserService (the user
 administration API), both through EmployeeAuthorizationPolicy.
@@ -62,6 +68,7 @@ class EmployeeLifecycleService:
         user_repository=None,
         event_bus: EventBus | None = None,
         structural_assignments=None,
+        event_recorder=None,
     ):
         """
         Args:
@@ -71,13 +78,23 @@ class EmployeeLifecycleService:
             event_bus: Event bus for the existing employee events
             structural_assignments: The employee's department headships
                 (the Django one is built on first use if None)
+            event_recorder: Writes the durable lifecycle event (the Django
+                one is built on first use if None)
         """
         self._employees = employee_repository
         self._users = user_repository
         self._event_bus = event_bus or EventBus.get_instance()
         self._structure = structural_assignments
+        self._events = event_recorder
 
-    def deactivate(self, employee_id: int, reason: str = "") -> LifecycleTransitionResult:
+    def deactivate(
+        self,
+        employee_id: int,
+        reason: str = "",
+        *,
+        actor_user_id=None,
+        source: str = "",
+    ) -> LifecycleTransitionResult:
         """
         ACTIVE -> DEACTIVATED, and the linked login is disabled.
 
@@ -93,11 +110,20 @@ class EmployeeLifecycleService:
 
         with transaction.atomic():
             employee = self._load_for_transition(employee_id)
+            from_status = employee.lifecycle_status
             changed = employee.deactivate()
             if changed:
                 self._employees.update(employee)
-            if employee.user_id is not None:
-                disable_login(self._user_repository(), employee.user_id)
+            login = self._login_effect(
+                employee,
+                lambda: disable_login(self._user_repository(), employee.user_id),
+                "disabled",
+            )
+            if changed:
+                self._record(
+                    employee, "DEACTIVATE", from_status, actor_user_id, reason, source,
+                    {"login": login},
+                )
 
         if changed:
             self._event_bus.publish(
@@ -109,7 +135,14 @@ class EmployeeLifecycleService:
             )
         return LifecycleTransitionResult(employee=employee, changed=changed)
 
-    def reactivate(self, employee_id: int) -> LifecycleTransitionResult:
+    def reactivate(
+        self,
+        employee_id: int,
+        *,
+        actor_user_id=None,
+        reason: str = "",
+        source: str = "",
+    ) -> LifecycleTransitionResult:
         """
         DEACTIVATED -> ACTIVE, and the linked login is re-enabled.
 
@@ -127,18 +160,30 @@ class EmployeeLifecycleService:
         temporary_password = None
         with transaction.atomic():
             employee = self._load_for_transition(employee_id)
+            from_status = employee.lifecycle_status
             changed = employee.reactivate()
             if changed:
                 self._employees.update(employee)
             if employee.user_id is not None:
                 temporary_password = enable_login(self._user_repository(), employee.user_id)
+            if changed:
+                self._record(
+                    employee, "REACTIVATE", from_status, actor_user_id, reason, source,
+                    {"login": self._login_label(employee, temporary_password is not None, "enabled")},
+                )
 
         return LifecycleTransitionResult(
             employee=employee, changed=changed, temporary_password=temporary_password
         )
 
     def archive(
-        self, employee_id: int, *, vacate_department_headships: bool = False
+        self,
+        employee_id: int,
+        *,
+        vacate_department_headships: bool = False,
+        actor_user_id=None,
+        reason: str = "",
+        source: str = "",
     ) -> LifecycleTransitionResult:
         """
         ACTIVE or DEACTIVATED -> ARCHIVED, and the linked login is disabled.
@@ -164,21 +209,34 @@ class EmployeeLifecycleService:
 
         with transaction.atomic():
             employee = self._load_for_transition(employee_id)
+            from_status = employee.lifecycle_status
             changed = not employee.is_archived
+            vacated: list[int] = []
             if changed:
-                self._release_department_headships(employee.id, vacate_department_headships)
+                vacated = self._release_department_headships(
+                    employee.id, vacate_department_headships
+                )
                 employee.archive()
                 self._employees.update(employee)
-            if employee.user_id is not None:
-                disable_login(self._user_repository(), employee.user_id)
+            login = self._login_effect(
+                employee,
+                lambda: disable_login(self._user_repository(), employee.user_id),
+                "disabled",
+            )
+            if changed:
+                self._record(
+                    employee, "ARCHIVE", from_status, actor_user_id, reason, source,
+                    {"login": login, "vacated_department_headships": vacated},
+                )
 
         return LifecycleTransitionResult(employee=employee, changed=changed)
 
-    def _release_department_headships(self, employee_id: int, vacate: bool) -> None:
+    def _release_department_headships(self, employee_id: int, vacate: bool) -> list[int]:
+        """The departments whose headship was vacated (none if not a head)."""
         structure = self._structural_assignments()
         headed = structure.departments_headed_by(employee_id)
         if not headed:
-            return
+            return []
         pending = structure.pending_department_head_approvals(headed)
         if pending or not vacate:
             raise ConflictError(
@@ -192,6 +250,41 @@ class EmployeeLifecycleService:
                 },
             )
         structure.vacate_department_headships(employee_id)
+        return headed
+
+    @staticmethod
+    def _login_label(employee: Employee, switched: bool, done: str) -> str:
+        if employee.user_id is None:
+            return "no_login"
+        return done if switched else "unchanged"
+
+    def _login_effect(self, employee: Employee, switch, done: str) -> str:
+        """Switch the employee's login, if any; say what happened to it."""
+        if employee.user_id is None:
+            return "no_login"
+        return self._login_label(employee, bool(switch()), done)
+
+    def _record(
+        self, employee: Employee, event_type: str, from_status, actor_user_id, reason, source, details
+    ) -> None:
+        """Write the durable lifecycle event - last, inside the transition's transaction."""
+        if self._events is None:
+            from modules.hr.infrastructure.persistence.lifecycle_events import (
+                DjangoLifecycleEventRecorder,
+            )
+
+            self._events = DjangoLifecycleEventRecorder()
+        self._events.record(
+            employee_id=employee.id,
+            employee_number=str(employee.employee_id),
+            event_type=event_type,
+            from_status=from_status.value,
+            to_status=employee.lifecycle_status.value,
+            actor_user_id=actor_user_id,
+            reason=reason,
+            source=source,
+            details=details,
+        )
 
     def _structural_assignments(self):
         if self._structure is None:

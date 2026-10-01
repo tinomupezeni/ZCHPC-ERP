@@ -582,6 +582,9 @@ class TestArchiveIsNotDeletion:
 
         assert archive(client_for(actor.user), target).status_code == 200
 
+        # Nothing removed anywhere; the only new row is the archive's own
+        # lifecycle event (Slice 7A).
+        counts["hr.EmployeeLifecycleEvent"] += 1
         assert {m._meta.label: m.objects.count() for m in apps.get_models()} == counts
         assert Employees.objects.filter(pk=target.pk).values(
             "id", "uuid", "employee_id", "email", "role_id", "user_id", "reports_to_id"

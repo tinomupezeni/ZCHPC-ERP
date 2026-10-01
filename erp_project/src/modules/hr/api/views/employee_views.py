@@ -41,6 +41,21 @@ def get_employee_service() -> EmployeeService:
     )
 
 
+def _reason(request) -> str | None:
+    """The optional free-text reason for a lifecycle change, or None if malformed."""
+    reason = request.data.get("reason", "")
+    if reason is None:
+        return ""
+    return reason.strip() if isinstance(reason, str) else None
+
+
+def _invalid_reason():
+    return Response(
+        {"error": "reason must be text", "code": "INVALID_REQUEST"},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
 def _actor_employee_id(request) -> int | None:
     """The authenticated caller's own employee record id - never from request data."""
     # Reverse one-to-one: an AttributeError subclass when there is no profile.
@@ -229,7 +244,9 @@ class EmployeeDetailView(APIView):
     def delete(self, request, employee_id: int):
         """Deactivate an employee (soft delete)."""
         service = get_employee_service()
-        reason = request.data.get("reason", "")
+        reason = _reason(request)
+        if reason is None:
+            return _invalid_reason()
 
         try:
             employee = service.deactivate_employee(
@@ -237,6 +254,7 @@ class EmployeeDetailView(APIView):
                 reason,
                 actor_permissions=resolve_actor_permissions(request.user),
                 actor_employee_id=_actor_employee_id(request),
+                actor_user_id=request.user.id,
             )
             return Response(
                 {"message": f"Employee {employee.full_name} deactivated"},
@@ -272,12 +290,17 @@ class EmployeeReactivateView(APIView):
     def post(self, request, employee_id: int):
         """Reactivate an employee (needs hr.employee.reactivate, checked by EmployeeService)."""
         service = get_employee_service()
+        reason = _reason(request)
+        if reason is None:
+            return _invalid_reason()
 
         try:
             result = service.reactivate_employee(
                 employee_id,
                 actor_permissions=resolve_actor_permissions(request.user),
                 actor_employee_id=_actor_employee_id(request),
+                actor_user_id=request.user.id,
+                reason=reason,
             )
         except AuthorizationError as e:
             return Response(
@@ -318,7 +341,7 @@ class EmployeeArchiveView(APIView):
     lifecycle. Not a deletion - the record and its history remain.
 
     POST: ACTIVE or DEACTIVATED -> ARCHIVED, disabling the employee's login
-        body: {"vacate_department_headships": false}
+        body: {"vacate_department_headships": false, "reason": "..."}
     """
 
     permission_classes = [IsAuthenticated]
@@ -332,6 +355,9 @@ class EmployeeArchiveView(APIView):
                  "code": "INVALID_REQUEST"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        reason = _reason(request)
+        if reason is None:
+            return _invalid_reason()
 
         try:
             result = get_employee_service().archive_employee(
@@ -339,6 +365,8 @@ class EmployeeArchiveView(APIView):
                 actor_permissions=resolve_actor_permissions(request.user),
                 actor_employee_id=_actor_employee_id(request),
                 vacate_department_headships=vacate,
+                actor_user_id=request.user.id,
+                reason=reason,
             )
         except AuthorizationError as e:
             return Response(

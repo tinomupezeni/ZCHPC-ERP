@@ -550,6 +550,7 @@ class EmployeeService:
         reason: str = "",
         actor_permissions: PermissionSet | None = None,
         actor_employee_id: int | None = None,
+        actor_user_id=None,
     ) -> Employee:
         """
         Deactivate an employee (soft delete) and disable their login.
@@ -586,13 +587,17 @@ class EmployeeService:
 
         # The employee record and its login go inactive together or not at
         # all, through the one transition authority (AUD-02).
-        return self._lifecycle.deactivate(employee.id, reason).employee
+        return self._lifecycle.deactivate(
+            employee.id, reason, actor_user_id=actor_user_id, source="hr.employee.deactivate"
+        ).employee
 
     def reactivate_employee(
         self,
         employee_id: int,
         actor_permissions: PermissionSet | None = None,
         actor_employee_id: int | None = None,
+        actor_user_id=None,
+        reason: str = "",
     ) -> LifecycleTransitionResult:
         """
         Reactivate a deactivated employee and re-enable their login.
@@ -631,7 +636,9 @@ class EmployeeService:
             is_self=actor_employee_id is not None and actor_employee_id == employee.id,
         )
 
-        return self._lifecycle.reactivate(employee.id)
+        return self._lifecycle.reactivate(
+            employee.id, actor_user_id=actor_user_id, reason=reason, source="hr.employee.reactivate"
+        )
 
     def archive_employee(
         self,
@@ -639,6 +646,8 @@ class EmployeeService:
         actor_permissions: PermissionSet | None = None,
         actor_employee_id: int | None = None,
         vacate_department_headships: bool = False,
+        actor_user_id=None,
+        reason: str = "",
     ) -> LifecycleTransitionResult:
         """
         Archive an employee: permanently close their employment lifecycle
@@ -673,7 +682,11 @@ class EmployeeService:
         )
 
         return self._lifecycle.archive(
-            employee.id, vacate_department_headships=vacate_department_headships
+            employee.id,
+            vacate_department_headships=vacate_department_headships,
+            actor_user_id=actor_user_id,
+            reason=reason,
+            source="hr.employee.archive",
         )
 
     def _ensure_not_archived_manager(self, reports_to_id: int | None) -> None:

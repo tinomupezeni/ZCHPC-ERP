@@ -373,7 +373,7 @@ class UserService:
         temp_password = None
         with transaction.atomic():
             if command.is_active is not None:
-                temp_password = self._set_access(user.id, command.is_active)
+                temp_password = self._set_access(user.id, command.is_active, actor_user_id)
                 user = self._get(user.id)
 
             if renames:
@@ -385,7 +385,9 @@ class UserService:
 
         return UpdateUserResult(user=self._to_dto(user), temp_password=temp_password)
 
-    def _set_access(self, user_id: UUID, active: bool) -> str | None:
+    def _set_access(
+        self, user_id: UUID, active: bool, actor_user_id: UUID | None = None
+    ) -> str | None:
         """
         Enable or disable this account through the one transition authority.
 
@@ -409,8 +411,12 @@ class UserService:
 
         lifecycle = self._lifecycle_service()
         if active:
-            return lifecycle.reactivate(employee_id).temporary_password
-        lifecycle.deactivate(employee_id)
+            return lifecycle.reactivate(
+                employee_id, actor_user_id=actor_user_id, source="identity.user.update"
+            ).temporary_password
+        lifecycle.deactivate(
+            employee_id, actor_user_id=actor_user_id, source="identity.user.update"
+        )
         return None
 
     def _lifecycle_service(self):
