@@ -9,6 +9,7 @@ from django.urls import path
 from modules.hr.api.views import (
     DepartmentDetailView,
     DepartmentListCreateView,
+    EmployeeArchiveView,
     DeductionTypeDetailView,
     DeductionTypeListCreateView,
     AllowanceTypeListCreateView,
@@ -40,6 +41,11 @@ urlpatterns = [
         "employees/<int:employee_id>/reactivate/",
         EmployeeReactivateView.as_view(),
         name="employee_reactivate",
+    ),
+    path(
+        "employees/<int:employee_id>/archive/",
+        EmployeeArchiveView.as_view(),
+        name="employee_archive",
     ),
 
     # Departments

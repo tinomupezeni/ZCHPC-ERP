@@ -16,7 +16,10 @@ from shared.domain.exceptions import (
     ValidationError,
 )
 
-from modules.hr.application.authorization import resolve_actor_permissions
+from modules.hr.application.authorization import (
+    EmployeeAuthorizationPolicy,
+    resolve_actor_permissions,
+)
 from modules.identity.api.serializers import (
     ChangePasswordRequestSerializer,
     CreateUserRequestSerializer,
@@ -56,7 +59,14 @@ class UserListCreateView(APIView):
 
         if request.user.is_staff or request.user.is_superuser:
             include_inactive = request.query_params.get("include_inactive", "false")
-            users = service.list_users(include_inactive=include_inactive.lower() == "true")
+            users = service.list_users(
+                include_inactive=include_inactive.lower() == "true",
+                # Logins of archived employees (AUD-02) only with
+                # hr.employee.view_archived.
+                include_archived=EmployeeAuthorizationPolicy().may_view_archived(
+                    resolve_actor_permissions(request.user)
+                ),
+            )
         else:
             # Non-admin users can only see themselves
             try:
@@ -162,6 +172,16 @@ class UserDetailView(APIView):
                 )
 
         service = UserService(DjangoUserRepository())
+
+        # The login of an archived employee (AUD-02) exists only for an actor
+        # holding hr.employee.view_archived.
+        if service.is_archived_account(uuid_id) and not EmployeeAuthorizationPolicy().may_view_archived(
+            resolve_actor_permissions(request.user)
+        ):
+            return Response(
+                {"detail": f"User with ID {uuid_id} not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         try:
             user = service.get_user(uuid_id)

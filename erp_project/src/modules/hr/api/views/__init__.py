@@ -3,6 +3,7 @@ HR API views.
 """
 
 from modules.hr.api.views.employee_views import (
+    EmployeeArchiveView,
     EmployeeDetailView,
     EmployeeListCreateView,
     EmployeeReactivateView,
@@ -34,6 +35,7 @@ __all__ = [
     # Employee
     "EmployeeListCreateView",
     "EmployeeDetailView",
+    "EmployeeArchiveView",
     "EmployeeReactivateView",
     "EmployeeSalaryView",
     # Department

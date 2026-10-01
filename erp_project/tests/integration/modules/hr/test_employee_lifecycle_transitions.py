@@ -487,10 +487,14 @@ class TestArchivedIsOutsideTheseTransitions:
         assert state(archived) == ("ARCHIVED", False, True)
         assert main_login(archived.email).status_code == 401
 
-    def test_no_transition_produces_archived(self):
+    def test_deactivate_and_reactivate_never_produce_archived(self):
+        """
+        Changed by Slice 6: the service now has archive() (see
+        test_employee_archive.py); deactivate and reactivate still never
+        lead to ARCHIVED.
+        """
         target = make_employee("Target", "hr.employee.view")
         service = lifecycle_service()
-        assert not hasattr(service, "archive")
         service.deactivate(target.pk)
         service.reactivate(target.pk)
         assert state(target)[0] == "ACTIVE"

@@ -17,7 +17,7 @@ Sections:
     D. Employee (EC) identifier reuse
     E. Structural assignments (department head, reports_to, reviewers)
     F. Listing and inactive visibility
-    G. Absence of an archive state
+    G. Archive surface (none before Slice 6; one archive route since)
 """
 
 from datetime import date
@@ -872,7 +872,7 @@ class TestUserListing:
 
 
 # =============================================================================
-# G. No archive state exists
+# G. Archive surface
 # =============================================================================
 
 
@@ -904,7 +904,12 @@ class TestNoArchiveStateExists:
             n for n in names if any(word in n for word in self.LIFECYCLE_WORDS)
         ] == lifecycle_fields
 
-    def test_no_archive_or_restore_route_exists(self):
+    def test_archive_is_the_only_archive_route_and_nothing_restores(self):
+        """
+        Changed by Slice 6: there was no archive route at all. Now there is
+        exactly one (hr employee_archive), and still no route that restores,
+        un-archives or terminates.
+        """
         from django.urls import get_resolver
 
         def names(patterns):
@@ -915,8 +920,9 @@ class TestNoArchiveStateExists:
                     yield pattern.name
 
         route_names = set(names(get_resolver().url_patterns))
+        assert [n for n in route_names if "archive" in n.lower()] == ["employee_archive"]
         assert not [
             name
             for name in route_names
-            if any(word in name.lower() for word in ("archive", "restore", "terminate"))
+            if any(word in name.lower() for word in ("restore", "unarchive", "terminate"))
         ]

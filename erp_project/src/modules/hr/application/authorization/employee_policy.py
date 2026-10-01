@@ -33,6 +33,9 @@ Rules (confirmed REM-01 decisions - capability-based, no job-title hierarchy):
   ``hr.employee.reactivate``, and refuses the actor themselves and anyone
   holding permissions the actor lacks. There is no delete operation to
   authorize (AUD-02).
+- Archiving an employee (AUD-02) needs ``hr.employee.archive`` and the same
+  target rule. Reading archived employees' records needs
+  ``hr.employee.view_archived``; ordinary employee access does not include it.
 
 Superusers resolve to PermissionSet.full_access() via
 resolve_actor_permissions, so they pass every capability and "covers" check
@@ -168,6 +171,44 @@ class EmployeeAuthorizationPolicy:
             is_self,
             "reactivate",
             self_code="EMPLOYEE_SELF_REACTIVATION",
+        )
+
+    def authorize_archive(self, actor_permissions: PermissionSet) -> None:
+        """Capability to permanently close an employment lifecycle (AUD-02)."""
+        self._require(
+            actor_permissions,
+            EmployeeManagementPermissions.ARCHIVE,
+            "Archiving an employee",
+            "EMPLOYEE_ARCHIVE_NOT_AUTHORIZED",
+        )
+
+    def authorize_archive_target(
+        self,
+        actor_permissions: PermissionSet,
+        *,
+        target_permissions: PermissionSet,
+        is_self: bool,
+    ) -> None:
+        self._require_target(
+            actor_permissions,
+            target_permissions,
+            is_self,
+            "archive",
+            self_code="EMPLOYEE_SELF_ARCHIVE",
+        )
+
+    def authorize_view_archived(self, actor_permissions: PermissionSet) -> None:
+        """Capability to read the records of archived employees (AUD-02)."""
+        self._require(
+            actor_permissions,
+            EmployeeManagementPermissions.VIEW_ARCHIVED,
+            "Viewing archived employees",
+            "EMPLOYEE_VIEW_ARCHIVED_NOT_AUTHORIZED",
+        )
+
+    def may_view_archived(self, actor_permissions: PermissionSet | None) -> bool:
+        return (actor_permissions or PermissionSet.empty()).has_permission(
+            EmployeeManagementPermissions.VIEW_ARCHIVED
         )
 
     @staticmethod

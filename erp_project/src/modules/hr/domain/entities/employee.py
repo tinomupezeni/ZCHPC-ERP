@@ -244,15 +244,29 @@ class Employee(AggregateRoot[int]):
         """
         return self._move_to(EmployeeLifecycleStatus.ACTIVE, "reactivated")
 
+    def archive(self) -> bool:
+        """
+        ACTIVE or DEACTIVATED -> ARCHIVED: the employment lifecycle is
+        permanently closed. Identity and history are kept; nothing reopens it.
+
+        Returns True if the state changed, False if the employee was already
+        archived (nothing is touched).
+        """
+        if self.is_archived:
+            return False
+        self.lifecycle_status = EmployeeLifecycleStatus.ARCHIVED
+        self.updated_at = datetime.utcnow()
+        return True
+
     def _move_to(self, target: EmployeeLifecycleStatus, action: str) -> bool:
-        self._ensure_not_archived(action)
+        self.ensure_not_archived(action)
         if self.lifecycle_status is target:
             return False
         self.lifecycle_status = target
         self.updated_at = datetime.utcnow()
         return True
 
-    def _ensure_not_archived(self, action: str) -> None:
+    def ensure_not_archived(self, action: str) -> None:
         """An archived employment lifecycle is closed and is not reopened."""
         if self.is_archived:
             raise ValidationError(

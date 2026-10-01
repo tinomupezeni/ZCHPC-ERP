@@ -301,6 +301,9 @@ class EmployeeService:
                     code="POSITION_DEPARTMENT_MISMATCH",
                 )
 
+        # An archived employee is given no new reports (AUD-02).
+        self._ensure_not_archived_manager(command.reports_to_id)
+
         # A requested EC number is checked here only for its format; whether
         # it is free is decided under the allocation lock below.
         requested_employee_id = (
@@ -440,6 +443,11 @@ class EmployeeService:
         employee = self._employees.get_by_id(command.employee_id)
         if not employee:
             raise NotFoundError(f"Employee with ID {command.employee_id} not found")
+
+        # An archived employee's record is closed (AUD-02), and an archived
+        # employee is given no new reports.
+        employee.ensure_not_archived("edited")
+        self._ensure_not_archived_manager(command.reports_to_id)
 
         # Target authority (AUD-01 F2): judged on the employee as they stand,
         # and only when the role or department actually changes.
@@ -625,6 +633,57 @@ class EmployeeService:
 
         return self._lifecycle.reactivate(employee.id)
 
+    def archive_employee(
+        self,
+        employee_id: int,
+        actor_permissions: PermissionSet | None = None,
+        actor_employee_id: int | None = None,
+        vacate_department_headships: bool = False,
+    ) -> LifecycleTransitionResult:
+        """
+        Archive an employee: permanently close their employment lifecycle
+        (AUD-02). See EmployeeLifecycleService.archive.
+
+        Args:
+            employee_id: Employee ID
+            actor_permissions: The acting user's permissions. None holds
+                nothing. Needs hr.employee.archive, checked before the target
+                is loaded, and must cover the target's own permissions.
+            actor_employee_id: The acting employee's own record id, from the
+                authenticated request; archiving it is refused.
+            vacate_department_headships: Explicitly leave any department the
+                employee heads without a head.
+
+        Raises:
+            AuthorizationError: If the actor may not archive this employee.
+            NotFoundError: If employee not found
+            ConflictError: If structural authority blocks the archive
+        """
+        actor_permissions = actor_permissions or PermissionSet.empty()
+        self._policy.authorize_archive(actor_permissions)
+
+        employee = self._employees.get_by_id(employee_id)
+        if not employee:
+            raise NotFoundError(f"Employee with ID {employee_id} not found")
+
+        self._policy.authorize_archive_target(
+            actor_permissions,
+            target_permissions=self._effective_permissions(employee),
+            is_self=actor_employee_id is not None and actor_employee_id == employee.id,
+        )
+
+        return self._lifecycle.archive(
+            employee.id, vacate_department_headships=vacate_department_headships
+        )
+
+    def _ensure_not_archived_manager(self, reports_to_id: int | None) -> None:
+        """An archived employee is given no new reports (AUD-02)."""
+        if reports_to_id is None:
+            return
+        manager = self._employees.get_by_id(reports_to_id)
+        if manager is not None:
+            manager.ensure_not_archived("assigned as a manager")
+
     def get_employee(
         self, employee_id: int, actor_permissions: PermissionSet | None = None
     ) -> EmployeeDTO | None:
@@ -633,9 +692,14 @@ class EmployeeService:
 
         Salary/bank fields are populated only for an actor holding the matching
         payroll view capability; otherwise they are None (see _to_dto).
+
+        An archived employee is returned only to an actor holding
+        hr.employee.view_archived; to anyone else they do not exist (AUD-02).
         """
         employee = self._employees.get_by_id(employee_id)
         if not employee:
+            return None
+        if employee.is_archived and not self._policy.may_view_archived(actor_permissions):
             return None
         return self._to_dto(employee, actor_permissions)
 
@@ -653,6 +717,28 @@ class EmployeeService:
     ) -> list[EmployeeDTO]:
         """Get all active employees."""
         employees = self._employees.get_all(include_inactive=False)
+        return [self._to_dto(e, actor_permissions) for e in employees]
+
+    def get_all_employees(
+        self,
+        actor_permissions: PermissionSet | None = None,
+        include_archived: bool = False,
+    ) -> list[EmployeeDTO]:
+        """
+        Every employee, active or deactivated. Archived employees are left
+        out unless asked for, which needs hr.employee.view_archived (AUD-02).
+
+        Raises:
+            AuthorizationError: If archived employees are asked for without
+                the capability
+        """
+        if include_archived:
+            self._policy.authorize_view_archived(actor_permissions or PermissionSet.empty())
+        employees = [
+            employee
+            for employee in self._employees.get_all(include_inactive=True)
+            if include_archived or not employee.is_archived
+        ]
         return [self._to_dto(e, actor_permissions) for e in employees]
 
     def get_employees_by_department(

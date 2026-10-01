@@ -268,18 +268,39 @@ class UserService:
             )
         return self._to_dto(user)
 
-    def list_users(self, include_inactive: bool = False) -> list[UserDTO]:
+    def list_users(
+        self, include_inactive: bool = False, include_archived: bool = False
+    ) -> list[UserDTO]:
         """
         List all users.
 
         Args:
             include_inactive: Whether to include deactivated users
+            include_archived: Whether to include the logins of archived
+                employees (AUD-02); callers pass True only for an actor
+                holding hr.employee.view_archived
 
         Returns:
             List of UserDTOs
         """
         users = self._user_repo.get_all(include_inactive=include_inactive)
+        if not include_archived:
+            archived = self._archived_login_ids()
+            users = [u for u in users if u.id not in archived]
         return [self._to_dto(u) for u in users]
+
+    def is_archived_account(self, user_id: UUID) -> bool:
+        """Whether this login belongs to an archived employee (AUD-02)."""
+        return user_id in self._archived_login_ids()
+
+    @staticmethod
+    def _archived_login_ids() -> set:
+        from modules.hr.infrastructure.persistence.models import Employees
+
+        return set(
+            Employees.objects.filter(lifecycle_status="ARCHIVED", user__isnull=False)
+            .values_list("user_id", flat=True)
+        )
 
     def update_user(
         self,
