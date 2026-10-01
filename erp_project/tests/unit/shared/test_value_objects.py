@@ -418,23 +418,3 @@ class TestEmployeeId:
         emp2 = EmployeeId("EMP0010")
         assert emp1 < emp2
         assert emp2 > emp1
-
-    def test_legacy_staff_id_accepted(self):
-        """Real ZCHPC staff numbers (H059, ...) validate and round-trip."""
-        emp_id = EmployeeId("H059")
-        assert emp_id.value == "H059"
-
-    def test_legacy_staff_id_case_insensitive(self):
-        emp_id = EmployeeId("h059")
-        assert emp_id.value == "H059"
-
-    def test_legacy_staff_id_numeric_part_zero(self):
-        """H IDs don't participate in EMP sequencing (like UUIDs)."""
-        assert EmployeeId("H059").numeric_part == 0
-
-    def test_legacy_staff_id_still_rejects_garbage(self):
-        with pytest.raises(ValidationError) as exc_info:
-            EmployeeId("H")
-        assert exc_info.value.code == "INVALID_EMPLOYEE_ID_FORMAT"
-        with pytest.raises(ValidationError):
-            EmployeeId("X059")

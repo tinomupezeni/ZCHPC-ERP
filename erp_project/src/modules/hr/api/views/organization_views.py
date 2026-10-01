@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from shared.domain.exceptions import AuthorizationError, NotFoundError, ValidationError
+from shared.domain.exceptions import NotFoundError, ValidationError
 
 from modules.hr.api.serializers import (
     CreateDepartmentRequestSerializer,
@@ -17,17 +17,13 @@ from modules.hr.api.serializers import (
     UpdateDepartmentRequestSerializer,
     UpdatePositionRequestSerializer,
 )
-from modules.hr.application.authorization import resolve_actor_permissions
 from modules.hr.application.services import (
     CreateDepartmentCommand,
     CreatePositionCommand,
-    CreateRoleCommand,
     DepartmentService,
     PositionService,
-    RoleService,
     UpdateDepartmentCommand,
     UpdatePositionCommand,
-    UpdateRoleCommand,
 )
 from modules.hr.infrastructure.persistence.department_repository import DjangoDepartmentRepository
 from modules.hr.infrastructure.persistence.employee_repository import DjangoEmployeeRepository
@@ -83,9 +79,7 @@ class DepartmentListCreateView(APIView):
 
         try:
             command = CreateDepartmentCommand(**serializer.validated_data)
-            department = service.create_department(
-                command, resolve_actor_permissions(request.user)
-            )
+            department = service.create_department(command)
 
             response_data = {
                 "id": department.id,
@@ -95,11 +89,6 @@ class DepartmentListCreateView(APIView):
 
             return Response(response_data, status=status.HTTP_201_CREATED)
 
-        except AuthorizationError as e:
-            return Response(
-                {"error": e.message, "code": e.code},
-                status=status.HTTP_403_FORBIDDEN,
-            )
         except ValidationError as e:
             return Response(
                 {"error": e.message, "code": e.code},
@@ -160,22 +149,16 @@ class DepartmentDetailView(APIView):
                 department_id=department_id,
                 **serializer.validated_data,
             )
-            department = service.update_department(
-                command, resolve_actor_permissions(request.user)
-            )
+            department = service.update_department(command)
 
-            # Re-fetch as the DTO so the response carries head_id/head_name
-            # (and employee_count) through the same serializer convention
-            # GET already uses, rather than hand-rolling a second response
-            # shape here.
-            response_dto = service.get_department(department.id)
-            return Response(DepartmentResponseSerializer(response_dto).data)
+            response_data = {
+                "id": department.id,
+                "name": department.name,
+                "description": department.description,
+            }
 
-        except AuthorizationError as e:
-            return Response(
-                {"error": e.message, "code": e.code},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+            return Response(response_data)
+
         except NotFoundError as e:
             return Response(
                 {"error": str(e)},
@@ -192,19 +175,12 @@ class DepartmentDetailView(APIView):
         service = get_department_service()
 
         try:
-            deleted = service.delete_department(
-                department_id, resolve_actor_permissions(request.user)
-            )
+            deleted = service.delete_department(department_id)
             if deleted:
                 return Response(status=status.HTTP_204_NO_CONTENT)
             return Response(
                 {"error": "Failed to delete department"},
                 status=status.HTTP_400_BAD_REQUEST,
-            )
-        except AuthorizationError as e:
-            return Response(
-                {"error": e.message, "code": e.code},
-                status=status.HTTP_403_FORBIDDEN,
             )
         except NotFoundError as e:
             return Response(
@@ -419,25 +395,31 @@ class RoleListCreateView(APIView):
 
     def post(self, request):
         """Create a new role."""
-        command = CreateRoleCommand(
-            name=request.data.get("name"),
-            display_name=request.data.get("display_name"),
-            description=request.data.get("description", ""),
-            permissions=request.data.get("permissions"),
-        )
+        from modules.hr.infrastructure.persistence.models import Role
 
-        try:
-            role = RoleService().create_role(command, resolve_actor_permissions(request.user))
-        except AuthorizationError as e:
+        name = request.data.get("name")
+        display_name = request.data.get("display_name", name)
+        description = request.data.get("description", "")
+        permissions = request.data.get("permissions", [])
+
+        if not name:
             return Response(
-                {"error": e.message, "code": e.code},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        except ValidationError as e:
-            return Response(
-                {"error": e.message, "code": e.code},
+                {"error": "Name is required"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        if Role.objects.filter(name=name).exists():
+            return Response(
+                {"error": f"Role with name '{name}' already exists"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        role = Role.objects.create(
+            name=name,
+            display_name=display_name,
+            description=description,
+            permissions=permissions,
+        )
 
         return Response(
             {
@@ -491,32 +473,26 @@ class RoleDetailView(APIView):
 
     def _update(self, request, role_id: int):
         """Handle role update."""
-        command = UpdateRoleCommand(
-            role_id=role_id,
-            name=request.data.get("name"),
-            display_name=request.data.get("display_name"),
-            description=request.data.get("description"),
-            permissions=request.data.get("permissions"),
-            permissions_provided="permissions" in request.data,
-        )
+        from modules.hr.infrastructure.persistence.models import Role
 
         try:
-            role = RoleService().update_role(command, resolve_actor_permissions(request.user))
-        except AuthorizationError as e:
+            role = Role.objects.get(id=role_id)
+        except Role.DoesNotExist:
             return Response(
-                {"error": e.message, "code": e.code},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        except NotFoundError as e:
-            return Response(
-                {"error": str(e)},
+                {"error": "Role not found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        except ValidationError as e:
-            return Response(
-                {"error": e.message, "code": e.code},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+
+        if "name" in request.data:
+            role.name = request.data["name"]
+        if "display_name" in request.data:
+            role.display_name = request.data["display_name"]
+        if "description" in request.data:
+            role.description = request.data["description"]
+        if "permissions" in request.data:
+            role.permissions = request.data["permissions"]
+
+        role.save()
 
         return Response({
             "id": role.id,
@@ -528,17 +504,14 @@ class RoleDetailView(APIView):
 
     def delete(self, request, role_id: int):
         """Delete a role."""
+        from modules.hr.infrastructure.persistence.models import Role
+
         try:
-            RoleService().delete_role(role_id, resolve_actor_permissions(request.user))
-        except AuthorizationError as e:
+            role = Role.objects.get(id=role_id)
+            role.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Role.DoesNotExist:
             return Response(
-                {"error": e.message, "code": e.code},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        except NotFoundError as e:
-            return Response(
-                {"error": str(e)},
+                {"error": "Role not found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
-
-        return Response(status=status.HTTP_204_NO_CONTENT)

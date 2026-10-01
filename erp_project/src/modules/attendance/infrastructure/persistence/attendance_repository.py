@@ -8,7 +8,6 @@ from typing import Sequence, Type
 from modules.attendance.application.interfaces import IAttendanceRepository
 from modules.attendance.domain.entities import AttendanceRecord
 from modules.attendance.domain.value_objects import ClockTime
-from shared.infrastructure.persistence import insert_or_update
 
 
 class DjangoAttendanceRepository(IAttendanceRepository):
@@ -96,28 +95,47 @@ class DjangoAttendanceRepository(IAttendanceRepository):
         return [self._to_entity(r) for r in queryset]
 
     def save(self, record: AttendanceRecord) -> AttendanceRecord:
-        """
-        Save attendance record.
+        """Save attendance record."""
+        time_in = record.time_in.to_time() if record.time_in else None
+        time_out = record.time_out.to_time() if record.time_out else None
 
-        A new record (id None) is inserted with a database-assigned id; a
-        record with an id updates exactly that row, and an unknown id raises
-        NotFoundError rather than inserting (REM-06).
-        """
-        db_record = insert_or_update(
-            self.model,
-            record.id,
-            {
-                "employee_id": record.employee_id,
-                "date": record.record_date,
-                "time_in": record.time_in.to_time() if record.time_in else None,
-                "time_out": record.time_out.to_time() if record.time_out else None,
-            },
-        )
-        return self._to_entity(db_record)
+        if record.id:
+            # Update existing
+            updated = self.model.objects.filter(pk=record.id).update(
+                employee_id=record.employee_id,
+                date=record.record_date,
+                time_in=time_in,
+                time_out=time_out,
+            )
+            if updated == 0:
+                # Record doesn't exist, create it
+                db_record = self.model.objects.create(
+                    employee_id=record.employee_id,
+                    date=record.record_date,
+                    time_in=time_in,
+                    time_out=time_out,
+                )
+                record = self._to_entity(db_record)
+        else:
+            # Create new
+            db_record = self.model.objects.create(
+                employee_id=record.employee_id,
+                date=record.record_date,
+                time_in=time_in,
+                time_out=time_out,
+            )
+            record = self._to_entity(db_record)
+
+        return record
 
     def delete(self, record_id: int) -> None:
         """Delete attendance record."""
         self.model.objects.filter(pk=record_id).delete()
+
+    def get_next_id(self) -> int:
+        """Get next available ID."""
+        last = self.model.objects.order_by("-id").first()
+        return (last.id + 1) if last else 1
 
     def _to_entity(self, db_record) -> AttendanceRecord:
         """Convert Django model to domain entity."""

@@ -75,10 +75,6 @@ class CustomUser(AbstractUser):
     # Security fields
     failed_attempts = models.IntegerField(default=0)
     lockout_until = models.DateTimeField(null=True, blank=True)
-    # REM-07: set while the account holds an issued temporary password;
-    # RBACMiddleware then allows only the password change (and "me") until
-    # the owner replaces it.
-    must_change_password = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'authentication_customuser'
@@ -110,10 +106,23 @@ class AuditLog(models.Model):
     """Immutable audit log for login attempts."""
 
     EVENT_CHOICES = [
+        # Authentication events
         ("SUCCESS", "Login Success"),
         ("FAILED", "Login Failed"),
         ("LOCKOUT", "Account Locked"),
         ("FORCE_RESET", "Forced Password Reset"),
+        ("LOGOUT", "Logout"),
+        # Administrative events
+        ("USER_CREATED", "User Created"),
+        ("USER_DELETED", "User Deleted"),
+        ("USER_UPDATED", "User Updated"),
+        ("ROLE_ASSIGNED", "Role Assigned"),
+        ("ROLE_REMOVED", "Role Removed"),
+        ("PERMISSION_GRANTED", "Permission Granted"),
+        ("PERMISSION_REVOKED", "Permission Revoked"),
+        ("EMPLOYEE_CREATED", "Employee Created"),
+        ("EMPLOYEE_UPDATED", "Employee Updated"),
+        ("EMPLOYEE_DELETED", "Employee Deleted"),
     ]
 
     user = models.ForeignKey(

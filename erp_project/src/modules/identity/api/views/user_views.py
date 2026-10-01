@@ -5,18 +5,12 @@ User management API views.
 from uuid import UUID
 
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from shared.domain.exceptions import (
-    AuthorizationError,
-    ConflictError,
-    NotFoundError,
-    ValidationError,
-)
+from shared.domain.exceptions import ConflictError, NotFoundError, ValidationError
 
-from modules.hr.application.authorization import resolve_actor_permissions
 from modules.identity.api.serializers import (
     ChangePasswordRequestSerializer,
     CreateUserRequestSerializer,
@@ -30,10 +24,6 @@ from modules.identity.application.services import (
     UserService,
 )
 from modules.identity.infrastructure.persistence.user_repository import DjangoUserRepository
-
-
-def _error(exc, http_status):
-    return Response({"detail": exc.message, "code": exc.code}, status=http_status)
 
 
 class UserListCreateView(APIView):
@@ -74,9 +64,14 @@ class UserListCreateView(APIView):
         """
         Create a new user.
 
-        Needs hr.employee.create (checked by UserService). Also creates the
-        employee record, through EmployeeService, if role/department provided.
+        Admin only. Optionally creates an employee profile if role/department provided.
         """
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response(
+                {"detail": "Admin access required"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         serializer = CreateUserRequestSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
@@ -93,12 +88,46 @@ class UserListCreateView(APIView):
                     first_name=serializer.validated_data["first_name"],
                     last_name=serializer.validated_data["last_name"],
                     password=serializer.validated_data.get("password"),
-                    role_id=serializer.validated_data.get("role"),
-                    department_id=serializer.validated_data.get("department"),
-                ),
-                actor_permissions=resolve_actor_permissions(request.user),
-                actor_email=request.user.email,
+                    is_staff=serializer.validated_data.get("is_staff", False),
+                    is_superuser=serializer.validated_data.get("is_superuser", False),
+                )
             )
+
+            # Create employee profile if role or department provided
+            role_id = serializer.validated_data.get("role")
+            department_id = serializer.validated_data.get("department")
+
+            if role_id or department_id:
+                from modules.hr.infrastructure.persistence.models import (
+                    Department, Employees, Role
+                )
+                from modules.identity.infrastructure.persistence.models import CustomUser
+
+                db_user = CustomUser.objects.get(id=result.user.id)
+
+                employee_data = {
+                    "user": db_user,
+                    "first_name": result.user.first_name,
+                    "surname": result.user.last_name,
+                    "email": result.user.email,
+                    "is_active": True,
+                }
+
+                if role_id:
+                    try:
+                        role = Role.objects.get(id=role_id)
+                        employee_data["role"] = role
+                    except Role.DoesNotExist:
+                        pass
+
+                if department_id:
+                    try:
+                        department = Department.objects.get(id=department_id)
+                        employee_data["department"] = department
+                    except Department.DoesNotExist:
+                        pass
+
+                Employees.objects.create(**employee_data)
 
             # Return flat response structure expected by frontend
             response_data = {
@@ -106,10 +135,7 @@ class UserListCreateView(APIView):
                 "email": result.user.email,
                 "first_name": result.user.first_name,
                 "last_name": result.user.last_name,
-                # One-time generated password (null when the creator chose
-                # one). Either way the owner must replace it at first login.
-                "temporary_password": result.temp_password,
-                "must_change_password": result.user.must_change_password,
+                "password": result.temp_password,
             }
 
             return Response(
@@ -117,15 +143,16 @@ class UserListCreateView(APIView):
                 status=status.HTTP_201_CREATED,
             )
 
-        except AuthorizationError as e:
-            return _error(e, status.HTTP_403_FORBIDDEN)
         except ConflictError as e:
-            return _error(e, status.HTTP_409_CONFLICT)
+            return Response(
+                {"detail": e.message, "code": e.code},
+                status=status.HTTP_409_CONFLICT,
+            )
         except ValidationError as e:
-            return _error(e, status.HTTP_400_BAD_REQUEST)
-        except NotFoundError as e:
-            # e.g. an unknown department - same mapping as the hr employees API
-            return _error(e, status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": e.message, "code": e.code},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class UserDetailView(APIView):
@@ -179,6 +206,14 @@ class UserDetailView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Only admins can update other users
+        is_self = uuid_id == request.user.id
+        if not is_self and not (request.user.is_staff or request.user.is_superuser):
+            return Response(
+                {"detail": "Not authorized"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         serializer = UpdateUserRequestSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
@@ -186,26 +221,28 @@ class UserDetailView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Non-admins cannot change is_active or is_staff
+        if not (request.user.is_staff or request.user.is_superuser):
+            if "is_active" in serializer.validated_data or "is_staff" in serializer.validated_data:
+                return Response(
+                    {"detail": "Cannot modify these fields"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
         service = UserService(DjangoUserRepository())
 
         try:
-            result = service.update_user(
+            user = service.update_user(
                 UpdateUserCommand(
                     user_id=uuid_id,
                     first_name=serializer.validated_data.get("first_name"),
                     last_name=serializer.validated_data.get("last_name"),
                     is_active=serializer.validated_data.get("is_active"),
-                ),
-                actor_permissions=resolve_actor_permissions(request.user),
-                actor_user_id=request.user.id,
+                    is_staff=serializer.validated_data.get("is_staff"),
+                )
             )
-            data = dict(UserResponseSerializer(result.user.__dict__).data)
-            if result.temp_password is not None:
-                # Reactivation issued a new one-time password (REM-07).
-                data["temporary_password"] = result.temp_password
-            return Response(data)
-        except AuthorizationError as e:
-            return _error(e, status.HTTP_403_FORBIDDEN)
+            response_serializer = UserResponseSerializer(user.__dict__)
+            return Response(response_serializer.data)
         except NotFoundError as e:
             return Response(
                 {"detail": e.message},
@@ -213,7 +250,13 @@ class UserDetailView(APIView):
             )
 
     def delete(self, request, user_id: str):
-        """Permanently delete a user (needs hr.employee.delete, checked by UserService)."""
+        """Delete a user. Admin only."""
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response(
+                {"detail": "Admin access required"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         try:
             uuid_id = UUID(user_id)
         except ValueError:
@@ -225,14 +268,8 @@ class UserDetailView(APIView):
         service = UserService(DjangoUserRepository())
 
         try:
-            service.delete_user(
-                uuid_id,
-                actor_permissions=resolve_actor_permissions(request.user),
-                actor_user_id=request.user.id,
-            )
+            service.delete_user(uuid_id)
             return Response(status=status.HTTP_204_NO_CONTENT)
-        except AuthorizationError as e:
-            return _error(e, status.HTTP_403_FORBIDDEN)
         except NotFoundError as e:
             return Response(
                 {"detail": e.message},
@@ -264,53 +301,6 @@ class CurrentUserView(APIView):
             )
 
 
-class ChangePasswordView(APIView):
-    """
-    Self-service password change.
-
-    POST /api/v2/auth/password/change/
-
-    Always acts on the authenticated caller - no user id is accepted - and
-    requires the current password. Reachable while must_change_password is
-    set (RBACMiddleware). The stored hash changes, which revokes every
-    previously issued token, so fresh tokens are returned.
-    """
-
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        serializer = ChangePasswordRequestSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        service = UserService(DjangoUserRepository())
-        try:
-            user = service.change_password(
-                request.user.id,
-                new_password=serializer.validated_data["new_password"],
-                current_password=serializer.validated_data["current_password"],
-            )
-        except ValidationError as e:
-            return Response(
-                {"detail": e.message, "code": e.code, **(e.details or {})},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        from rest_framework_simplejwt.tokens import RefreshToken
-
-        from modules.identity.infrastructure.persistence.models import CustomUser
-
-        refresh = RefreshToken.for_user(CustomUser.objects.get(pk=user.id))
-        return Response(
-            {
-                "detail": "Password changed.",
-                "must_change_password": user.must_change_password,
-                "access": str(refresh.access_token),
-                "refresh": str(refresh),
-            }
-        )
-
-
 class UnlockUserView(APIView):
     """
     API endpoint to unlock a user account.
@@ -318,10 +308,10 @@ class UnlockUserView(APIView):
     POST /api/v2/auth/users/{id}/unlock/
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
 
     def post(self, request, user_id: str):
-        """Unlock a user account (needs hr.employee.reactivate, checked by UserService)."""
+        """Unlock a user account."""
         try:
             uuid_id = UUID(user_id)
         except ValueError:
@@ -333,15 +323,9 @@ class UnlockUserView(APIView):
         service = UserService(DjangoUserRepository())
 
         try:
-            user = service.unlock_user(
-                uuid_id,
-                actor_permissions=resolve_actor_permissions(request.user),
-                actor_user_id=request.user.id,
-            )
+            user = service.unlock_user(uuid_id)
             serializer = UserResponseSerializer(user.__dict__)
             return Response(serializer.data)
-        except AuthorizationError as e:
-            return _error(e, status.HTTP_403_FORBIDDEN)
         except NotFoundError as e:
             return Response(
                 {"detail": e.message},

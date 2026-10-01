@@ -11,6 +11,7 @@ For more information please see:
 """
 from django.contrib import admin
 from django.http import JsonResponse
+from django.shortcuts import redirect
 from django.urls import include, path
 
 from modules.identity.api.views import AdminDashboardView
@@ -21,7 +22,17 @@ def health_check(request):
     return JsonResponse({'status': 'healthy', 'service': 'zchpc-erp'})
 
 
+def root_redirect(request):
+    """Redirect root URL to admin panel."""
+    return redirect('/admin/')
+
+
 urlpatterns = [
+    # =========================================================================
+    # Root URL Redirect
+    # =========================================================================
+    path('', root_redirect, name='root'),
+
     # =========================================================================
     # Health Check (for Docker/load balancers)
     # =========================================================================

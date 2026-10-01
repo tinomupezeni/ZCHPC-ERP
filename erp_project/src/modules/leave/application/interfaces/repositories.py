@@ -38,6 +38,11 @@ class ILeaveTypeRepository(ABC):
         """Delete leave type."""
         ...
 
+    @abstractmethod
+    def get_next_id(self) -> int:
+        """Get next available ID."""
+        ...
+
 
 class ILeaveBalanceRepository(ABC):
     """Interface for leave balance repository."""
@@ -79,6 +84,11 @@ class ILeaveBalanceRepository(ABC):
     @abstractmethod
     def delete(self, balance_id: int) -> None:
         """Delete balance."""
+        ...
+
+    @abstractmethod
+    def get_next_id(self) -> int:
+        """Get next available ID."""
         ...
 
 
@@ -136,4 +146,9 @@ class ILeaveRequestRepository(ABC):
     @abstractmethod
     def delete(self, request_id: int) -> None:
         """Delete request."""
+        ...
+
+    @abstractmethod
+    def get_next_id(self) -> int:
+        """Get next available ID."""
         ...

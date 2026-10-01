@@ -35,35 +35,29 @@ export interface JobApplicationFormData {
   resume?: File;
 }
 
-// The public careers API discloses nothing about the applicant's identity:
-// check-application answers only has_applied, and neither the submission
-// receipt nor the status lookup carries a name or email.
 export interface ApplicationCheckResponse {
   has_applied: boolean;
-}
-
-export interface ApplicationReceipt {
-  id: number;
-  job_id: number;
-  job_title: string;
-  status: ApplicationStatus['status'];
-  applied_at: string;
-  updated_at: string;
+  candidate_exists: boolean;
+  candidate_name?: string;
 }
 
 export interface ApplicationSubmitResponse {
-  success: boolean;
-  message: string;
-  application: ApplicationReceipt;
+  detail: string;
+  application_id: number;
+  job_title: string;
+  candidate_name: string;
 }
 
 export interface ApplicationStatus {
-  job_id: number;
+  id: number;
   job_title: string;
-  applied_at: string;
+  job_department: string | null;
+  applied_on: string;
   status: 'Pending' | 'Shortlisted' | 'Interview' | 'Offered' | 'Hired' | 'Rejected';
 }
 
-// An unknown ID number returns an empty list, exactly like an ID with no
-// applications.
-export type ApplicationStatusResponse = ApplicationStatus[];
+export interface ApplicationStatusResponse {
+  candidate_name: string;
+  applications: ApplicationStatus[];
+  total: number;
+}

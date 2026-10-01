@@ -25,51 +25,7 @@ export default function AddEmployee({ setShowModal, fetchEmployees }) {
     handleCreateDepartment,
     handleCreatePosition,
     handleSubmit,
-    issuedCredential,
-    closeIssuedCredential,
   } = useAddEmployee(setShowModal, fetchEmployees);
-
-  // REM-07: show the new login's temporary password once, then forget it.
-  if (issuedCredential) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-xl w-full max-w-md shadow-xl p-6 space-y-4">
-          <h2 className="text-xl font-semibold text-gray-800">Employee login created</h2>
-          <p className="text-sm text-gray-600">
-            Give these sign-in details to the employee. The password is temporary
-            and is shown only this once: they must replace it when they first sign in.
-          </p>
-          {[
-            ["EC Number (portal)", issuedCredential.ecNumber],
-            ["Email", issuedCredential.email],
-            ["Temporary password", issuedCredential.temporaryPassword],
-          ].map(([label, value]) => (
-            <div key={label} className="rounded-lg bg-gray-900 p-3">
-              <div className="text-[11px] font-bold uppercase tracking-widest text-gray-400">{label}</div>
-              <div className="mt-1 flex items-center justify-between gap-2">
-                <code className="font-mono text-sm text-green-400 break-all">{value}</code>
-                <button
-                  type="button"
-                  onClick={() => navigator.clipboard.writeText(value)}
-                  className="text-xs text-gray-300 hover:text-white"
-                >
-                  Copy
-                </button>
-              </div>
-            </div>
-          ))}
-          <button
-            type="button"
-            onClick={closeIssuedCredential}
-            className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
-          >
-            Done
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">

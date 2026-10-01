@@ -15,11 +15,6 @@ from modules.hr.application.services.organization_service import (
     UpdateDepartmentCommand,
     UpdatePositionCommand,
 )
-from modules.hr.application.services.role_service import (
-    CreateRoleCommand,
-    RoleService,
-    UpdateRoleCommand,
-)
 
 __all__ = [
     # Employee service
@@ -34,8 +29,4 @@ __all__ = [
     "PositionService",
     "CreatePositionCommand",
     "UpdatePositionCommand",
-    # Role service
-    "RoleService",
-    "CreateRoleCommand",
-    "UpdateRoleCommand",
 ]

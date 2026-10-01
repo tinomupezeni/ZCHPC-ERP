@@ -1,9 +1,8 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Menu, User, LogOut, Settings, ChevronDown, Briefcase } from 'lucide-react';
+import { Bell, Menu, User, LogOut, Settings, ChevronDown, Briefcase } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { NotificationBell } from '@/components/notifications/NotificationBell';
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -50,7 +49,14 @@ export function Header({ onMenuClick }: HeaderProps) {
           </Link>
 
           {/* Notifications */}
-          <NotificationBell />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative text-white hover:bg-white/20"
+          >
+            <Bell className="h-5 w-5" />
+            <span className="absolute top-1 right-1 h-2 w-2 bg-red-400 rounded-full ring-2 ring-blue-700" />
+          </Button>
 
           {/* User menu */}
           <div className="relative">

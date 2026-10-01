@@ -23,7 +23,7 @@ class QRToken(AggregateRoot[int]):
 
     def __init__(
         self,
-        id: int | None,
+        id: int,
         token: TokenValue,
         expiry: TokenExpiry,
         is_active: bool = True,
@@ -48,7 +48,7 @@ class QRToken(AggregateRoot[int]):
     @classmethod
     def create(
         cls,
-        id: int | None,
+        id: int,
         validity_seconds: int = DEFAULT_VALIDITY_SECONDS,
         created_at: datetime | None = None,
     ) -> "QRToken":

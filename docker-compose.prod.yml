@@ -50,9 +50,6 @@ services:
       - DB_USER=${POSTGRES_USER:?POSTGRES_USER must be set}
       - DB_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-http://localhost,http://127.0.0.1}
-      # The api service publishes no ports: every request arrives through the
-      # nginx service, so the last X-Forwarded-For entry (nginx's) is trusted.
-      - DRF_NUM_PROXIES=1
     volumes:
       - api_static:/app/staticfiles
       - api_media:/app/mediafiles

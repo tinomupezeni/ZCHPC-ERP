@@ -17,7 +17,7 @@ class LeaveType(AggregateRoot[int]):
 
     def __init__(
         self,
-        id: int | None,
+        id: int,
         name: str,
         default_days_allowed: int = 0,
         is_active: bool = True,
@@ -54,7 +54,7 @@ class LeaveType(AggregateRoot[int]):
     @classmethod
     def create(
         cls,
-        id: int | None,
+        id: int,
         name: str,
         default_days_allowed: int = 0,
     ) -> "LeaveType":

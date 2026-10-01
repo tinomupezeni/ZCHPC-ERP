@@ -4,7 +4,7 @@ API views for the portal module.
 
 from datetime import date
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes, throttle_classes
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -21,7 +21,6 @@ from modules.portal.application.services import (
     PortalPayslipService,
     CareersService,
 )
-from modules.recruitment.api.throttles import RecruitmentApplyThrottle, RecruitmentStatusThrottle
 from modules.portal.infrastructure.persistence.django_providers import (
     DjangoEmployeeProvider,
     DjangoAttendanceProvider,
@@ -111,13 +110,9 @@ def login(request: Request) -> Response:
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    from modules.identity.api.views.auth_views import get_client_ip
-
     result = _auth_service.authenticate(
         ec_number=serializer.validated_data["ec_number"],
         password=serializer.validated_data["password"],
-        ip_address=get_client_ip(request),
-        user_agent=request.META.get("HTTP_USER_AGENT", ""),
     )
 
     if not result.success:
@@ -136,9 +131,6 @@ def login(request: Request) -> Response:
         "access": str(refresh.access_token),
         "refresh": str(refresh),
         "employee": EmployeeProfileSerializer(result.employee).data,
-        # REM-07: when true, these tokens reach only the password change
-        # until the temporary password is replaced.
-        "must_change_password": user.must_change_password,
     })
 
 
@@ -165,9 +157,7 @@ def me(request: Request) -> Response:
     """Get current employee profile."""
     try:
         employee = _auth_service.get_current_employee(request.user.id)
-        data = dict(EmployeeProfileSerializer(employee).data)
-        data["must_change_password"] = request.user.must_change_password
-        return Response(data)
+        return Response(EmployeeProfileSerializer(employee).data)
     except NotFoundError as e:
         return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
 
@@ -535,7 +525,6 @@ def public_job_detail(request: Request, job_id: int) -> Response:
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
-@throttle_classes([RecruitmentApplyThrottle])
 def public_job_apply(request: Request, job_id: int) -> Response:
     """Apply for a job (public)."""
     serializer = JobApplicationSerializer(data=request.data)
@@ -561,7 +550,6 @@ def public_job_apply(request: Request, job_id: int) -> Response:
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
-@throttle_classes([RecruitmentStatusThrottle])
 def public_application_status(request: Request) -> Response:
     """Check application status by national ID (public)."""
     national_id = request.data.get("national_id")
@@ -610,18 +598,10 @@ def notification_unread_count(request: Request) -> Response:
 @api_view(["PATCH"])
 @permission_classes([IsAuthenticated])
 def notification_mark_read(request: Request, notification_id: int) -> Response:
-    """
-    Mark notification as read.
-
-    Scoped to the caller's own notifications: an id existing at all is not
-    enough, since ids are sequential across every employee's notifications.
-    A mismatch is reported the same as "not found" so this can't be used to
-    probe which ids belong to someone else.
-    """
-    employee_id = _get_employee_id(request)
+    """Mark notification as read."""
     notification = _notification_repo.get_by_id(notification_id)
 
-    if notification is None or notification.employee_id != employee_id:
+    if notification is None:
         return Response(
             {"error": "Notification not found"},
             status=status.HTTP_404_NOT_FOUND

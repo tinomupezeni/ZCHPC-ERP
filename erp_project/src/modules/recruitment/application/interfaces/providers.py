@@ -39,41 +39,6 @@ class JobDTO:
 
 
 @dataclass(frozen=True)
-class PublicJobDTO:
-    """
-    The public careers contract for an open job - an explicit allowlist.
-
-    Anything not named here stays internal, so a field added to JobDTO for HR
-    never becomes public by accident. Deliberately absent (REM-04 decisions):
-    ``applicants_count`` and the internal ``notes``. Salary is public.
-    Changing a public-field decision means changing this DTO and
-    PublicJobResponseSerializer, nothing else.
-    """
-
-    id: int
-    title: str
-    department_id: int
-    department_name: str
-    position_id: int | None
-    position_title: str | None
-    status: str
-    location: str
-    reports_to: str
-    salary_usd_min: Decimal | None
-    salary_usd_max: Decimal | None
-    salary_zig_min: Decimal | None
-    salary_zig_max: Decimal | None
-    is_internal: bool
-    description: str
-    responsibilities: list[str]
-    qualifications: list[str]
-    competencies: list[str]
-    application_process: str
-    contact_email: str
-    posted_date: date
-
-
-@dataclass(frozen=True)
 class CandidateDTO:
     """Data transfer object for candidates."""
 

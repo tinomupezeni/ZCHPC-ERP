@@ -32,17 +32,9 @@ def create_default_roles(sender, **kwargs):
 def create_employee_user_account(sender, instance, created, **kwargs):
     """
     Automatically creates a user account when an employee is added.
-
-    Login: email (/api/v2/auth/token/) or EC number (/api/v2/portal/auth/login/).
-    Password (REM-07): a random temporary password from the identity module's
-    generator - never derived from employee data. The account is marked
-    must_change_password, so it can do nothing but change that password.
-
-    The plaintext is handed back once on ``instance.temporary_password`` so
-    the service creating the employee can return it to its authorized
-    creator; it is never stored or logged.
+    Login: EC number (employee_id)
+    Password: Employee's surname
     """
-    from modules.identity.application.services import generate_temp_password
     from modules.identity.infrastructure.persistence.models import CustomUser
 
     if created and not instance.user and instance.email:
@@ -52,17 +44,15 @@ def create_employee_user_account(sender, instance, created, **kwargs):
             if existing_user:
                 sender.objects.filter(pk=instance.pk).update(user=existing_user)
             else:
-                temporary_password = generate_temp_password()
+                password = instance.surname
                 user = CustomUser.objects.create_user(
                     email=instance.email,
-                    password=temporary_password,
+                    password=password,
                     first_name=instance.first_name,
                     last_name=instance.surname,
                     is_active=True,
-                    must_change_password=True,
                 )
                 sender.objects.filter(pk=instance.pk).update(user=user)
-                instance.temporary_password = temporary_password
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)

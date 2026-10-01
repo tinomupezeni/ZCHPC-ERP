@@ -1,7 +1,7 @@
 """
 Procurement application layer.
 
-Contains application services, use cases, authorization policies and interfaces.
+Contains application services and interfaces.
 """
 
 from modules.procurement.application.interfaces import (
@@ -10,12 +10,6 @@ from modules.procurement.application.interfaces import (
     IBudgetCenterRepository,
     IPurchaseRequestRepository,
     IPurchaseOrderRepository,
-    IOrganizationalDirectory,
-)
-from modules.procurement.application.authorization import (
-    Actor,
-    PurchaseRequestAuthorizationPolicy,
-    PurchaseRequestPermissions,
 )
 from modules.procurement.application.services import (
     ProcurementService,
@@ -30,11 +24,6 @@ __all__ = [
     "IBudgetCenterRepository",
     "IPurchaseRequestRepository",
     "IPurchaseOrderRepository",
-    "IOrganizationalDirectory",
-    # Authorization
-    "Actor",
-    "PurchaseRequestAuthorizationPolicy",
-    "PurchaseRequestPermissions",
     # Services
     "ProcurementService",
     "CreatePurchaseRequestDTO",

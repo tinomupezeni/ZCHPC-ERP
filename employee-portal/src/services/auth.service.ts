@@ -1,12 +1,5 @@
 import api, { setTokens, clearTokens, getRefreshToken } from './api';
-import type {
-  ChangePasswordRequest,
-  ChangePasswordResponse,
-  LoginCredentials,
-  LoginResponse,
-  Employee,
-  TokenRefreshResponse,
-} from '@/types/auth.types';
+import type { LoginCredentials, LoginResponse, Employee, TokenRefreshResponse } from '@/types/auth.types';
 
 export const authService = {
   /**
@@ -61,16 +54,6 @@ export const authService = {
    */
   async getCurrentEmployee(): Promise<Employee> {
     const response = await api.get<Employee>('/portal/auth/me/');
-    return response.data;
-  },
-
-  /**
-   * Replace the caller's own password (REM-07). The change revokes every
-   * earlier token, so the fresh pair returned replaces the stored one.
-   */
-  async changePassword(request: ChangePasswordRequest): Promise<ChangePasswordResponse> {
-    const response = await api.post<ChangePasswordResponse>('/auth/password/change/', request);
-    setTokens(response.data.access, response.data.refresh);
     return response.data;
   },
 };

@@ -5,10 +5,8 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
-export const CHANGE_PASSWORD_PATH = '/portal/change-password';
-
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading, employee } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -25,13 +23,6 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (!isAuthenticated) {
     // Redirect to login, but save the attempted URL
     return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  // REM-07: a temporary password must be replaced before anything else. The
-  // backend enforces this too; this only keeps the user on the one page that
-  // works for them.
-  if (employee?.must_change_password && location.pathname !== CHANGE_PASSWORD_PATH) {
-    return <Navigate to={CHANGE_PASSWORD_PATH} replace />;
   }
 
   return <>{children}</>;

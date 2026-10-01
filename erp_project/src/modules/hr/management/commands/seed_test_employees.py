@@ -72,7 +72,6 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         from modules.hr.application.services import CreateEmployeeCommand, EmployeeService
-        from modules.identity.domain.value_objects import PermissionSet
         from modules.hr.infrastructure.persistence.department_repository import DjangoDepartmentRepository
         from modules.hr.infrastructure.persistence.employee_repository import DjangoEmployeeRepository
         from modules.hr.infrastructure.persistence.position_repository import DjangoPositionRepository
@@ -147,9 +146,7 @@ class Command(BaseCommand):
             )
 
             try:
-                # Operator-run seed script (no request actor): explicitly full access so
-                # the seeded salary/bank/statutory data passes the payroll policy.
-                service.create_employee(command, actor_permissions=PermissionSet.full_access())
+                service.create_employee(command)
                 created_count += 1
             except ValidationError as exc:
                 if exc.code in ("DUPLICATE_EMAIL", "DUPLICATE_NATIONAL_ID", "DUPLICATE_EMPLOYEE_ID"):

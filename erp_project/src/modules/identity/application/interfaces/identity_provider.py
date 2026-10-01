@@ -22,7 +22,6 @@ class UserDTO:
     is_active: bool
     is_staff: bool
     is_superuser: bool
-    must_change_password: bool = False
 
 
 @dataclass

@@ -58,6 +58,9 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
     return filterItems(navItems);
   }, [user, isLoading, isModulesLoading, activeModules, checkPermission]); // Dependency on 'user' is key for refresh fix
 
+  console.log(user);
+  
+
   const userName = `${user?.first_name || ""} ${user?.last_name || ""}`;
   // Get role display name - check multiple sources
   const userRole = user?.employee_profile?.role_display_name
@@ -83,7 +86,7 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto py-6 px-3">
-          <nav className="space-y-1" aria-label="Primary">
+          <nav className="space-y-1">
             {isLoading ? (
               <div className="space-y-3 p-2 animate-pulse">
                 {[1, 2, 3, 4, 5].map((i) => (

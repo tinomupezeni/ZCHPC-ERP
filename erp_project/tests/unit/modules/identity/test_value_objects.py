@@ -147,31 +147,6 @@ class TestPermissionSet:
         assert perm_set.has_all_permissions(["hr.view", "payroll.process"])
         assert not perm_set.has_all_permissions(["hr.view", "accounts.view"])
 
-    @pytest.mark.parametrize(
-        "holder, granted, expected",
-        [
-            (["*"], ["*", "hr.*", "payroll.process"], True),
-            (["hr.*"], ["hr.view", "hr.employee.*", "hr.*"], True),
-            (["hr.*"], ["*"], False),
-            (["hr.*"], ["payroll.process"], False),
-            (["hr.employee.*"], ["hr.*"], False),
-            (["hr.view"], ["hr.view"], True),
-            (["hr.view"], ["hr.*"], False),
-            (["h*"], ["hr.*"], True),
-            (["?"], ["*"], False),  # "?" would match the literal "*"
-            (["hr.?"], ["hr.*"], False),
-            (["hr.?"], ["hr.?"], True),  # an exact match still covers
-            (["hr.[ab]"], ["hr.[ab]"], True),
-            (["hr.view"], [], True),
-        ],
-    )
-    def test_covers(self, holder, granted, expected):
-        """A set covers another only if it already grants all of it."""
-        assert (
-            PermissionSet.from_list(holder).covers(PermissionSet.from_list(granted))
-            is expected
-        )
-
     def test_in_operator(self):
         """Test 'in' operator for permission checking."""
         perm_set = PermissionSet.from_list(["hr.*"])

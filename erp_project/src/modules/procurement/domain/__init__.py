@@ -29,7 +29,6 @@ from modules.procurement.domain.events import (
     PurchaseRequestLevel1Approved,
     PurchaseRequestLevel2Approved,
     PurchaseRequestRejected,
-    PurchaseRequestProcessed,
     PurchaseOrderCreated,
     GoodsReceived,
 )
@@ -65,7 +64,6 @@ __all__ = [
     "PurchaseRequestLevel1Approved",
     "PurchaseRequestLevel2Approved",
     "PurchaseRequestRejected",
-    "PurchaseRequestProcessed",
     "PurchaseOrderCreated",
     "GoodsReceived",
     # Services

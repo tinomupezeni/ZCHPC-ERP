@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { SidebarItemConfig } from "./navConfig";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface SidebarItemProps {
   item: SidebarItemConfig;
@@ -27,6 +28,10 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const {user} = useAuth()
+
+  console.log(user);
+  
 
   const isExpanded = expandedItems[item.path || ""] || false;
   const hasSubItems = !!item.subItems?.length;

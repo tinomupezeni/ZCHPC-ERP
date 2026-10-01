@@ -25,11 +25,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Production default is the portal's own public origin (same-origin /api
-# via reverse proxy needs no CORS). Matches build-and-push.sh. Local and
-# staging builds MUST pass an explicit --build-arg instead - never promote
-# a localhost-baked image to prod.
-ARG VITE_API_URL=https://employees.zchpc.ac.zw
+# Set environment variables for build
+ARG VITE_API_URL=https://zchpcerp.zchpc.ac.zw
 ENV VITE_API_URL=${VITE_API_URL}
 
 # Build the application
