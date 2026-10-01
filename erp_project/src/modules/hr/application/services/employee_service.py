@@ -301,46 +301,12 @@ class EmployeeService:
                     code="POSITION_DEPARTMENT_MISMATCH",
                 )
 
-        # Use provided employee ID or generate a new one
-        if command.employee_id and command.employee_id.strip():
-            # Validate custom employee_id uniqueness
-            if self._employees.exists_by_employee_id(command.employee_id.strip()):
-                raise ValidationError(
-                    message=f"Employee with EC Number {command.employee_id} already exists",
-                    code="DUPLICATE_EMPLOYEE_ID",
-                )
-            employee_id = EmployeeId(command.employee_id.strip())
-        else:
-            # Auto-generate employee ID
-            id_generator = SequentialEmployeeIdGenerator(self._employees.get_max_employee_id)
-            employee_id = id_generator.next_id()
-
-        # Create employee entity
-        employee = Employee(
-            id=0,  # Will be set by repository
-            employee_id=employee_id,
-            user_id=command.user_id,
-            first_name=command.first_name,
-            surname=command.surname,
-            national_id=NationalId(command.national_id) if command.national_id else None,
-            date_of_birth=command.date_of_birth,
-            gender=Gender.from_string(command.gender) if command.gender else None,
-            marital_status=MaritalStatus.from_string(command.marital_status) if command.marital_status else None,
-            email=Email(command.email) if command.email else None,
-            phone=PhoneNumber(command.phone) if command.phone else None,
-            department_id=command.department_id,
-            position_id=command.position_id,
-            role_id=command.role_id,
-            employee_type=EmploymentType.from_string(command.employee_type),
-            reports_to_id=command.reports_to_id,
-            date_joined=command.date_joined or date.today(),
-            contract_from=command.contract_from,
-            contract_to=command.contract_to,
-            emergency_contact=EmergencyContact(
-                name=command.emergency_contact_name or "",
-                number=command.emergency_contact_number or "",
-                relationship=command.emergency_contact_relationship or "",
-            ),
+        # A requested EC number is checked here only for its format; whether
+        # it is free is decided under the allocation lock below.
+        requested_employee_id = (
+            EmployeeId(command.employee_id.strip())
+            if command.employee_id and command.employee_id.strip()
+            else None
         )
 
         # Save. Salary, banking, statutory, and leave data live in the
@@ -348,7 +314,38 @@ class EmployeeService:
         # aggregate) - see _get_payroll_info() for the corresponding read
         # path. All writes happen in one transaction so a failure partway
         # through doesn't leave an employee without their profile rows.
+        # The EC number is allocated in the same transaction (AUD-02).
         with transaction.atomic():
+            employee_id = self._allocate_employee_id(requested_employee_id)
+
+            # Create employee entity
+            employee = Employee(
+                id=0,  # Will be set by repository
+                employee_id=employee_id,
+                user_id=command.user_id,
+                first_name=command.first_name,
+                surname=command.surname,
+                national_id=NationalId(command.national_id) if command.national_id else None,
+                date_of_birth=command.date_of_birth,
+                gender=Gender.from_string(command.gender) if command.gender else None,
+                marital_status=MaritalStatus.from_string(command.marital_status) if command.marital_status else None,
+                email=Email(command.email) if command.email else None,
+                phone=PhoneNumber(command.phone) if command.phone else None,
+                department_id=command.department_id,
+                position_id=command.position_id,
+                role_id=command.role_id,
+                employee_type=EmploymentType.from_string(command.employee_type),
+                reports_to_id=command.reports_to_id,
+                date_joined=command.date_joined or date.today(),
+                contract_from=command.contract_from,
+                contract_to=command.contract_to,
+                emergency_contact=EmergencyContact(
+                    name=command.emergency_contact_name or "",
+                    number=command.emergency_contact_number or "",
+                    relationship=command.emergency_contact_relationship or "",
+                ),
+            )
+
             self._employees.add(employee)
             self._save_payroll_info(employee.id, command)
             if command.bank_name or command.bank_account:
@@ -370,6 +367,34 @@ class EmployeeService:
         )
 
         return employee
+
+    def _allocate_employee_id(self, requested: EmployeeId | None) -> EmployeeId:
+        """
+        The EC number for a new employee (AUD-02). Must run inside the
+        transaction that adds the employee.
+
+        An EC number belongs to one employee for all time: the holder's row
+        is never deleted and the number on it never changes, so any number a
+        row holds - whatever its lifecycle state - is consumed. Allocation is
+        serialized for the rest of the transaction, so the check below and
+        the insert cannot interleave with another creation.
+
+        A requested number is accepted only if no employee holds it (compared
+        in its normalized form, e.g. "emp0007" is EMP0007); otherwise the next
+        number after the highest one held is issued.
+
+        Raises:
+            ValidationError: DUPLICATE_EMPLOYEE_ID if the requested number is held
+        """
+        self._employees.lock_employee_id_allocation()
+        if requested is not None:
+            if self._employees.exists_by_employee_id(requested.value):
+                raise ValidationError(
+                    message=f"Employee with EC Number {requested.value} already exists",
+                    code="DUPLICATE_EMPLOYEE_ID",
+                )
+            return requested
+        return SequentialEmployeeIdGenerator(self._employees.get_max_employee_id).next_id()
 
     def update_employee(
         self,

@@ -61,6 +61,14 @@ class IEmployeeRepository(ABC):
         """Get the highest employee ID number."""
         ...
 
+    def lock_employee_id_allocation(self) -> None:
+        """
+        Hold EC number allocation for the rest of the current transaction, so
+        no concurrent creation can choose the same number. Implementations
+        backed by a concurrent database should lock; the default does nothing.
+        """
+        return None
+
     @abstractmethod
     def exists_by_email(self, email: str) -> bool:
         """Check if an employee with the given email exists."""

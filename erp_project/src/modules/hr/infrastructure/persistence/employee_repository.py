@@ -5,7 +5,7 @@ Django repository implementation for Employee aggregate.
 from datetime import date
 from decimal import Decimal
 
-from django.db import transaction
+from django.db import connection, transaction
 
 from shared.domain.value_objects import Email, NationalId, PhoneNumber, EmployeeId
 
@@ -22,6 +22,10 @@ from modules.hr.domain.value_objects import (
     Salary,
     StatutoryInfo,
 )
+
+
+# Advisory-lock key for EC number allocation (any constant unique to this use).
+_EMPLOYEE_ID_ALLOCATION_LOCK = 2_026_020_005
 
 
 class DjangoEmployeeRepository(IEmployeeRepository):
@@ -120,18 +124,33 @@ class DjangoEmployeeRepository(IEmployeeRepository):
         return [self._to_entity(e) for e in queryset]
 
     def get_max_employee_id(self) -> EmployeeId | None:
-        """Get the highest employee ID number."""
-        last_employee = self.model.objects.filter(
-            employee_id__startswith="EMP"
-        ).order_by("-employee_id").first()
-
-        if not last_employee or not last_employee.employee_id:
+        """
+        The highest EC number held by any employee, whatever their lifecycle
+        state, compared by its number: as text "EMP9999" sorts after
+        "EMP10000", which made the next number collide with an existing one.
+        """
+        numbers = [
+            int(match.group(1))
+            for value in self.model.objects.filter(employee_id__istartswith="EMP")
+            .values_list("employee_id", flat=True)
+            .iterator()
+            if (match := EmployeeId.EMPLOYEE_ID_PATTERN.match(value))
+        ]
+        if not numbers:
             return None
+        return EmployeeId.from_number(max(numbers))
 
-        try:
-            return EmployeeId(last_employee.employee_id)
-        except ValueError:
-            return None
+    def lock_employee_id_allocation(self) -> None:
+        """
+        Serialize EC number allocation until the surrounding transaction
+        ends, so two concurrent creations cannot both choose the same number
+        (AUD-02). A PostgreSQL transaction-level advisory lock; on SQLite,
+        used only for development and tests, writes are already serialized.
+        """
+        if connection.vendor != "postgresql":
+            return
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(%s)", [_EMPLOYEE_ID_ALLOCATION_LOCK])
 
     def exists_by_email(self, email: str) -> bool:
         """Check if an employee with the given email exists."""
@@ -142,8 +161,12 @@ class DjangoEmployeeRepository(IEmployeeRepository):
         return self.model.objects.filter(national_id=national_id).exists()
 
     def exists_by_employee_id(self, employee_id: str) -> bool:
-        """Check if an employee with the given employee ID (EC Number) exists."""
-        return self.model.objects.filter(employee_id=employee_id).exists()
+        """
+        Check if an employee holds this EC number, ignoring case: the stored
+        form is upper-case but the unique index is case-sensitive, so a
+        legacy lower-case row must still count as holding it (AUD-02).
+        """
+        return self.model.objects.filter(employee_id__iexact=employee_id).exists()
 
     def count(self, include_inactive: bool = False) -> int:
         """Count employees."""
@@ -189,9 +212,13 @@ class DjangoEmployeeRepository(IEmployeeRepository):
 
     @transaction.atomic
     def update(self, employee: Employee) -> None:
-        """Update an existing employee."""
+        """
+        Update an existing employee.
+
+        The EC number is not written: it is assigned once, on add, and never
+        changes (AUD-02; the database refuses a change too).
+        """
         self.model.objects.filter(id=employee.id).update(
-            employee_id=str(employee.employee_id),
             user_id=employee.user_id,
             first_name=employee.first_name,
             surname=employee.surname,
