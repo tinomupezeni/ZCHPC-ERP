@@ -18,22 +18,11 @@ import {
   Fuel,
   ClipboardCheck,
   Scale,
-  ShoppingBag,
-  FileCheck,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useRole, type RoleGroup } from '@/hooks/useRole';
-import { usePurchaseRequestActionCount } from '@/hooks/usePurchaseRequestActionCount';
-import { usePurchaseRequestReviewerAccess } from '@/hooks/usePurchaseRequestReviewerAccess';
-
-const PURCHASE_REQUESTS_PATH = '/portal/purchase-requests';
-
-// Exact-match these so /portal/purchase-requests/review (F17) doesn't also
-// highlight the plain "Purchase Requests" link as active - the only two
-// paths in NAV_ITEMS today where one is a prefix of another.
-const EXACT_MATCH_PATHS = new Set(['/portal', PURCHASE_REQUESTS_PATH]);
 
 interface NavItem {
   path: string;
@@ -47,7 +36,6 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
     { path: '/portal', label: 'Dashboard', icon: Home, description: 'Overview & stats' },
     { path: '/portal/attendance', label: 'Attendance', icon: Clock, description: 'Clock in/out' },
     { path: '/portal/leave', label: 'Leave', icon: CalendarDays, description: 'Request time off' },
-    { path: '/portal/purchase-requests', label: 'Purchase Requests', icon: ShoppingBag, description: 'Raise a requisition' },
     { path: '/portal/payslips', label: 'Payslips', icon: FileText, description: 'View earnings' },
     { path: '/portal/fuel-requisitions', label: 'Fuel Requisitions', icon: Fuel, description: 'Submit fuel request' },
     { path: '/portal/stores-requisitions', label: 'Stores Requisitions', icon: ClipboardCheck, description: 'Submit stores request' },
@@ -57,7 +45,6 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
     { path: '/portal', label: 'Dashboard', icon: Home, description: 'HR overview' },
     { path: '/portal/employees', label: 'Employees', icon: Users, description: 'Manage employees' },
     { path: '/portal/leave', label: 'Leave Management', icon: CalendarDays, description: 'Review requests' },
-    { path: '/portal/purchase-requests', label: 'Purchase Requests', icon: ShoppingBag, description: 'Raise a requisition' },
     { path: '/careers', label: 'Recruitment', icon: UserPlus, description: 'Job postings & apps' },
     { path: '/portal/attendance', label: 'Attendance', icon: Clock, description: 'Track records' },
     { path: '/portal/payslips', label: 'My Payslips', icon: FileText, description: 'Your earnings' },
@@ -65,7 +52,6 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
   manager: [
     { path: '/portal', label: 'Dashboard', icon: Home, description: 'Team overview' },
     { path: '/portal/leave', label: 'Leave Approvals', icon: ClipboardList, description: 'Review team leave' },
-    { path: '/portal/purchase-requests', label: 'Purchase Requests', icon: ShoppingBag, description: 'Raise a requisition' },
     { path: '/portal/fuel-requisitions', label: 'Fuel Requisitions', icon: Fuel, description: 'Approve fuel requests' },
     { path: '/portal/stores-requisitions', label: 'Stores Requisitions', icon: ClipboardCheck, description: 'Approve stores requests' },
     { path: '/portal/comparative-schedules', label: 'Comparative Schedules', icon: Scale, description: 'Approve schedules' },
@@ -82,7 +68,6 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
     { path: '/portal/stores-requisitions', label: 'Stores Requisitions', icon: ClipboardCheck, description: 'Approve stores requests' },
     { path: '/portal/comparative-schedules', label: 'Comparative Schedules', icon: Scale, description: 'Approve schedules' },
     { path: '/portal/leave', label: 'Leave', icon: CalendarDays, description: 'Request time off' },
-    { path: '/portal/purchase-requests', label: 'Purchase Requests', icon: ShoppingBag, description: 'Raise a requisition' },
     { path: '/portal/payslips', label: 'My Payslips', icon: FileText, description: 'Your earnings' },
     { path: '/portal/attendance', label: 'Attendance', icon: Clock, description: 'Clock in/out' },
   ],
@@ -95,7 +80,6 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
     { path: '/portal/inventory', label: 'Inventory', icon: Package, description: 'Stock levels' },
     { path: '/portal/suppliers', label: 'Suppliers', icon: Users, description: 'Vendor records' },
     { path: '/portal/leave', label: 'Leave', icon: CalendarDays, description: 'Request time off' },
-    { path: '/portal/purchase-requests', label: 'Purchase Requests', icon: ShoppingBag, description: 'Raise a requisition' },
     { path: '/portal/payslips', label: 'My Payslips', icon: FileText, description: 'Your earnings' },
     { path: '/portal/attendance', label: 'Attendance', icon: Clock, description: 'Clock in/out' },
   ],
@@ -111,60 +95,8 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
     { path: '/portal/reports', label: 'Reports', icon: BarChart2, description: 'System-wide reports' },
     { path: '/portal/attendance', label: 'Attendance', icon: Clock, description: 'Track records' },
     { path: '/portal/leave', label: 'Leave', icon: CalendarDays, description: 'Manage leave' },
-    { path: '/portal/purchase-requests', label: 'Purchase Requests', icon: ShoppingBag, description: 'Raise a requisition' },
     { path: '/portal/settings', label: 'Settings', icon: Settings, description: 'System config' },
   ],
-};
-
-/**
- * F20 follow-up: the Department Head Review / Accounts Verification links
- * are no longer part of the static per-roleGroup NAV_ITEMS map above -
- * roleGroup is a coarse role-NAME guess (see useRole's own docstring) that
- * doesn't reflect actual purchase-request permission, and for the seeded
- * PR_TEST_* accounts specifically it can't: their role_name comes back null
- * from the portal login/me endpoints, so every one of them - requester,
- * department head, accounts alike - maps to the same 'staff' group. These
- * two links are instead shown/hidden per-employee based on
- * usePurchaseRequestReviewerAccess, independent of roleGroup, and inserted
- * right after "Purchase Requests" regardless of which role group's base
- * list they're joining.
- */
-const DEPARTMENT_HEAD_REVIEW_ITEM: NavItem = {
-  path: '/portal/purchase-requests/review',
-  label: 'Department Head Review',
-  icon: FileCheck,
-  description: 'Approve or reject as department head',
-};
-
-const ACCOUNTS_VERIFICATION_ITEM: NavItem = {
-  path: '/portal/purchase-requests/accounts',
-  label: 'Accounts Verification',
-  icon: FileCheck,
-  description: 'Verify or reject purchase requests',
-};
-
-/** F21: same pattern as the two items above - gated on canRecommendAsGM, not roleGroup. */
-const GM_RECOMMENDATION_ITEM: NavItem = {
-  path: '/portal/purchase-requests/gm',
-  label: 'GM Recommendation',
-  icon: FileCheck,
-  description: 'Recommend or reject purchase requests',
-};
-
-/** F22: same pattern - gated on canApproveAsDirector, not roleGroup. */
-const DIRECTOR_APPROVAL_ITEM: NavItem = {
-  path: '/portal/purchase-requests/director',
-  label: 'Director Approval',
-  icon: FileCheck,
-  description: 'Approve or reject purchase requests',
-};
-
-/** F23: same pattern - gated on canProcessAsProcurement, not roleGroup. */
-const PROCUREMENT_PROCESSING_ITEM: NavItem = {
-  path: '/portal/purchase-requests/procurement',
-  label: 'Procurement Processing',
-  icon: FileCheck,
-  description: 'Process fully approved purchase requests',
 };
 
 interface SidebarProps {
@@ -172,82 +104,15 @@ interface SidebarProps {
   onClose: () => void;
 }
 
-/**
- * Design refresh (2026-09-29): group the flat per-role lists under a few
- * labeled sections so an 8-13 item nav scans instead of scrolls. Sections
- * are derived from paths (not annotated per item) so the six role lists
- * above and the permission-gated reviewer inserts below keep working
- * unchanged - anything unrecognized falls into MANAGE rather than
- * disappearing.
- */
-const SECTION_ORDER = ['Overview', 'Requests', 'Self service', 'Manage'] as const;
-type NavSection = (typeof SECTION_ORDER)[number];
-
-const REQUEST_PATHS = new Set([
-  PURCHASE_REQUESTS_PATH,
-  '/portal/purchase-requests/review',
-  '/portal/purchase-requests/accounts',
-  '/portal/purchase-requests/gm',
-  '/portal/purchase-requests/director',
-  '/portal/purchase-requests/procurement',
-  '/portal/fuel-requisitions',
-  '/portal/stores-requisitions',
-  '/portal/comparative-schedules',
-]);
-
-const SELF_SERVICE_PATHS = new Set([
-  '/portal/leave',
-  '/portal/payslips',
-  '/portal/attendance',
-  '/portal/expenses',
-]);
-
-function sectionFor(item: NavItem): NavSection {
-  if (item.path === '/portal' || item.path === '/portal/reports') return 'Overview';
-  if (REQUEST_PATHS.has(item.path)) return 'Requests';
-  if (SELF_SERVICE_PATHS.has(item.path)) return 'Self service';
-  return 'Manage';
-}
-
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { roleGroup } = useRole();
-  const {
-    canReviewAsDepartmentHead,
-    canVerifyAsAccounts,
-    canRecommendAsGM,
-    canApproveAsDirector,
-    canProcessAsProcurement,
-  } = usePurchaseRequestReviewerAccess();
-  const purchaseRequestActionCount = usePurchaseRequestActionCount();
-
-  const baseNavItems = NAV_ITEMS[roleGroup] ?? NAV_ITEMS.staff;
-  const reviewerItems: NavItem[] = [];
-  if (canReviewAsDepartmentHead) reviewerItems.push(DEPARTMENT_HEAD_REVIEW_ITEM);
-  if (canVerifyAsAccounts) reviewerItems.push(ACCOUNTS_VERIFICATION_ITEM);
-  if (canRecommendAsGM) reviewerItems.push(GM_RECOMMENDATION_ITEM);
-  if (canApproveAsDirector) reviewerItems.push(DIRECTOR_APPROVAL_ITEM);
-  if (canProcessAsProcurement) reviewerItems.push(PROCUREMENT_PROCESSING_ITEM);
-
-  const navItems = [...baseNavItems];
-  if (reviewerItems.length > 0) {
-    const purchaseRequestsIndex = navItems.findIndex(
-      (item) => item.path === PURCHASE_REQUESTS_PATH
-    );
-    const insertAt = purchaseRequestsIndex === -1 ? navItems.length : purchaseRequestsIndex + 1;
-    navItems.splice(insertAt, 0, ...reviewerItems);
-  }
-
-  const groupedNavItems = SECTION_ORDER.map((section) => ({
-    section,
-    items: navItems.filter((item) => sectionFor(item) === section),
-  })).filter((group) => group.items.length > 0);
+  const navItems = NAV_ITEMS[roleGroup] ?? NAV_ITEMS.staff;
 
   return (
     <>
-      {/* Overlay for mobile - decorative; the X button is the keyboard path */}
+      {/* Overlay for mobile */}
       {isOpen && (
         <div
-          aria-hidden="true"
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 md:hidden"
           onClick={onClose}
         />
@@ -280,25 +145,23 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           </Button>
         </div>
 
-        {/* Navigation - scrollable, grouped into labeled sections */}
-        <nav className="flex-1 overflow-y-auto p-3 space-y-1" aria-label="Primary">
-          {groupedNavItems.map((group) => (
-            <div key={group.section}>
-              <p className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                {group.section}
-              </p>
-              {group.items.map((item) => (
+        {/* Navigation - scrollable */}
+        <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+          <p className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            Menu
+          </p>
+          {navItems.map((item) => (
             <NavLink
               key={item.path + item.label}
               to={item.path}
-              end={EXACT_MATCH_PATHS.has(item.path)}
+              end={item.path === '/portal'}
               onClick={onClose}
               className={({ isActive }) =>
                 cn(
                   'flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200',
                   isActive
-                    ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/25'
-                    : 'text-slate-600 hover:bg-accent hover:text-primary'
+                    ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25'
+                    : 'text-slate-600 hover:bg-blue-50 hover:text-blue-700'
                 )
               }
             >
@@ -311,24 +174,11 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                     )}
                   >
                     <item.icon
-                      className={cn('h-5 w-5', isActive ? 'text-primary-foreground' : 'text-slate-500')}
+                      className={cn('h-5 w-5', isActive ? 'text-white' : 'text-slate-500')}
                     />
                   </div>
                   <div className="min-w-0">
-                    <span className="flex items-center gap-1.5">
-                      <span className="truncate">{item.label}</span>
-                      {item.path === PURCHASE_REQUESTS_PATH && purchaseRequestActionCount > 0 && (
-                        <span
-                          className={cn(
-                            'inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full text-[10px] font-semibold flex-shrink-0',
-                            isActive ? 'bg-white text-blue-700' : 'bg-amber-500 text-white'
-                          )}
-                          aria-label={`${purchaseRequestActionCount} request${purchaseRequestActionCount === 1 ? '' : 's'} need${purchaseRequestActionCount === 1 ? 's' : ''} your attention`}
-                        >
-                          {purchaseRequestActionCount}
-                        </span>
-                      )}
-                    </span>
+                    <span className="block truncate">{item.label}</span>
                     {item.description && (
                       <span
                         className={cn(
@@ -343,8 +193,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 </>
               )}
             </NavLink>
-              ))}
-            </div>
           ))}
         </nav>
 

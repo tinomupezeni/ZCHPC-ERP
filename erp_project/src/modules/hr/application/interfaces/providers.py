@@ -68,8 +68,6 @@ class DepartmentDTO:
     name: str
     description: str
     employee_count: int = 0
-    head_id: int | None = None
-    head_name: str = ""
 
 
 @dataclass(frozen=True)

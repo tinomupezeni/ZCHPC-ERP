@@ -16,13 +16,6 @@ class Application(AggregateRoot[int]):
     Job application aggregate root.
 
     Represents a candidate's application for a specific job.
-
-    The submission fields (resume, contact details, qualifications,
-    experience) record what the applicant sent *with this application*. They
-    belong to the application, not to the canonical Candidate record, so an
-    applicant can revise an application without anyone - in particular an
-    anonymous caller - being able to rewrite the candidate's stored identity
-    or contact data (REM-04).
     """
 
     def __init__(
@@ -34,22 +27,12 @@ class Application(AggregateRoot[int]):
         status: ApplicationStatus = ApplicationStatus.PENDING,
         applied_at: Optional[datetime] = None,
         updated_at: Optional[datetime] = None,
-        resume_path: Optional[str] = None,
-        phone: str = "",
-        address: str = "",
-        qualifications: str = "",
-        experience: str = "",
     ) -> None:
         super().__init__(id)
         self.job_id = job_id
         self.candidate_id = candidate_id
         self.cover_letter = cover_letter
         self.status = status
-        self.resume_path = resume_path
-        self.phone = phone
-        self.address = address
-        self.qualifications = qualifications
-        self.experience = experience
         self.applied_at = applied_at or datetime.now()
         self.updated_at = updated_at or datetime.now()
         self._validate()
@@ -65,11 +48,6 @@ class Application(AggregateRoot[int]):
     def is_active(self) -> bool:
         """Check if application is still active (not final)."""
         return self.status.is_active
-
-    @property
-    def is_decided(self) -> bool:
-        """Hired or Rejected: the application is part of the hiring record."""
-        return self.status.is_final
 
     @property
     def is_hired(self) -> bool:
@@ -129,37 +107,6 @@ class Application(AggregateRoot[int]):
     def update_cover_letter(self, cover_letter: str) -> None:
         """Update the cover letter."""
         self.cover_letter = cover_letter
-        self.updated_at = datetime.now()
-
-    def update_submission(
-        self,
-        cover_letter: str,
-        phone: str,
-        address: str,
-        qualifications: str,
-        experience: str,
-        resume_path: Optional[str] = None,
-    ) -> None:
-        """
-        Replace what the applicant submitted with this application.
-
-        A resubmission without a new resume keeps the one already on file.
-        The review status is not touched - only reviewers change it. A decided
-        (Hired/Rejected) application's submission is evidence for that
-        decision and can no longer be replaced.
-        """
-        if self.is_decided:
-            raise ValidationError(
-                f"Cannot change the submission of a {self.status.value} application",
-                code="APPLICATION_DECIDED",
-            )
-        self.cover_letter = cover_letter
-        self.phone = phone
-        self.address = address
-        self.qualifications = qualifications
-        self.experience = experience
-        if resume_path:
-            self.resume_path = resume_path
         self.updated_at = datetime.now()
 
     def change_status(self, new_status: ApplicationStatus) -> None:

@@ -1,3 +1,0 @@
-"""
-Recruitment file storage adapters.
-"""

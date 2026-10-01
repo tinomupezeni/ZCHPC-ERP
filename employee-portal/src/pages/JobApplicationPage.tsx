@@ -76,6 +76,7 @@ export function JobApplicationPage() {
 
       if (result.has_applied) {
         setHasAlreadyApplied(true);
+        toast.error('You have already applied for this position.');
       } else {
         setHasAlreadyApplied(false);
       }
@@ -118,6 +119,11 @@ export function JobApplicationPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (hasAlreadyApplied) {
+      toast.error('You have already applied for this position.');
+      return;
+    }
+
     // Validate required fields
     if (
       !formData.id_number ||
@@ -131,20 +137,16 @@ export function JobApplicationPage() {
 
     try {
       setIsSubmitting(true);
-      const result = await jobsService.submitApplication({
+      await jobsService.submitApplication({
         ...formData,
         resume: resume || undefined,
       });
 
       setSubmitted(true);
-      toast.success(result.message || 'Application submitted successfully!');
+      toast.success('Application submitted successfully!');
     } catch (err: any) {
       const message =
-        err.response?.status === 429
-          ? 'Too many submissions. Please wait a while and try again.'
-          : err.response?.data?.error ||
-            err.response?.data?.detail ||
-            'Failed to submit application.';
+        err.response?.data?.detail || 'Failed to submit application.';
       toast.error(message);
     } finally {
       setIsSubmitting(false);
@@ -251,10 +253,9 @@ export function JobApplicationPage() {
                     </p>
                   )}
                   {hasAlreadyApplied && (
-                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    <p className="text-sm text-destructive flex items-center gap-1">
                       <AlertCircle className="h-4 w-4" />
-                      You have already applied for this position. Submitting
-                      again will update your existing application.
+                      You have already applied for this position
                     </p>
                   )}
                 </div>
@@ -435,12 +436,11 @@ export function JobApplicationPage() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting
-                    ? 'Submitting...'
-                    : hasAlreadyApplied
-                      ? 'Update Application'
-                      : 'Submit Application'}
+                <Button
+                  type="submit"
+                  disabled={isSubmitting || hasAlreadyApplied}
+                >
+                  {isSubmitting ? 'Submitting...' : 'Submit Application'}
                 </Button>
               </div>
             </CardContent>

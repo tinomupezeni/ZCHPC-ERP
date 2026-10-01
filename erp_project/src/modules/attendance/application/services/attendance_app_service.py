@@ -108,7 +108,7 @@ class AttendanceService:
         else:
             # Create new record
             record = AttendanceRecord.create_for_clock_in(
-                id=None,  # database-assigned on insert (REM-06)
+                id=self.attendance_repo.get_next_id(),
                 employee_id=command.employee_id,
                 record_date=today,
                 clock_in_time=clock_time,

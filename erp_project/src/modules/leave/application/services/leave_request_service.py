@@ -6,12 +6,8 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Sequence
 
-from shared.domain.exceptions import AuthorizationError, NotFoundError, ValidationError
+from shared.domain.exceptions import NotFoundError, ValidationError
 
-from modules.leave.application.authorization import (
-    LeaveActor,
-    LeaveAuthorizationPolicy,
-)
 from modules.leave.application.interfaces import (
     ILeaveBalanceRepository,
     ILeaveRequestRepository,
@@ -45,7 +41,7 @@ class ReviewLeaveRequestCommand:
     """Command to approve or reject a leave request."""
 
     request_id: int
-    reviewer_id: int | None  # the acting employee; None only for an unlinked superuser
+    reviewer_id: int
     approved: bool
     rejection_reason: str | None = None
 
@@ -61,9 +57,7 @@ class LeaveRequestService:
     """
     Application service for leave request operations.
 
-    Handles use cases related to leave requests. Every public method takes
-    the acting LeaveActor and authorizes it through LeaveAuthorizationPolicy
-    before anything is disclosed or changed (REM-03).
+    Handles use cases related to leave requests.
     """
 
     def __init__(
@@ -74,7 +68,6 @@ class LeaveRequestService:
         conflict_detector: ILeaveConflictDetector,
         balance_calculator: ILeaveBalanceCalculator,
         approval_policy: ILeaveApprovalPolicy,
-        authorization_policy: LeaveAuthorizationPolicy | None = None,
     ) -> None:
         self._request_repository = request_repository
         self._balance_repository = balance_repository
@@ -82,14 +75,11 @@ class LeaveRequestService:
         self._conflict_detector = conflict_detector
         self._balance_calculator = balance_calculator
         self._approval_policy = approval_policy
-        self._authz = authorization_policy or LeaveAuthorizationPolicy()
 
     def submit_leave_request(
-        self, command: SubmitLeaveRequestCommand, actor: LeaveActor
+        self, command: SubmitLeaveRequestCommand
     ) -> LeaveRequestDTO:
-        """Submit a new leave request (only ever in the actor's own name)."""
-        self._authz.authorize_submit(actor, command.employee_id)
-
+        """Submit a new leave request."""
         # Verify leave type exists and is active
         leave_type = self._leave_type_repository.get_by_id(command.leave_type_id)
         if not leave_type:
@@ -143,7 +133,7 @@ class LeaveRequestService:
 
         # Create the request
         request = LeaveRequest(
-            id=None,  # database-assigned on insert (REM-06)
+            id=self._request_repository.get_next_id(),
             employee_id=command.employee_id,
             leave_type_id=command.leave_type_id,
             period=period,
@@ -160,28 +150,31 @@ class LeaveRequestService:
             )
             raise ValidationError(f"Leave request conflicts with existing requests: {conflict_dates}")
 
-        saved = self._request_repository.save(request)
-
-        # Add domain event once persisted, so it carries the database-assigned id
-        saved.add_domain_event(
+        # Add domain event
+        request.add_domain_event(
             LeaveRequested(
-                request_id=saved.id,
-                employee_id=saved.employee_id,
-                leave_type_id=saved.leave_type_id,
-                start_date=saved.start_date,
-                end_date=saved.end_date,
-                days=saved.days,
+                request_id=request.id,
+                employee_id=request.employee_id,
+                leave_type_id=request.leave_type_id,
+                start_date=request.start_date,
+                end_date=request.end_date,
+                days=request.days,
             )
         )
+
+        saved = self._request_repository.save(request)
         return self._to_dto(saved, leave_type.name)
 
     def approve_leave_request(
-        self, command: ReviewLeaveRequestCommand, actor: LeaveActor
+        self, command: ReviewLeaveRequestCommand
     ) -> LeaveRequestDTO:
         """Approve a leave request."""
-        request = self._load_for_review(command, actor)
         if not command.approved:
             raise ValidationError("Use reject method for rejecting requests")
+
+        request = self._request_repository.get_by_id(command.request_id)
+        if not request:
+            raise NotFoundError(f"Leave request with ID {command.request_id} not found")
 
         leave_type = self._leave_type_repository.get_by_id(request.leave_type_id)
         if not leave_type:
@@ -225,10 +218,12 @@ class LeaveRequestService:
         return self._to_dto(saved, leave_type.name)
 
     def reject_leave_request(
-        self, command: ReviewLeaveRequestCommand, actor: LeaveActor
+        self, command: ReviewLeaveRequestCommand
     ) -> LeaveRequestDTO:
         """Reject a leave request."""
-        request = self._load_for_review(command, actor)
+        request = self._request_repository.get_by_id(command.request_id)
+        if not request:
+            raise NotFoundError(f"Leave request with ID {command.request_id} not found")
 
         leave_type = self._leave_type_repository.get_by_id(request.leave_type_id)
         if not leave_type:
@@ -260,11 +255,10 @@ class LeaveRequestService:
         return self._to_dto(saved, leave_type.name)
 
     def cancel_leave_request(
-        self, command: CancelLeaveRequestCommand, actor: LeaveActor
+        self, command: CancelLeaveRequestCommand
     ) -> LeaveRequestDTO:
-        """Cancel a leave request: the owner's own, or anyone's with cancel_any."""
+        """Cancel a leave request."""
         request = self._request_repository.get_by_id(command.request_id)
-        self._authz.authorize_cancel_request(actor, request.employee_id if request else None)
         if not request:
             raise NotFoundError(f"Leave request with ID {command.request_id} not found")
 
@@ -303,10 +297,9 @@ class LeaveRequestService:
         saved = self._request_repository.save(request)
         return self._to_dto(saved, leave_type.name)
 
-    def get_leave_request(self, request_id: int, actor: LeaveActor) -> LeaveRequestDTO:
-        """Get a leave request by ID: the owner's own, or anyone's with view_any."""
+    def get_leave_request(self, request_id: int) -> LeaveRequestDTO:
+        """Get a leave request by ID."""
         request = self._request_repository.get_by_id(request_id)
-        self._authz.authorize_view_request(actor, request.employee_id if request else None)
         if not request:
             raise NotFoundError(f"Leave request with ID {request_id} not found")
 
@@ -317,12 +310,10 @@ class LeaveRequestService:
     def get_employee_requests(
         self,
         employee_id: int,
-        actor: LeaveActor,
         year: int | None = None,
         status: LeaveStatus | None = None,
     ) -> Sequence[LeaveRequestDTO]:
         """Get leave requests for an employee."""
-        self._authz.authorize_view_employee_requests(actor, employee_id)
         requests = self._request_repository.get_by_employee(
             employee_id=employee_id,
             year=year,
@@ -337,24 +328,12 @@ class LeaveRequestService:
             for r in requests
         ]
 
-    def get_pending_requests(self, actor: LeaveActor) -> Sequence[LeaveRequestDTO]:
-        """
-        Pending requests, scoped to the actor.
-
-        A holder of the review capability gets the review queue: every pending
-        request they may review (never their own - the domain forbids
-        self-review). Anyone else gets only their own pending requests.
-        """
-        if self._authz.may_review_requests(actor):
-            requests = self._authz.filter_reviewable_requests(
-                actor, self._request_repository.get_pending_requests()
-            )
-        elif actor.employee_id is not None:
-            requests = self._request_repository.get_pending_requests(
-                employee_id=actor.employee_id
-            )
-        else:
-            requests = []
+    def get_pending_requests(
+        self,
+        employee_id: int | None = None,
+    ) -> Sequence[LeaveRequestDTO]:
+        """Get pending leave requests."""
+        requests = self._request_repository.get_pending_requests(employee_id=employee_id)
 
         # Get leave type names
         leave_types = {lt.id: lt.name for lt in self._leave_type_repository.get_all()}
@@ -368,10 +347,8 @@ class LeaveRequestService:
         self,
         employee_id: int,
         year: int,
-        actor: LeaveActor,
     ) -> LeaveRequestSummaryDTO:
         """Get summary of leave requests for an employee."""
-        self._authz.authorize_view_employee_requests(actor, employee_id)
         requests = self._request_repository.get_by_employee(
             employee_id=employee_id,
             year=year,
@@ -393,26 +370,6 @@ class LeaveRequestService:
             cancelled_requests=cancelled,
             total_days_taken=total_days_taken,
         )
-
-    def _load_for_review(
-        self, command: ReviewLeaveRequestCommand, actor: LeaveActor
-    ) -> LeaveRequest:
-        """
-        Authorize a review before anything else, and bind the reviewer to the
-        actor: a caller-supplied reviewer_id could otherwise defeat the
-        domain's self-review prohibition, which compares against it.
-        """
-        self._authz.authorize_review_request(actor, None)  # capability, before any lookup
-        if command.reviewer_id != actor.employee_id:
-            raise AuthorizationError(
-                "The reviewer must be the acting user",
-                code="LEAVE_REVIEWER_MISMATCH",
-            )
-        request = self._request_repository.get_by_id(command.request_id)
-        if not request:
-            raise NotFoundError(f"Leave request with ID {command.request_id} not found")
-        self._authz.authorize_review_request(actor, request.employee_id)
-        return request
 
     def _to_dto(self, request: LeaveRequest, leave_type_name: str) -> LeaveRequestDTO:
         """Convert entity to DTO."""

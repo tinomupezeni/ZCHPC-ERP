@@ -31,13 +31,7 @@ export const useLogin = () => {
 
     try {
       const loggedInUser = await login(email, password);
-
-      // REM-07: a temporary password must be replaced before anything else
-      if (loggedInUser?.must_change_password) {
-        setPendingNavigation("/change-password");
-        return;
-      }
-
+      
       // Check if user is admin/superuser first
       if (loggedInUser?.is_superuser || loggedInUser?.is_staff) {
         toast.success(`Welcome back, ${loggedInUser.first_name}!`);

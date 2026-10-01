@@ -7,12 +7,8 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Sequence
 
-from shared.domain.exceptions import AuthorizationError, NotFoundError, ValidationError
+from shared.domain.exceptions import NotFoundError, ValidationError
 
-from modules.leave.application.authorization import (
-    LeaveActor,
-    LeaveAuthorizationPolicy,
-)
 from modules.leave.application.interfaces import (
     ILeaveBalanceRepository,
     ILeaveRequestRepository,
@@ -43,7 +39,7 @@ class AdjustLeaveBalanceCommand:
     balance_id: int
     adjustment_days: Decimal
     reason: str
-    adjusted_by_id: int | None  # the acting employee
+    adjusted_by_id: int
 
 
 @dataclass
@@ -60,10 +56,7 @@ class LeaveBalanceService:
     """
     Application service for leave balance operations.
 
-    Handles use cases related to leave balances. Reading a balance is open
-    to its owner or a holder of ``leave.balance.view_any``; setting,
-    adjusting and initializing balances needs ``leave.balance.manage``
-    (REM-03). Authorization runs before anything is disclosed or changed.
+    Handles use cases related to leave balances.
     """
 
     def __init__(
@@ -72,20 +65,16 @@ class LeaveBalanceService:
         leave_type_repository: ILeaveTypeRepository,
         request_repository: ILeaveRequestRepository,
         balance_calculator: ILeaveBalanceCalculator,
-        authorization_policy: LeaveAuthorizationPolicy | None = None,
     ) -> None:
         self._balance_repository = balance_repository
         self._leave_type_repository = leave_type_repository
         self._request_repository = request_repository
         self._balance_calculator = balance_calculator
-        self._authz = authorization_policy or LeaveAuthorizationPolicy()
 
     def create_or_update_balance(
-        self, command: SetLeaveEntitlementCommand, actor: LeaveActor
+        self, command: SetLeaveEntitlementCommand
     ) -> LeaveBalanceDTO:
         """Create or update leave balance for an employee."""
-        self._authz.authorize_manage_balance(actor, command.employee_id)
-
         # Verify leave type exists
         leave_type = self._leave_type_repository.get_by_id(command.leave_type_id)
         if not leave_type:
@@ -109,7 +98,7 @@ class LeaveBalanceService:
                 used_days=Decimal("0"),
             )
             balance = LeaveBalance(
-                id=None,  # database-assigned on insert (REM-06)
+                id=self._balance_repository.get_next_id(),
                 employee_id=command.employee_id,
                 leave_type_id=command.leave_type_id,
                 year=command.year,
@@ -119,24 +108,11 @@ class LeaveBalanceService:
 
         return self._to_dto(saved, leave_type.name)
 
-    def adjust_balance(
-        self, command: AdjustLeaveBalanceCommand, actor: LeaveActor
-    ) -> LeaveBalanceDTO:
+    def adjust_balance(self, command: AdjustLeaveBalanceCommand) -> LeaveBalanceDTO:
         """Adjust a leave balance (add or subtract days)."""
-        self._authz.authorize_manage_balance(actor, None)  # capability, before any lookup
-        if command.adjusted_by_id != actor.employee_id:
-            raise AuthorizationError(
-                "The adjuster must be the acting user",
-                code="LEAVE_ADJUSTER_MISMATCH",
-            )
-        if actor.employee_id is None:
-            # The adjustment event is attributed to an employee.
-            raise ValidationError("User is not linked to an employee record")
-
         balance = self._balance_repository.get_by_id(command.balance_id)
         if not balance:
             raise NotFoundError(f"Leave balance with ID {command.balance_id} not found")
-        self._authz.authorize_manage_balance(actor, balance.employee_id)
 
         # Get leave type name
         leave_type = self._leave_type_repository.get_by_id(balance.leave_type_id)
@@ -163,25 +139,13 @@ class LeaveBalanceService:
         saved = self._balance_repository.save(balance)
         return self._to_dto(saved, leave_type.name)
 
-    def get_balance_by_id(self, balance_id: int, actor: LeaveActor) -> LeaveBalanceDTO:
-        """A single balance: the owner's own, or anyone's with balance view_any."""
-        balance = self._balance_repository.get_by_id(balance_id)
-        self._authz.authorize_view_balance(actor, balance.employee_id if balance else None)
-        if not balance:
-            raise NotFoundError("Leave balance not found")
-
-        leave_type = self._leave_type_repository.get_by_id(balance.leave_type_id)
-        return self._to_dto(balance, leave_type.name if leave_type else "Unknown")
-
     def get_balance(
         self,
         employee_id: int,
         leave_type_id: int,
         year: int,
-        actor: LeaveActor,
     ) -> LeaveBalanceDTO | None:
         """Get leave balance for employee, type, and year."""
-        self._authz.authorize_view_balance(actor, employee_id)
         balance = self._balance_repository.get_by_employee_and_type_and_year(
             employee_id=employee_id,
             leave_type_id=leave_type_id,
@@ -198,10 +162,8 @@ class LeaveBalanceService:
         self,
         employee_id: int,
         year: int,
-        actor: LeaveActor,
     ) -> LeaveBalanceSummaryDTO:
         """Get all leave balances for an employee in a year."""
-        self._authz.authorize_view_balance(actor, employee_id)
         balances = self._balance_repository.get_by_employee_and_year(
             employee_id=employee_id,
             year=year,
@@ -237,10 +199,8 @@ class LeaveBalanceService:
         employee_id: int,
         leave_type_id: int,
         year: int,
-        actor: LeaveActor,
     ) -> Decimal:
         """Get available days considering pending requests."""
-        self._authz.authorize_view_balance(actor, employee_id)
         balance = self._balance_repository.get_by_employee_and_type_and_year(
             employee_id=employee_id,
             leave_type_id=leave_type_id,
@@ -265,15 +225,8 @@ class LeaveBalanceService:
         self,
         employee_id: int,
         year: int,
-        actor: LeaveActor,
     ) -> Sequence[LeaveBalanceDTO]:
-        """
-        Initialize all leave balances for an employee using default days.
-
-        Requires ``leave.balance.manage`` even for the actor's own balances:
-        no business rule establishes employee self-initialization.
-        """
-        self._authz.authorize_manage_balance(actor, employee_id)
+        """Initialize all leave balances for an employee using default days."""
         leave_types = self._leave_type_repository.get_all(include_inactive=False)
         results = []
 
@@ -294,7 +247,7 @@ class LeaveBalanceService:
                 used_days=Decimal("0"),
             )
             balance = LeaveBalance(
-                id=None,  # database-assigned on insert (REM-06)
+                id=self._balance_repository.get_next_id(),
                 employee_id=employee_id,
                 leave_type_id=leave_type.id,
                 year=year,

@@ -179,46 +179,6 @@ class JobResponseSerializer(serializers.Serializer):
     applicants_count = serializers.IntegerField()
 
 
-class PublicJobResponseSerializer(serializers.Serializer):
-    """
-    Public careers job contract - mirrors PublicJobDTO field for field.
-
-    An explicit allowlist: it is *not* derived from JobResponseSerializer, so
-    fields added for internal use never become public by accident.
-    ``applicants_count`` is deliberately absent; salary is deliberately public.
-    """
-
-    id = serializers.IntegerField()
-    title = serializers.CharField()
-    department_id = serializers.IntegerField()
-    department_name = serializers.CharField()
-    position_id = serializers.IntegerField(allow_null=True)
-    position_title = serializers.CharField(allow_null=True)
-    status = serializers.CharField()
-    location = serializers.CharField()
-    reports_to = serializers.CharField()
-    salary_usd_min = serializers.DecimalField(
-        max_digits=12, decimal_places=2, allow_null=True
-    )
-    salary_usd_max = serializers.DecimalField(
-        max_digits=12, decimal_places=2, allow_null=True
-    )
-    salary_zig_min = serializers.DecimalField(
-        max_digits=12, decimal_places=2, allow_null=True
-    )
-    salary_zig_max = serializers.DecimalField(
-        max_digits=12, decimal_places=2, allow_null=True
-    )
-    is_internal = serializers.BooleanField()
-    description = serializers.CharField()
-    responsibilities = serializers.ListField(child=serializers.CharField())
-    qualifications = serializers.ListField(child=serializers.CharField())
-    competencies = serializers.ListField(child=serializers.CharField())
-    application_process = serializers.CharField()
-    contact_email = serializers.EmailField()
-    posted_date = serializers.DateField()
-
-
 class CandidateResponseSerializer(serializers.Serializer):
     """Serializer for candidate responses."""
 
@@ -250,22 +210,6 @@ class ApplicationResponseSerializer(serializers.Serializer):
     updated_at = serializers.DateTimeField()
 
 
-class PublicApplicationReceiptSerializer(serializers.Serializer):
-    """
-    What an anonymous applicant gets back after submitting.
-
-    Only facts about the application itself - never candidate identity
-    (name, email, candidate id), which the caller has not proven they own.
-    """
-
-    id = serializers.IntegerField()
-    job_id = serializers.IntegerField()
-    job_title = serializers.CharField()
-    status = serializers.CharField()
-    applied_at = serializers.DateTimeField()
-    updated_at = serializers.DateTimeField()
-
-
 class ApplicationStatusResponseSerializer(serializers.Serializer):
     """Serializer for application status responses."""
 
@@ -276,9 +220,9 @@ class ApplicationStatusResponseSerializer(serializers.Serializer):
 
 
 class CheckApplicationResponseSerializer(serializers.Serializer):
-    """
-    Public check-application response: only what the careers form needs.
-    No candidate identity, and no separate "candidate exists" signal.
-    """
+    """Serializer for check application response."""
 
+    candidate_exists = serializers.BooleanField()
     has_applied = serializers.BooleanField()
+    candidate_id = serializers.IntegerField(required=False)
+    candidate_name = serializers.CharField(required=False)

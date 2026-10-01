@@ -4,11 +4,9 @@ Organization application service for departments and positions.
 
 from dataclasses import dataclass
 
-from shared.domain.exceptions import AuthorizationError, ValidationError, NotFoundError
+from shared.domain.exceptions import ValidationError, NotFoundError
 from shared.infrastructure import EventBus
 
-from modules.hr.application.authorization import DepartmentManagementPermissions
-from modules.identity.domain.value_objects import PermissionSet
 from modules.hr.application.interfaces import (
     IDepartmentRepository,
     IPositionRepository,
@@ -42,7 +40,6 @@ class UpdateDepartmentCommand:
     department_id: int
     name: str | None = None
     description: str | None = None
-    head_id: int | None = None
 
 
 @dataclass
@@ -67,27 +64,7 @@ class UpdatePositionCommand:
 class DepartmentService:
     """
     Application service for department operations.
-
-    Every mutation - create, update (name, description, head) and delete -
-    requires DepartmentManagementPermissions.MANAGE (AUD-01 F8), checked at
-    the top of each method before the department is loaded, the same shape
-    as RoleService. RBACMiddleware's "holds anything in hr" gate only decides
-    who may reach these routes; reads stay governed by that gate alone.
     """
-
-    @staticmethod
-    def _authorize_department_administration(actor_permissions: PermissionSet | None) -> None:
-        """None means no actor context and holds nothing (fail closed)."""
-        if (actor_permissions or PermissionSet.empty()).has_permission(
-            DepartmentManagementPermissions.MANAGE
-        ):
-            return
-
-        raise AuthorizationError(
-            "Administering departments requires the "
-            f"'{DepartmentManagementPermissions.MANAGE}' permission.",
-            code="DEPARTMENT_ADMINISTRATION_NOT_AUTHORIZED",
-        )
 
     def __init__(
         self,
@@ -100,24 +77,16 @@ class DepartmentService:
         self._employees = employee_repository
         self._event_bus = event_bus or EventBus.get_instance()
 
-    def create_department(
-        self, command: CreateDepartmentCommand, actor_permissions: PermissionSet | None = None
-    ) -> Department:
+    def create_department(self, command: CreateDepartmentCommand) -> Department:
         """
         Create a new department.
 
         Args:
             command: Create department command
-            actor_permissions: The acting user's permissions (None holds nothing)
 
         Returns:
             Created department
-
-        Raises:
-            AuthorizationError: If the actor lacks DepartmentManagementPermissions.MANAGE.
         """
-        self._authorize_department_administration(actor_permissions)
-
         # Check uniqueness
         if self._departments.exists_by_name(command.name):
             raise ValidationError(
@@ -142,25 +111,16 @@ class DepartmentService:
 
         return department
 
-    def update_department(
-        self, command: UpdateDepartmentCommand, actor_permissions: PermissionSet | None = None
-    ) -> Department:
+    def update_department(self, command: UpdateDepartmentCommand) -> Department:
         """
-        Update an existing department, including its head.
+        Update an existing department.
 
         Args:
             command: Update department command
-            actor_permissions: The acting user's permissions (None holds nothing)
 
         Returns:
             Updated department
-
-        Raises:
-            AuthorizationError: If the actor lacks DepartmentManagementPermissions.MANAGE.
-            NotFoundError: If the department does not exist.
         """
-        self._authorize_department_administration(actor_permissions)
-
         department = self._departments.get_by_id(command.department_id)
         if not department:
             raise NotFoundError(f"Department with ID {command.department_id} not found")
@@ -180,26 +140,7 @@ class DepartmentService:
         if command.description is not None and command.description != department.description:
             changes.append("description")
 
-        if command.head_id is not None and command.head_id != department.head_id:
-            # The purpose of this field is only to identify the employee
-            # responsible for departmental approval - not to gate who may be
-            # assigned by role or permission (see F10-PR scope). It must
-            # still refer to a real employee, or PurchaseRequestDecision's
-            # non-nullable actor reference would fail later, on approval,
-            # for reasons invisible from this endpoint.
-            head = self._employees.get_by_id(command.head_id)
-            if head is None:
-                raise ValidationError(
-                    message=f"Employee with ID {command.head_id} does not exist",
-                    code="INVALID_DEPARTMENT_HEAD",
-                )
-            changes.append("head")
-
-        department.update(
-            name=command.name,
-            description=command.description,
-            head_id=command.head_id,
-        )
+        department.update(name=command.name, description=command.description)
         self._departments.update(department)
 
         if changes:
@@ -213,25 +154,16 @@ class DepartmentService:
 
         return department
 
-    def delete_department(
-        self, department_id: int, actor_permissions: PermissionSet | None = None
-    ) -> bool:
+    def delete_department(self, department_id: int) -> bool:
         """
         Delete a department.
 
         Args:
             department_id: Department ID
-            actor_permissions: The acting user's permissions (None holds nothing)
 
         Returns:
             True if deleted
-
-        Raises:
-            AuthorizationError: If the actor lacks DepartmentManagementPermissions.MANAGE.
-            NotFoundError: If the department does not exist.
         """
-        self._authorize_department_administration(actor_permissions)
-
         department = self._departments.get_by_id(department_id)
         if not department:
             raise NotFoundError(f"Department with ID {department_id} not found")
@@ -271,20 +203,11 @@ class DepartmentService:
     def _to_dto(self, department: Department) -> DepartmentDTO:
         """Convert department entity to DTO."""
         employee_count = len(self._employees.get_by_department(department.id))
-
-        head_name = ""
-        if department.head_id is not None:
-            head = self._employees.get_by_id(department.head_id)
-            if head is not None:
-                head_name = f"{head.first_name} {head.surname}".strip()
-
         return DepartmentDTO(
             id=department.id,
             name=department.name,
             description=department.description,
             employee_count=employee_count,
-            head_id=department.head_id,
-            head_name=head_name,
         )
 
 

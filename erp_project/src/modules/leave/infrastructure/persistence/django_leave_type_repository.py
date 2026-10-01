@@ -8,7 +8,6 @@ from modules.leave.infrastructure.persistence.models import LeaveType as LeaveTy
 
 from modules.leave.application.interfaces import ILeaveTypeRepository
 from modules.leave.domain.entities import LeaveType
-from shared.infrastructure.persistence import insert_or_update
 
 
 class DjangoLeaveTypeRepository(ILeaveTypeRepository):
@@ -38,17 +37,10 @@ class DjangoLeaveTypeRepository(ILeaveTypeRepository):
         return [self._to_entity(model) for model in queryset]
 
     def save(self, leave_type: LeaveType) -> LeaveType:
-        """
-        Save leave type.
-
-        A new type (id None) is inserted with a database-assigned id; a type
-        with an id updates exactly that row, and an unknown id raises
-        NotFoundError rather than inserting (REM-06).
-        """
-        model = insert_or_update(
-            LeaveTypeModel,
-            leave_type.id,
-            {
+        """Save leave type."""
+        model, created = LeaveTypeModel.objects.update_or_create(
+            id=leave_type.id,
+            defaults={
                 "name": leave_type.name,
                 "default_days_allowed": leave_type.default_days_allowed,
             },
@@ -58,6 +50,11 @@ class DjangoLeaveTypeRepository(ILeaveTypeRepository):
     def delete(self, leave_type_id: int) -> None:
         """Delete leave type."""
         LeaveTypeModel.objects.filter(id=leave_type_id).delete()
+
+    def get_next_id(self) -> int:
+        """Get next available ID."""
+        last = LeaveTypeModel.objects.order_by("-id").first()
+        return (last.id + 1) if last else 1
 
     def _to_entity(self, model: LeaveTypeModel) -> LeaveType:
         """Convert Django model to domain entity."""

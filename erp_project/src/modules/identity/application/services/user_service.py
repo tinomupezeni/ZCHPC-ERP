@@ -2,65 +2,39 @@
 User management application service.
 
 Orchestrates user CRUD operations.
-
-Authorization (REM-08) lives here, not in the HTTP view, so a caller that
-skips the view or the middleware is held to the same rules. Every mutating
-method takes the acting user's permissions (resolve_actor_permissions) and
-is judged by the same EmployeeAuthorizationPolicy REM-01 introduced - an
-application login is an employee's login, so there is one policy for both:
-
-- create: hr.employee.create; any role goes through EmployeeService and so
-  through REM-01's assignment rules (manage_assignments, role must exist,
-  no role above the actor's own permissions, no self-escalation);
-- disable a login: hr.employee.deactivate; re-enable or unlock one:
-  hr.employee.reactivate; permanently delete one: hr.employee.delete - each
-  refusing the actor's own account and anyone holding more than the actor.
-
-Staff and superuser status are never written here. They are platform-level
-flags granted only by operator bootstrap (createsuperuser, seed_admin,
-create_test_account, entrypoint.sh), never by an API caller.
-
-Credentials (REM-07): every login this service creates or re-enables holds a
-password someone other than its owner knows - chosen by the creator or
-issued by generate_temp_password() - so it is marked must_change_password
-and RBACMiddleware confines it to the password change until the owner
-replaces it (change_password). Reactivation never restores the previous
-password; it issues a new temporary one.
 """
 
-import logging
 import secrets
 import string
 
 from dataclasses import dataclass
 from uuid import UUID
 
-from django.db import transaction
 
 from shared.domain.exceptions import ConflictError, NotFoundError, ValidationError
 from shared.domain.value_objects import Email
 
-from modules.hr.application.authorization import EmployeeAuthorizationPolicy
 from modules.identity.application.interfaces import (
+    IAuditLogRepository,
     IUserRepository,
     UserDTO,
 )
-from modules.identity.domain.entities import User
-from modules.identity.domain.value_objects import PermissionSet
-
-logger = logging.getLogger(__name__)
+from modules.identity.domain.entities import AuditLogEntry, User
 
 
 @dataclass
 class CreateUserCommand:
-    """Command to create a new user, optionally with an employee record."""
+    """Command to create a new user."""
 
     email: str
     first_name: str
     last_name: str
     password: str | None = None  # If None, generates temp password
-    role_id: int | None = None
-    department_id: int | None = None
+    is_staff: bool = False
+    is_superuser: bool = False
+    actor_id: UUID | None = None  # Who is creating this user
+    ip_address: str = "0.0.0.0"
+    user_agent: str = ""
 
 
 @dataclass
@@ -71,19 +45,15 @@ class UpdateUserCommand:
     first_name: str | None = None
     last_name: str | None = None
     is_active: bool | None = None
+    is_staff: bool | None = None
+    actor_id: UUID | None = None  # Who is updating this user
+    ip_address: str = "0.0.0.0"
+    user_agent: str = ""
 
 
 @dataclass
 class CreateUserResult:
     """Result of user creation."""
-
-    user: UserDTO
-    temp_password: str | None = None
-
-
-@dataclass
-class UpdateUserResult:
-    """Result of a user update; a reactivation issues a temporary password."""
 
     user: UserDTO
     temp_password: str | None = None
@@ -106,51 +76,35 @@ class UserService:
     Handles CRUD operations and user administration.
     """
 
-    def __init__(self, user_repository: IUserRepository, employee_service=None) -> None:
+    def __init__(
+        self,
+        user_repository: IUserRepository,
+        audit_repository: IAuditLogRepository | None = None,
+    ) -> None:
         """
         Initialize user service.
 
         Args:
             user_repository: Repository for user data
-            employee_service: modules.hr EmployeeService used to create the
-                employee record for a new login (built on first use if None)
+            audit_repository: Repository for audit logs (optional)
         """
         self._user_repo = user_repository
-        self._employee_service = employee_service
-        self._policy = EmployeeAuthorizationPolicy()
+        self._audit_repo = audit_repository
 
-    def create_user(
-        self,
-        command: CreateUserCommand,
-        actor_permissions: PermissionSet | None = None,
-        actor_email: str | None = None,
-    ) -> CreateUserResult:
+    def create_user(self, command: CreateUserCommand) -> CreateUserResult:
         """
-        Create a new login and, if a role or department is given, its
-        employee record - both or neither.
+        Create a new user.
 
         Args:
             command: User creation command
-            actor_permissions: The acting user's permissions. None holds
-                nothing. Needs hr.employee.create; the employee record is
-                created by EmployeeService, which applies REM-01's
-                role-assignment rules.
-            actor_email: The acting user's login email, from the
-                authenticated request (REM-01's self-assignment check).
 
         Returns:
             CreateUserResult with user and temp password
 
         Raises:
-            AuthorizationError: If the actor may not create this account or
-                assign the requested role
             ConflictError: If email already exists
-            ValidationError: If data is invalid (including an unknown role)
-            NotFoundError: If the requested department does not exist
+            ValidationError: If data is invalid
         """
-        actor_permissions = actor_permissions or PermissionSet.empty()
-        self._policy.authorize_create(actor_permissions)
-
         # Check for duplicate email
         email = command.email.lower().strip()
         if self._user_repo.exists_by_email(email):
@@ -160,6 +114,7 @@ class UserService:
                 details={"email": email},
             )
 
+        
         # Use provided password or generate a secure temporary password
         if command.password:
             password = command.password
@@ -167,22 +122,29 @@ class UserService:
         else:
             password = generate_temp_password()
             temp_password = password
-
-        # Staff/superuser are deliberately not parameters: a created login
-        # never holds platform-level authority. Whoever created it knows its
-        # password, so the owner must replace it at first login (REM-07).
+              
+        # Create user
         user = User.create(
             email=email,
             password=password,
             first_name=command.first_name,
             last_name=command.last_name,
-            must_change_password=True,
+            is_staff=command.is_staff,
+            is_superuser=command.is_superuser,
         )
 
-        with transaction.atomic():
-            self._user_repo.add(user)
-            if command.role_id is not None or command.department_id is not None:
-                self._create_employee_record(user, command, actor_permissions, actor_email)
+        self._user_repo.add(user)
+
+        # Log user creation if audit repository is available
+        if self._audit_repo and command.actor_id:
+            entry = AuditLogEntry.create_user_created(
+                actor_id=command.actor_id,
+                target_user_id=user.id,
+                target_email=user.email.value,
+                ip_address=command.ip_address,
+                user_agent=command.user_agent,
+            )
+            self._audit_repo.add(entry)
 
         return CreateUserResult(
             user=self._to_dto(user),
@@ -246,63 +208,25 @@ class UserService:
         users = self._user_repo.get_all(include_inactive=include_inactive)
         return [self._to_dto(u) for u in users]
 
-    def update_user(
-        self,
-        command: UpdateUserCommand,
-        actor_permissions: PermissionSet | None = None,
-        actor_user_id: UUID | None = None,
-    ) -> UpdateUserResult:
+    def update_user(self, command: UpdateUserCommand) -> UserDTO:
         """
         Update a user.
 
-        Anyone may change their own name. Changing another user's name needs
-        hr.employee.create (authority over provisioning logins). Disabling a
-        login needs hr.employee.deactivate and re-enabling one needs
-        hr.employee.reactivate; both refuse the actor's own account and
-        anyone holding permissions the actor lacks.
-
-        Re-enabling a disabled login never restores its previous password: a
-        new temporary one is issued, returned once, and must be replaced by
-        the owner (REM-07).
-
         Args:
             command: Update command
-            actor_permissions: The acting user's permissions (None holds nothing)
-            actor_user_id: The acting user's id, from the authenticated request
 
         Returns:
-            UpdateUserResult with the updated user and, on reactivation, the
-            temporary password
+            Updated UserDTO
 
         Raises:
-            AuthorizationError: If the actor may not make this change
             NotFoundError: If user not found
         """
-        actor_permissions = actor_permissions or PermissionSet.empty()
-        is_self = actor_user_id is not None and actor_user_id == command.user_id
-
-        # Capabilities first, so an unauthorized caller learns nothing about
-        # which user ids exist.
-        if command.is_active is True:
-            self._policy.authorize_reactivate(actor_permissions)
-        elif command.is_active is False:
-            self._policy.authorize_deactivate(actor_permissions)
-        renames = command.first_name is not None or command.last_name is not None
-        if renames and not is_self:
-            self._policy.authorize_create(actor_permissions)
-
-        user = self._get(command.user_id)
-
-        if command.is_active is not None:
-            authorize_target = (
-                self._policy.authorize_reactivate_target
-                if command.is_active
-                else self._policy.authorize_deactivate_target
-            )
-            authorize_target(
-                actor_permissions,
-                target_permissions=self._account_permissions(user.id),
-                is_self=is_self,
+        user = self._user_repo.get_by_id(command.user_id)
+        if user is None:
+            raise NotFoundError(
+                f"User with ID {command.user_id} not found",
+                code="USER_NOT_FOUND",
+                details={"user_id": str(command.user_id)},
             )
 
         # Apply updates
@@ -312,97 +236,109 @@ class UserService:
         if command.last_name is not None:
             user.last_name = command.last_name.strip()
 
-        temp_password = None
         if command.is_active is not None:
             if command.is_active:
-                if not user.is_active:
-                    temp_password = generate_temp_password()
-                    user.issue_temporary_password(temp_password)
                 user.activate()
             else:
                 user.deactivate()
 
+        if command.is_staff is not None:
+            user.is_staff = command.is_staff
+
         self._user_repo.update(user)
 
-        return UpdateUserResult(user=self._to_dto(user), temp_password=temp_password)
+        # Log user update if audit repository is available
+        if self._audit_repo and command.actor_id:
+            updated_fields = []
+            if command.first_name is not None:
+                updated_fields.append("first_name")
+            if command.last_name is not None:
+                updated_fields.append("last_name")
+            if command.is_active is not None:
+                updated_fields.append("is_active")
+            if command.is_staff is not None:
+                updated_fields.append("is_staff")
+
+            if updated_fields:
+                entry = AuditLogEntry.create_user_updated(
+                    actor_id=command.actor_id,
+                    target_user_id=user.id,
+                    target_email=user.email.value,
+                    ip_address=command.ip_address,
+                    user_agent=command.user_agent,
+                    updated_fields=updated_fields,
+                )
+                self._audit_repo.add(entry)
+
+        return self._to_dto(user)
 
     def delete_user(
         self,
         user_id: UUID,
-        actor_permissions: PermissionSet | None = None,
-        actor_user_id: UUID | None = None,
+        actor_id: UUID | None = None,
+        ip_address: str = "0.0.0.0",
+        user_agent: str = "",
     ) -> bool:
         """
-        Permanently delete a user. Employees.user cascades, so this also
-        deletes the linked employee record and everything that cascades
-        from it; it therefore needs its own capability, hr.employee.delete.
+        Delete a user.
 
         Args:
             user_id: User's UUID
-            actor_permissions: The acting user's permissions (None holds nothing)
-            actor_user_id: The acting user's id, from the authenticated request
+            actor_id: Who is deleting this user
+            ip_address: Client IP address
+            user_agent: Client user agent
 
         Returns:
             True if deleted
 
         Raises:
-            AuthorizationError: If the actor may not delete this account
             NotFoundError: If user not found
         """
-        actor_permissions = actor_permissions or PermissionSet.empty()
-        self._policy.authorize_delete(actor_permissions)
+        user = self._user_repo.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError(
+                f"User with ID {user_id} not found",
+                code="USER_NOT_FOUND",
+                details={"user_id": str(user_id)},
+            )
 
-        user = self._get(user_id)
-        self._policy.authorize_delete_target(
-            actor_permissions,
-            target_permissions=self._account_permissions(user.id),
-            is_self=actor_user_id is not None and actor_user_id == user.id,
-        )
+        # Store email for audit log before deletion
+        user_email = user.email.value
 
-        # AuditLog only records login events, so the deletion is recorded in
-        # the application log.
-        logger.warning(
-            "Account %s (%s) permanently deleted by user %s",
-            user.id,
-            user.email.value,
-            actor_user_id,
-        )
-        return self._user_repo.delete(user_id)
+        result = self._user_repo.delete(user_id)
 
-    def unlock_user(
-        self,
-        user_id: UUID,
-        actor_permissions: PermissionSet | None = None,
-        actor_user_id: UUID | None = None,
-    ) -> UserDTO:
+        # Log user deletion if audit repository is available
+        if self._audit_repo and actor_id:
+            entry = AuditLogEntry.create_user_deleted(
+                actor_id=actor_id,
+                target_email=user_email,
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            self._audit_repo.add(entry)
+
+        return result
+
+    def unlock_user(self, user_id: UUID) -> UserDTO:
         """
         Manually unlock a user account.
 
-        Lifting a lockout re-enables a login, so it is governed like
-        reactivation: hr.employee.reactivate, never on the actor's own
-        account or on anyone holding permissions the actor lacks.
-
         Args:
             user_id: User's UUID
-            actor_permissions: The acting user's permissions (None holds nothing)
-            actor_user_id: The acting user's id, from the authenticated request
 
         Returns:
             Updated UserDTO
 
         Raises:
-            AuthorizationError: If the actor may not unlock this account
             NotFoundError: If user not found
         """
-        actor_permissions = actor_permissions or PermissionSet.empty()
-        self._policy.authorize_reactivate(actor_permissions)
-
-        user = self._get(user_id)
-        self._policy.authorize_reactivate_target(
-            actor_permissions,
-            target_permissions=self._account_permissions(user.id),
-            is_self=actor_user_id is not None and actor_user_id == user.id,
-        )
+        user = self._user_repo.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError(
+                f"User with ID {user_id} not found",
+                code="USER_NOT_FOUND",
+                details={"user_id": str(user_id)},
+            )
 
         user.unlock()
         self._user_repo.update(user)
@@ -413,70 +349,20 @@ class UserService:
         self,
         user_id: UUID,
         new_password: str,
-        current_password: str,
-    ) -> UserDTO:
+        current_password: str | None = None,
+    ) -> None:
         """
-        Change a user's own password (self-service; REM-07).
-
-        ``user_id`` must be the authenticated caller's own id - the view
-        passes request.user.id and nothing else - and the current password
-        must be proven. The new password is checked by the configured
-        AUTH_PASSWORD_VALIDATORS. Success ends the forced-change state; the
-        stored hash changes, so every token issued before it stops working
-        (SIMPLE_JWT CHECK_REVOKE_TOKEN).
+        Change a user's password.
 
         Args:
-            user_id: The caller's own UUID
+            user_id: User's UUID
             new_password: New password
-            current_password: The caller's current password
-
-        Returns:
-            The updated UserDTO
+            current_password: Current password (for self-change)
 
         Raises:
             NotFoundError: If user not found
-            ValidationError: If the current password is wrong or the new one
-                is rejected
+            ValidationError: If current password is wrong
         """
-        user = self._get(user_id)
-
-        if not current_password or not user.verify_password(current_password):
-            raise ValidationError(
-                "Current password is incorrect",
-                code="INVALID_CURRENT_PASSWORD",
-            )
-        if new_password == current_password:
-            raise ValidationError(
-                "The new password must differ from the current one",
-                code="PASSWORD_UNCHANGED",
-            )
-        self._validate_new_password(user, new_password)
-
-        user.change_password(new_password)
-        self._user_repo.update(user)
-        return self._to_dto(user)
-
-    @staticmethod
-    def _validate_new_password(user: User, new_password: str) -> None:
-        """Apply the project's AUTH_PASSWORD_VALIDATORS."""
-        from django.contrib.auth.password_validation import validate_password
-        from django.core.exceptions import ValidationError as DjangoValidationError
-
-        from modules.identity.infrastructure.persistence.models import CustomUser
-
-        # UserAttributeSimilarityValidator needs the model instance (it reads
-        # field verbose names as well as values).
-        subject = CustomUser.objects.filter(pk=user.id).first()
-        try:
-            validate_password(new_password, user=subject)
-        except DjangoValidationError as exc:
-            raise ValidationError(
-                " ".join(exc.messages),
-                code="INVALID_NEW_PASSWORD",
-                details={"errors": list(exc.messages)},
-            ) from None
-
-    def _get(self, user_id: UUID) -> User:
         user = self._user_repo.get_by_id(user_id)
         if user is None:
             raise NotFoundError(
@@ -484,64 +370,17 @@ class UserService:
                 code="USER_NOT_FOUND",
                 details={"user_id": str(user_id)},
             )
-        return user
 
-    def _account_permissions(self, user_id: UUID) -> PermissionSet:
-        """
-        What the target login can actually do, resolved exactly as for an
-        acting user (superuser => full access, else its employee role).
-        """
-        from modules.hr.application.authorization import resolve_actor_permissions
-        from modules.identity.infrastructure.persistence.models import CustomUser
+        # Verify current password if provided
+        if current_password is not None:
+            if not user.verify_password(current_password):
+                raise ValidationError(
+                    "Current password is incorrect",
+                    code="INVALID_CURRENT_PASSWORD",
+                )
 
-        db_user = CustomUser.objects.filter(pk=user_id).first()
-        if db_user is None:
-            return PermissionSet.empty()
-        return resolve_actor_permissions(db_user)
-
-    def _create_employee_record(
-        self,
-        user: User,
-        command: CreateUserCommand,
-        actor_permissions: PermissionSet,
-        actor_email: str | None,
-    ) -> None:
-        """
-        Create the new login's employee record through EmployeeService, so
-        REM-01's creation and role-assignment rules are the only ones applied.
-        """
-        from modules.hr.application.services import CreateEmployeeCommand
-
-        if self._employee_service is None:
-            from modules.hr.application.services import EmployeeService
-            from modules.hr.infrastructure.persistence.department_repository import (
-                DjangoDepartmentRepository,
-            )
-            from modules.hr.infrastructure.persistence.employee_repository import (
-                DjangoEmployeeRepository,
-            )
-            from modules.hr.infrastructure.persistence.position_repository import (
-                DjangoPositionRepository,
-            )
-
-            self._employee_service = EmployeeService(
-                employee_repository=DjangoEmployeeRepository(),
-                department_repository=DjangoDepartmentRepository(),
-                position_repository=DjangoPositionRepository(),
-            )
-
-        self._employee_service.create_employee(
-            CreateEmployeeCommand(
-                first_name=user.first_name,
-                surname=user.last_name,
-                email=user.email.value,
-                role_id=command.role_id,
-                department_id=command.department_id,
-                user_id=user.id,
-            ),
-            actor_permissions=actor_permissions,
-            actor_email=actor_email,
-        )
+        user.change_password(new_password)
+        self._user_repo.update(user)
 
     def _to_dto(self, user: User) -> UserDTO:
         """Convert User entity to DTO."""
@@ -554,6 +393,5 @@ class UserService:
             is_active=user.is_active,
             is_staff=user.is_staff,
             is_superuser=user.is_superuser,
-            must_change_password=user.must_change_password,
         )
 

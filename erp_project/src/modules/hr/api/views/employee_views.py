@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from shared.domain.exceptions import AuthorizationError, NotFoundError, ValidationError
+from shared.domain.exceptions import NotFoundError, ValidationError
 
 from modules.hr.api.serializers import (
     CreateEmployeeRequestSerializer,
@@ -16,7 +16,6 @@ from modules.hr.api.serializers import (
     SalarySerializer,
     UpdateEmployeeRequestSerializer,
 )
-from modules.hr.application.authorization import resolve_actor_permissions
 from modules.hr.application.services import (
     CreateEmployeeCommand,
     EmployeeService,
@@ -36,13 +35,6 @@ def get_employee_service() -> EmployeeService:
     )
 
 
-def _actor_employee_id(request) -> int | None:
-    """The authenticated caller's own employee record id - never from request data."""
-    # Reverse one-to-one: an AttributeError subclass when there is no profile.
-    employee = getattr(request.user, "employee_profile", None)
-    return employee.pk if employee else None
-
-
 class EmployeeListCreateView(APIView):
     """
     List all employees or create a new employee.
@@ -56,24 +48,21 @@ class EmployeeListCreateView(APIView):
     def get(self, request):
         """List all active employees."""
         service = get_employee_service()
-        actor_permissions = resolve_actor_permissions(request.user)
 
         # Optional filters
         department_id = request.query_params.get("department_id")
         include_inactive = request.query_params.get("include_inactive", "false").lower() == "true"
 
         if department_id:
-            employees = service.get_employees_by_department(
-                int(department_id), actor_permissions=actor_permissions
-            )
+            employees = service.get_employees_by_department(int(department_id))
         else:
-            employees = service.get_active_employees(actor_permissions=actor_permissions)
+            employees = service.get_active_employees()
 
         # If include_inactive, get all
         if include_inactive:
             repo = DjangoEmployeeRepository()
             all_employees = repo.get_all(include_inactive=True)
-            employees = [service._to_dto(e, actor_permissions) for e in all_employees]
+            employees = [service._to_dto(e) for e in all_employees]
 
         serializer = EmployeeListItemSerializer(employees, many=True)
         return Response(serializer.data)
@@ -88,11 +77,7 @@ class EmployeeListCreateView(APIView):
 
         try:
             command = CreateEmployeeCommand(**serializer.validated_data)
-            employee = service.create_employee(
-                command,
-                actor_permissions=resolve_actor_permissions(request.user),
-                actor_email=request.user.email,
-            )
+            employee = service.create_employee(command)
 
             # Convert to response DTO
             response_data = {
@@ -105,19 +90,10 @@ class EmployeeListCreateView(APIView):
                 "department_id": employee.department_id,
                 "position_id": employee.position_id,
                 "is_active": employee.is_active,
-                # One-time temporary password of the login provisioned for
-                # this employee (null if none was created); shown once to the
-                # creator, who must hand it over. REM-07.
-                "temporary_password": employee.temporary_password,
             }
 
             return Response(response_data, status=status.HTTP_201_CREATED)
 
-        except AuthorizationError as e:
-            return Response(
-                {"error": e.message, "code": e.code},
-                status=status.HTTP_403_FORBIDDEN,
-            )
         except ValidationError as e:
             return Response(
                 {"error": e.message, "code": e.code},
@@ -144,9 +120,7 @@ class EmployeeDetailView(APIView):
     def get(self, request, employee_id: int):
         """Get employee details."""
         service = get_employee_service()
-        employee = service.get_employee(
-            employee_id, actor_permissions=resolve_actor_permissions(request.user)
-        )
+        employee = service.get_employee(employee_id)
 
         if not employee:
             return Response(
@@ -172,18 +146,13 @@ class EmployeeDetailView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         service = get_employee_service()
-        actor_permissions = resolve_actor_permissions(request.user)
 
         try:
             command = UpdateEmployeeCommand(
                 employee_id=employee_id,
                 **serializer.validated_data,
             )
-            employee = service.update_employee(
-                command,
-                actor_permissions=actor_permissions,
-                actor_employee_id=_actor_employee_id(request),
-            )
+            employee = service.update_employee(command)
 
             response_data = {
                 "id": employee.id,
@@ -196,11 +165,6 @@ class EmployeeDetailView(APIView):
 
             return Response(response_data)
 
-        except AuthorizationError as e:
-            return Response(
-                {"error": e.message, "code": e.code},
-                status=status.HTTP_403_FORBIDDEN,
-            )
         except NotFoundError as e:
             return Response(
                 {"error": str(e)},
@@ -218,20 +182,10 @@ class EmployeeDetailView(APIView):
         reason = request.data.get("reason", "")
 
         try:
-            employee = service.deactivate_employee(
-                employee_id,
-                reason,
-                actor_permissions=resolve_actor_permissions(request.user),
-                actor_employee_id=_actor_employee_id(request),
-            )
+            employee = service.deactivate_employee(employee_id, reason)
             return Response(
                 {"message": f"Employee {employee.full_name} deactivated"},
                 status=status.HTTP_200_OK,
-            )
-        except AuthorizationError as e:
-            return Response(
-                {"error": e.message, "code": e.code},
-                status=status.HTTP_403_FORBIDDEN,
             )
         except NotFoundError as e:
             return Response(
@@ -252,15 +206,7 @@ class EmployeeSalaryView(APIView):
     def get(self, request, employee_id: int):
         """Get employee salary."""
         service = get_employee_service()
-        try:
-            salary = service.get_employee_salary(
-                employee_id, resolve_actor_permissions(request.user)
-            )
-        except AuthorizationError as e:
-            return Response(
-                {"error": e.message, "code": e.code},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        salary = service.get_employee_salary(employee_id)
 
         if not salary:
             return Response(

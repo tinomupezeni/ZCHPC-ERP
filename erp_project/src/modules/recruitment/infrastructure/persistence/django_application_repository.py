@@ -4,7 +4,6 @@ Django ORM implementation of IApplicationRepository.
 
 from typing import Sequence
 
-from shared.infrastructure.persistence import insert_or_update
 from modules.recruitment.infrastructure.persistence.models import JobApplication as ApplicationModel
 
 from modules.recruitment.application.interfaces import IApplicationRepository
@@ -82,20 +81,14 @@ class DjangoApplicationRepository(IApplicationRepository):
         return [self._to_entity(model) for model in queryset]
 
     def save(self, application: Application) -> Application:
-        """Insert a new application (id None) or update its existing row."""
-        model = insert_or_update(
-            ApplicationModel,
-            application.id,
-            {
+        """Save application."""
+        model, created = ApplicationModel.objects.update_or_create(
+            id=application.id,
+            defaults={
                 "job_id": application.job_id,
                 "candidate_id": application.candidate_id,
                 "cover_letter": application.cover_letter,
                 "status": application.status.value,
-                "resume": application.resume_path or None,
-                "phone": application.phone,
-                "address": application.address,
-                "qualifications": application.qualifications,
-                "experience": application.experience,
             },
         )
         # Reload with relationships
@@ -107,6 +100,11 @@ class DjangoApplicationRepository(IApplicationRepository):
     def delete(self, application_id: int) -> None:
         """Delete application."""
         ApplicationModel.objects.filter(id=application_id).delete()
+
+    def get_next_id(self) -> int:
+        """Get next available ID."""
+        last = ApplicationModel.objects.order_by("-id").first()
+        return (last.id + 1) if last else 1
 
     def count_by_job(
         self,
@@ -132,10 +130,5 @@ class DjangoApplicationRepository(IApplicationRepository):
             cover_letter=model.cover_letter or "",
             status=status,
             applied_at=model.applied_on,
-            updated_at=model.updated_at or model.applied_on,
-            resume_path=model.resume.name or None,
-            phone=model.phone or "",
-            address=model.address or "",
-            qualifications=model.qualifications or "",
-            experience=model.experience or "",
+            updated_at=model.applied_on,  # Model doesn't have updated_at
         )

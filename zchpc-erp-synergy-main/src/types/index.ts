@@ -18,9 +18,7 @@ export interface User {
   is_active: boolean;
   department: number | null; // The ID
   department_name?: string;  // Flattened from serializer
-  // REM-07: signed in with a temporary password that must be replaced first
-  must_change_password?: boolean;
-
+  
   // This matches your LoginPage logic for user.employee_profile.role
   employee_profile?: {
     role: UserRole;

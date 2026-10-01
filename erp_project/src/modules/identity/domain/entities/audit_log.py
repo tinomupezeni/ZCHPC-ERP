@@ -15,16 +15,28 @@ from shared.domain.exceptions import InvalidOperationError
 class AuditEventType(str, Enum):
     """Types of audit events."""
 
+    # Authentication events
     LOGIN_SUCCESS = "SUCCESS"
     LOGIN_FAILED = "FAILED"
     ACCOUNT_LOCKED = "LOCKOUT"
     PASSWORD_RESET = "FORCE_RESET"
     LOGOUT = "LOGOUT"
 
+    # Administrative events
+    USER_CREATED = "USER_CREATED"
+    USER_DELETED = "USER_DELETED"
+    USER_UPDATED = "USER_UPDATED"
+    ROLE_ASSIGNED = "ROLE_ASSIGNED"
+    ROLE_REMOVED = "ROLE_REMOVED"
+    PERMISSION_GRANTED = "PERMISSION_GRANTED"
+    PERMISSION_REVOKED = "PERMISSION_REVOKED"
+    EMPLOYEE_CREATED = "EMPLOYEE_CREATED"
+    EMPLOYEE_UPDATED = "EMPLOYEE_UPDATED"
+    EMPLOYEE_DELETED = "EMPLOYEE_DELETED"
+
     def __str__(self) -> str:
         return self.value
-
-
+    
 @dataclass
 class AuditLogEntry(Entity[int]):
     """
@@ -154,6 +166,228 @@ class AuditLogEntry(Entity[int]):
             user_agent=user_agent,
             event_type=AuditEventType.PASSWORD_RESET,
             details={"reset_by": reset_by},
+        )
+
+    @classmethod
+    def create_user_created(
+        cls,
+        actor_id: UUID,
+        target_user_id: UUID,
+        target_email: str,
+        ip_address: str,
+        user_agent: str,
+    ) -> "AuditLogEntry":
+        """Create an audit entry for user creation."""
+        return cls(
+            id=0,
+            user_id=actor_id,
+            username_attempted=target_email,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            event_type=AuditEventType.USER_CREATED,
+            details={"target_user_id": str(target_user_id)},
+        )
+
+    @classmethod
+    def create_user_deleted(
+        cls,
+        actor_id: UUID,
+        target_email: str,
+        ip_address: str,
+        user_agent: str,
+    ) -> "AuditLogEntry":
+        """Create an audit entry for user deletion."""
+        return cls(
+            id=0,
+            user_id=actor_id,
+            username_attempted=target_email,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            event_type=AuditEventType.USER_DELETED,
+        )
+
+    @classmethod
+    def create_user_updated(
+        cls,
+        actor_id: UUID,
+        target_user_id: UUID,
+        target_email: str,
+        ip_address: str,
+        user_agent: str,
+        updated_fields: list[str] | None = None,
+    ) -> "AuditLogEntry":
+        """Create an audit entry for user update."""
+        return cls(
+            id=0,
+            user_id=actor_id,
+            username_attempted=target_email,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            event_type=AuditEventType.USER_UPDATED,
+            details={
+                "target_user_id": str(target_user_id),
+                "updated_fields": updated_fields or [],
+            },
+        )
+
+    @classmethod
+    def create_role_assigned(
+        cls,
+        actor_id: UUID,
+        target_user_id: UUID,
+        target_email: str,
+        role_name: str,
+        ip_address: str,
+        user_agent: str,
+    ) -> "AuditLogEntry":
+        """Create an audit entry for role assignment."""
+        return cls(
+            id=0,
+            user_id=actor_id,
+            username_attempted=target_email,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            event_type=AuditEventType.ROLE_ASSIGNED,
+            details={
+                "target_user_id": str(target_user_id),
+                "role_name": role_name,
+            },
+        )
+
+    @classmethod
+    def create_role_removed(
+        cls,
+        actor_id: UUID,
+        target_user_id: UUID,
+        target_email: str,
+        role_name: str,
+        ip_address: str,
+        user_agent: str,
+    ) -> "AuditLogEntry":
+        """Create an audit entry for role removal."""
+        return cls(
+            id=0,
+            user_id=actor_id,
+            username_attempted=target_email,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            event_type=AuditEventType.ROLE_REMOVED,
+            details={
+                "target_user_id": str(target_user_id),
+                "role_name": role_name,
+            },
+        )
+
+    @classmethod
+    def create_permission_granted(
+        cls,
+        actor_id: UUID,
+        target_user_id: UUID,
+        target_email: str,
+        permission: str,
+        ip_address: str,
+        user_agent: str,
+    ) -> "AuditLogEntry":
+        """Create an audit entry for permission grant."""
+        return cls(
+            id=0,
+            user_id=actor_id,
+            username_attempted=target_email,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            event_type=AuditEventType.PERMISSION_GRANTED,
+            details={
+                "target_user_id": str(target_user_id),
+                "permission": permission,
+            },
+        )
+
+    @classmethod
+    def create_permission_revoked(
+        cls,
+        actor_id: UUID,
+        target_user_id: UUID,
+        target_email: str,
+        permission: str,
+        ip_address: str,
+        user_agent: str,
+    ) -> "AuditLogEntry":
+        """Create an audit entry for permission revocation."""
+        return cls(
+            id=0,
+            user_id=actor_id,
+            username_attempted=target_email,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            event_type=AuditEventType.PERMISSION_REVOKED,
+            details={
+                "target_user_id": str(target_user_id),
+                "permission": permission,
+            },
+        )
+
+    @classmethod
+    def create_employee_created(
+        cls,
+        actor_id: UUID,
+        employee_id: str,
+        employee_name: str,
+        ip_address: str,
+        user_agent: str,
+    ) -> "AuditLogEntry":
+        """Create an audit entry for employee creation."""
+        return cls(
+            id=0,
+            user_id=actor_id,
+            username_attempted=employee_name,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            event_type=AuditEventType.EMPLOYEE_CREATED,
+            details={"employee_id": employee_id},
+        )
+
+    @classmethod
+    def create_employee_updated(
+        cls,
+        actor_id: UUID,
+        employee_id: str,
+        employee_name: str,
+        ip_address: str,
+        user_agent: str,
+        updated_fields: list[str] | None = None,
+    ) -> "AuditLogEntry":
+        """Create an audit entry for employee update."""
+        return cls(
+            id=0,
+            user_id=actor_id,
+            username_attempted=employee_name,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            event_type=AuditEventType.EMPLOYEE_UPDATED,
+            details={
+                "employee_id": employee_id,
+                "updated_fields": updated_fields or [],
+            },
+        )
+
+    @classmethod
+    def create_employee_deleted(
+        cls,
+        actor_id: UUID,
+        employee_id: str,
+        employee_name: str,
+        ip_address: str,
+        user_agent: str,
+    ) -> "AuditLogEntry":
+        """Create an audit entry for employee deletion."""
+        return cls(
+            id=0,
+            user_id=actor_id,
+            username_attempted=employee_name,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            event_type=AuditEventType.EMPLOYEE_DELETED,
+            details={"employee_id": employee_id},
         )
 
     def mark_persisted(self) -> None:

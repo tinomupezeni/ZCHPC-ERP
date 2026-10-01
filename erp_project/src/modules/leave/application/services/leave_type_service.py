@@ -7,10 +7,6 @@ from typing import Sequence
 
 from shared.domain.exceptions import NotFoundError, ValidationError
 
-from modules.leave.application.authorization import (
-    LeaveActor,
-    LeaveAuthorizationPolicy,
-)
 from modules.leave.application.interfaces import ILeaveTypeRepository, LeaveTypeDTO
 from modules.leave.domain.entities import LeaveType
 from modules.leave.domain.events import LeaveTypeCreated
@@ -42,17 +38,11 @@ class LeaveTypeService:
     Handles use cases related to leave types.
     """
 
-    def __init__(
-        self,
-        leave_type_repository: ILeaveTypeRepository,
-        authorization_policy: LeaveAuthorizationPolicy | None = None,
-    ) -> None:
-        self._authz = authorization_policy or LeaveAuthorizationPolicy()
+    def __init__(self, leave_type_repository: ILeaveTypeRepository) -> None:
         self._repository = leave_type_repository
 
-    def create_leave_type(self, command: CreateLeaveTypeCommand, actor: LeaveActor) -> LeaveTypeDTO:
-        """Create a new leave type (requires leave.type.manage)."""
-        self._authz.authorize_manage_types(actor)
+    def create_leave_type(self, command: CreateLeaveTypeCommand) -> LeaveTypeDTO:
+        """Create a new leave type."""
         # Check for duplicate name
         existing = self._repository.get_by_name(command.name)
         if existing:
@@ -60,17 +50,13 @@ class LeaveTypeService:
 
         # Create leave type
         leave_type = LeaveType(
-            id=None,  # database-assigned on insert (REM-06)
+            id=self._repository.get_next_id(),
             name=command.name,
             default_days_allowed=command.default_days_allowed,
             is_active=command.is_active,
         )
 
-        # Add domain event. Deliberately still built before save: it passes a
-        # keyword LeaveTypeCreated does not define (pre-existing, pinned by a
-        # strict xfail in REM-03's tests), so it raises; built after save it
-        # would leave a persisted row behind a failed request. The id is None
-        # here (database-assigned on insert) and the event is never dispatched.
+        # Add domain event
         leave_type.add_domain_event(
             LeaveTypeCreated(
                 leave_type_id=leave_type.id,
@@ -83,9 +69,8 @@ class LeaveTypeService:
         saved = self._repository.save(leave_type)
         return self._to_dto(saved)
 
-    def update_leave_type(self, command: UpdateLeaveTypeCommand, actor: LeaveActor) -> LeaveTypeDTO:
-        """Update an existing leave type (requires leave.type.manage)."""
-        self._authz.authorize_manage_types(actor)
+    def update_leave_type(self, command: UpdateLeaveTypeCommand) -> LeaveTypeDTO:
+        """Update an existing leave type."""
         leave_type = self._repository.get_by_id(command.leave_type_id)
         if not leave_type:
             raise NotFoundError(f"Leave type with ID {command.leave_type_id} not found")
@@ -123,9 +108,8 @@ class LeaveTypeService:
         leave_types = self._repository.get_all(include_inactive=include_inactive)
         return [self._to_dto(lt) for lt in leave_types]
 
-    def delete_leave_type(self, leave_type_id: int, actor: LeaveActor) -> None:
-        """Delete a leave type (requires leave.type.manage)."""
-        self._authz.authorize_manage_types(actor)
+    def delete_leave_type(self, leave_type_id: int) -> None:
+        """Delete a leave type."""
         leave_type = self._repository.get_by_id(leave_type_id)
         if not leave_type:
             raise NotFoundError(f"Leave type with ID {leave_type_id} not found")

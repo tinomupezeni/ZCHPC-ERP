@@ -41,9 +41,6 @@ class AdminDashboardView(APIView):
         from modules.hr.infrastructure.persistence.models import Employees, Department
         from modules.attendance.infrastructure.persistence.models import AttendanceRecord
         from modules.payroll.infrastructure.persistence.models import Payroll
-        from modules.payroll.api.actors import payroll_actor_from_request
-        from modules.payroll.application.authorization import PayrollAuthorizationPolicy
-        from shared.domain.exceptions import AuthorizationError
 
         # Metrics
         total_employees = Employees.objects.filter(is_active=True).count()
@@ -70,16 +67,7 @@ class AdminDashboardView(APIView):
             for item in employee_distribution
         ]
 
-        # Payroll distribution by department. These are payroll aggregates, so
-        # they need the payroll summary capability (REM-02); without it the
-        # chart is empty and nothing is queried. The rest of the dashboard is
-        # unaffected.
-        try:
-            PayrollAuthorizationPolicy().authorize_view_summary(payroll_actor_from_request(request))
-            may_view_payroll_summary = True
-        except AuthorizationError:
-            may_view_payroll_summary = False
-
+        # Payroll distribution by department (latest period)
         payroll_distribution = list(
             Payroll.objects.values('employee__department__name')
             .annotate(
@@ -87,7 +75,7 @@ class AdminDashboardView(APIView):
                 total_zig=Sum('net_salary_zig')
             )
             .order_by('-total_usd')
-        ) if may_view_payroll_summary else []
+        )
         # Format for frontend
         payroll_distribution = [
             {

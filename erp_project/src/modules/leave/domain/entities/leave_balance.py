@@ -20,7 +20,7 @@ class LeaveBalance(AggregateRoot[int]):
 
     def __init__(
         self,
-        id: int | None,
+        id: int,
         employee_id: int,
         leave_type_id: int,
         year: int,
@@ -59,7 +59,7 @@ class LeaveBalance(AggregateRoot[int]):
     @classmethod
     def create(
         cls,
-        id: int | None,
+        id: int,
         employee_id: int,
         leave_type_id: int,
         year: int,

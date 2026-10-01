@@ -5,13 +5,6 @@ import { MainLayout, PublicLayout } from '@/components/layout';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { AttendancePage } from '@/pages/AttendancePage';
 import { LeavePage } from '@/pages/LeavePage';
-import { PurchaseRequestsPage } from '@/pages/PurchaseRequestsPage';
-import { PurchaseRequestReviewPage } from '@/pages/PurchaseRequestReviewPage';
-import { PurchaseRequestAccountsReviewPage } from '@/pages/PurchaseRequestAccountsReviewPage';
-import { PurchaseRequestGMReviewPage } from '@/pages/PurchaseRequestGMReviewPage';
-import { PurchaseRequestDirectorReviewPage } from '@/pages/PurchaseRequestDirectorReviewPage';
-import { PurchaseRequestProcurementReviewPage } from '@/pages/PurchaseRequestProcurementReviewPage';
-import { PurchaseRequestPrintPage } from '@/pages/PurchaseRequestPrintPage';
 import { FuelRequisitionsPage } from '@/pages/FuelRequisitionsPage';
 import { StoresRequisitionsPage } from '@/pages/StoresRequisitionsPage';
 import { ComparativeSchedulesPage } from '@/pages/ComparativeSchedulesPage';
@@ -21,7 +14,6 @@ import { JobDetailPage } from '@/pages/JobDetailPage';
 import { JobApplicationPage } from '@/pages/JobApplicationPage';
 import { ApplicationStatusPage } from '@/pages/ApplicationStatusPage';
 import { QRDisplayPage } from '@/pages/QRDisplayPage';
-import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
 import { Toaster } from 'sonner';
 
 function App() {
@@ -31,33 +23,6 @@ function App() {
         <Routes>
           {/* QR Display for office - standalone page without layout */}
           <Route path="/attendance/qr-display" element={<QRDisplayPage />} />
-
-          {/*
-            F23: the final printable Purchase Requisition. Authenticated but
-            deliberately outside MainLayout, like QR Display above - the
-            print output must not include the application's sidebar/nav.
-          */}
-          <Route
-            path="/portal/purchase-requests/:id/print"
-            element={
-              <ProtectedRoute>
-                <PurchaseRequestPrintPage />
-              </ProtectedRoute>
-            }
-          />
-
-          {/*
-            REM-07: replacing a temporary password. Authenticated, outside
-            MainLayout (whose data calls a confined account cannot make).
-          */}
-          <Route
-            path="/portal/change-password"
-            element={
-              <ProtectedRoute>
-                <ChangePasswordPage />
-              </ProtectedRoute>
-            }
-          />
 
           {/* Public careers routes - default landing page */}
           <Route element={<PublicLayout />}>
@@ -82,27 +47,6 @@ function App() {
             <Route path="/portal" element={<DashboardPage />} />
             <Route path="/portal/attendance" element={<AttendancePage />} />
             <Route path="/portal/leave" element={<LeavePage />} />
-            <Route path="/portal/purchase-requests" element={<PurchaseRequestsPage />} />
-            <Route
-              path="/portal/purchase-requests/review"
-              element={<PurchaseRequestReviewPage />}
-            />
-            <Route
-              path="/portal/purchase-requests/accounts"
-              element={<PurchaseRequestAccountsReviewPage />}
-            />
-            <Route
-              path="/portal/purchase-requests/gm"
-              element={<PurchaseRequestGMReviewPage />}
-            />
-            <Route
-              path="/portal/purchase-requests/director"
-              element={<PurchaseRequestDirectorReviewPage />}
-            />
-            <Route
-              path="/portal/purchase-requests/procurement"
-              element={<PurchaseRequestProcurementReviewPage />}
-            />
             <Route path="/portal/fuel-requisitions" element={<FuelRequisitionsPage />} />
             <Route path="/portal/stores-requisitions" element={<StoresRequisitionsPage />} />
             <Route path="/portal/comparative-schedules" element={<ComparativeSchedulesPage />} />

@@ -41,8 +41,6 @@ class PortalAuthService:
         self,
         ec_number: str,
         password: str,
-        ip_address: str = "0.0.0.0",
-        user_agent: str = "",
     ) -> AuthResult:
         """
         Authenticate employee by EC number and password.
@@ -50,8 +48,6 @@ class PortalAuthService:
         Args:
             ec_number: Employee ID (e.g., EMP0001)
             password: User password
-            ip_address: Client address, for the login audit log
-            user_agent: Client user agent, for the login audit log
 
         Returns:
             AuthResult with employee data and tokens if successful
@@ -66,8 +62,6 @@ class PortalAuthService:
         employee = self._employee_provider.authenticate(
             ec_number=ec_number.strip().upper(),
             password=password,
-            ip_address=ip_address,
-            user_agent=user_agent,
         )
 
         if employee is None:
