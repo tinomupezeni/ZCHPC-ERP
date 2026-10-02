@@ -1,42 +1,28 @@
 """
-Flag logins still holding the surname password (REM-07).
+Flag logins still holding the surname password (REM-07) - now a no-op.
 
 Until REM-07, every login provisioned for a new employee received the
-employee's surname as its password. Those accounts are found by checking
-the surname against the stored hash with Django's own check_password - no
-hash is read into plaintext, rewritten or replaced - and marked
-must_change_password, so RBACMiddleware confines them to the password change.
+employee's surname as its password. This migration used to find those
+accounts with check_password and mark them must_change_password. Each check
+runs the full password hasher, so the work grew with the number of employees
+and ran inside the migration transaction, before the API could start.
 
-Only accounts whose password verifiably equals the linked employee's surname
-are flagged; every other account, and every password hash, is untouched.
-Running it again changes nothing (flagged accounts are skipped). The reverse
-is a no-op: the flag cannot be told apart from one set later for another
-reason.
+That work now lives in the management command
 
-Note: check_password runs the full password hasher once per linked employee
-login, so this migration's duration grows with the number of employees.
+    python manage.py flag_surname_passwords
+
+(modules.identity.management.commands.flag_surname_passwords), which applies
+the same rule in short, resumable batches outside the deployment window. Run
+it once on every database after this migration is applied - see
+docs/DEPLOYMENT.md, "Flagging Surname-Password Accounts".
+
+The migration keeps its name, dependencies and place in the graph so
+databases that already applied it, and databases that have not, agree on
+migration history. Where it already ran, its flags stay set and the command
+finds nothing more to do.
 """
 
-from django.contrib.auth.hashers import check_password
 from django.db import migrations
-
-
-def flag_surname_passwords(apps, schema_editor):
-    Employees = apps.get_model("hr", "Employees")
-    CustomUser = apps.get_model("identity", "CustomUser")
-
-    candidates = (
-        Employees.objects.filter(user__isnull=False, user__must_change_password=False)
-        .exclude(surname="")
-        .select_related("user")
-    )
-    flagged = [
-        employee.user_id
-        for employee in candidates
-        if employee.user.password and check_password(employee.surname, employee.user.password)
-    ]
-    if flagged:
-        CustomUser.objects.filter(pk__in=flagged).update(must_change_password=True)
 
 
 class Migration(migrations.Migration):
@@ -47,5 +33,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(flag_surname_passwords, migrations.RunPython.noop),
+        migrations.RunPython(
+            migrations.RunPython.noop, migrations.RunPython.noop, elidable=True
+        ),
     ]

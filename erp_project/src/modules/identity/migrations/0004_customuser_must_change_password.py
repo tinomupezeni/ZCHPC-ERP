@@ -2,6 +2,28 @@
 
 from django.db import migrations, models
 
+# ALTER TABLE on authentication_customuser needs an ACCESS EXCLUSIVE lock, and
+# while it waits for one every query on the table queues behind it. Give up
+# after LOCK_TIMEOUT instead: the statement fails, the migration transaction
+# rolls back and `migrate` exits non-zero, so the deploy can be retried.
+LOCK_TIMEOUT = "2s"
+
+
+def set_lock_timeout(apps, schema_editor):
+    """SET LOCAL lock_timeout for the rest of this migration's transaction.
+
+    SET LOCAL ends with the transaction (commit or rollback), so it cannot
+    leak into later migrations or a pooled connection. PostgreSQL only;
+    other backends (SQLite in tests) have no lock_timeout.
+    """
+    connection = schema_editor.connection
+    if connection.vendor != "postgresql":
+        return
+    if not connection.in_atomic_block:
+        # Outside a transaction SET LOCAL only warns and does nothing.
+        raise RuntimeError("lock_timeout requires the migration to run in a transaction")
+    schema_editor.execute(f"SET LOCAL lock_timeout = '{LOCK_TIMEOUT}'")
+
 
 class Migration(migrations.Migration):
 
@@ -9,10 +31,15 @@ class Migration(migrations.Migration):
         ('identity', '0003_seed_core_system_modules'),
     ]
 
+    # Operations are unapplied in reverse order, so the timeout is set both
+    # before the AddField (forwards) and after it (backwards, i.e. before the
+    # column is dropped).
     operations = [
+        migrations.RunPython(set_lock_timeout, migrations.RunPython.noop),
         migrations.AddField(
             model_name='customuser',
             name='must_change_password',
             field=models.BooleanField(default=False),
         ),
+        migrations.RunPython(migrations.RunPython.noop, set_lock_timeout),
     ]
