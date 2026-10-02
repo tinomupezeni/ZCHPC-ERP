@@ -605,6 +605,104 @@ python manage.py collectstatic --noinput
 sudo systemctl restart gunicorn
 ```
 
+### Migration Lock Timeouts
+
+Some schema migrations (first: `identity 0004_customuser_must_change_password`)
+run `SET LOCAL lock_timeout = '2s'` before their `ALTER TABLE`. If another
+transaction holds the table, the migration fails after about 2 seconds with
+`canceling statement due to lock timeout` instead of queueing every request
+on that table behind it. The migration is rolled back completely and
+`migrate` exits non-zero (in Docker, the `api` container stops before
+starting Gunicorn).
+
+To recover, find what holds the lock and retry the deployment:
+
+```sql
+SELECT pid, state, xact_start, left(query, 80)
+FROM pg_stat_activity
+WHERE datname = current_database() AND state <> 'idle'
+ORDER BY xact_start;
+```
+
+### Flagging Surname-Password Accounts
+
+Before REM-07, every login created for a new employee had the employee's
+surname as its password. `identity` migration `0005_flag_surname_passwords`
+used to find and flag those accounts during `migrate`; that check runs the
+full password hasher once per employee, so it now lives in a management
+command that runs outside the deployment window. Migration 0005 itself is a
+no-op.
+
+**When:** once on every database (production and any shared staging or test
+database), as soon as possible after a deployment that includes migration
+`identity 0005`. Running it again later is safe.
+
+**Has 0005 already run on this database?** This is not recorded anywhere in
+the repository, so check each database:
+
+```bash
+docker exec zchpc_api python manage.py showmigrations identity
+# or, on a venv deployment:  python manage.py showmigrations identity
+```
+
+`[X] 0005_flag_surname_passwords` means it was applied. If it was applied
+*before* this change, the old migration already flagged that database's
+accounts and the command will find nothing new - run it anyway to confirm.
+
+**Run it:**
+
+```bash
+# Optional: see how many accounts would be flagged, saving nothing
+docker exec zchpc_api python manage.py flag_surname_passwords --dry-run
+
+docker exec zchpc_api python manage.py flag_surname_passwords
+# venv deployment: python manage.py flag_surname_passwords
+```
+
+Each check takes about 0.4 s, so expect roughly 0.4 s x the number of
+employees with a login. Flags are saved page by page (100 employees per page;
+`--batch-size N` to change).
+
+**Reading the output:** one line per page, then a summary. It contains counts
+and employee primary keys only - no names, emails or passwords.
+
+- `checked` - accounts tested (already-flagged accounts are skipped).
+- `matched` - accounts whose password is the employee's surname.
+- `flagged` - accounts marked must_change_password.
+- `changed` - matched accounts that changed between the check and the save
+  (password changed, surname edited, login relinked, or flagged by someone
+  else). They were left as they now are; a rerun re-checks them.
+- `[dry run - nothing saved] complete: ... would_flag=N` - N accounts would be
+  flagged by a real run.
+
+A real run ends with `complete: ...` and exit status 0. Any other ending is a
+failure.
+
+**If it fails or is interrupted:** it exits non-zero with
+`failed after employee pk P ... Resume with --start-after P.` Every page up
+to P is saved. Resume with:
+
+```bash
+docker exec zchpc_api python manage.py flag_surname_passwords --start-after P
+```
+
+(Rerunning without `--start-after` is also safe, just slower.)
+
+**Security window:** between deploying migration 0005 and running the command,
+surname-password accounts on a database where 0005 had not already run are
+*not* flagged: anyone who knows the surname can log in normally, exactly as
+before REM-07. Keep this interval short.
+
+**After flagging:** a flagged account is confined to changing its password,
+but the surname still logs in to that confined session. To retire the
+surname itself, an operator holding `hr.employee.deactivate` and
+`hr.employee.reactivate` deactivates and then reactivates the login
+(`PATCH /api/v2/auth/users/<id>/` with `{"is_active": false}`, then
+`{"is_active": true}`). Reactivation returns a one-time temporary password in
+`temporary_password`, the surname stops working on both login pages and
+earlier tokens are revoked (covered by
+`tests/integration/modules/identity/test_credential_lifecycle.py::TestFlaggedAccountRotation`).
+
 ### Frontend Update
 
 ```bash
