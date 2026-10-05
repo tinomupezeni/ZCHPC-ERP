@@ -24,6 +24,11 @@ Rules (confirmed REM-01 decisions - capability-based, no job-title hierarchy):
   over that employee: the actor must hold every permission the target
   currently holds (AUD-01 F2), so nobody can demote or move someone above
   them.
+- Editing an employee's ordinary fields (name, date of birth, gender,
+  marital status, phone, emergency contact) needs authority over that
+  employee in the same sense (AUD-02 F1). There is no separate capability:
+  reaching the hr routes is the prerequisite, authority over the target is
+  the rule. Yourself and your peers are covered.
 - Deactivating an employee needs ``hr.employee.deactivate``, may not target
   the actor themselves, and may not target anyone whose effective
   permissions the actor does not hold (so, for example, only a full-access
@@ -128,6 +133,24 @@ class EmployeeAuthorizationPolicy:
                 "holds permissions you do not hold.",
                 code="EMPLOYEE_TARGET_EXCEEDS_ACTOR_AUTHORITY",
             )
+
+    def authorize_update_target(
+        self,
+        actor_permissions: PermissionSet,
+        *,
+        target_permissions: PermissionSet,
+    ) -> None:
+        """
+        Editing an employee's ordinary fields (AUD-02 F1) needs authority
+        over that employee as they stand. Judged whenever such a field is
+        sent, changed or not. Acting on oneself always passes (an actor
+        covers their own permissions).
+        """
+        self._require_covers(
+            actor_permissions,
+            target_permissions,
+            "You cannot edit an employee who holds permissions you do not hold.",
+        )
 
     def authorize_rename_target(
         self,

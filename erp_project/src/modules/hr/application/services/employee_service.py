@@ -122,6 +122,23 @@ class UpdateEmployeeCommand:
     emergency_contact_relationship: str | None = None
 
 
+# The UpdateEmployeeCommand fields that need authority over the employee and
+# nothing else (AUD-02 F1). Role, department and payroll data have their own
+# rules; position, employee type, reports_to, email and leave entitlement are
+# deliberately not classified here.
+ORDINARY_FIELDS = (
+    "first_name",
+    "surname",
+    "date_of_birth",
+    "gender",
+    "marital_status",
+    "phone",
+    "emergency_contact_name",
+    "emergency_contact_number",
+    "emergency_contact_relationship",
+)
+
+
 class EmployeeService:
     """
     Application service for employee operations.
@@ -459,7 +476,9 @@ class EmployeeService:
                 department_id without EmployeeManagementPermissions
                 .MANAGE_ASSIGNMENTS, assigns a role the actor may not grant,
                 or changes the role/department of an employee who holds
-                permissions the actor does not.
+                permissions the actor does not; or if it sends an ordinary
+                field (ORDINARY_FIELDS) for an employee who holds
+                permissions the actor does not (AUD-02 F1).
             NotFoundError: If employee not found
             ValidationError: If validation fails (including an unknown role_id)
         """
@@ -486,6 +505,15 @@ class EmployeeService:
             command.department_id is not None and command.department_id != employee.department_id
         ):
             self._policy.authorize_assignment_target(
+                actor_permissions,
+                target_permissions=self._effective_permissions(employee),
+            )
+
+        # Ordinary fields (AUD-02 F1): authority over the employee whenever
+        # one is sent. Every check above and here runs before anything is
+        # written, so a refused request changes nothing.
+        if any(getattr(command, field) is not None for field in ORDINARY_FIELDS):
+            self._policy.authorize_update_target(
                 actor_permissions,
                 target_permissions=self._effective_permissions(employee),
             )

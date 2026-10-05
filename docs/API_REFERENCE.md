@@ -240,6 +240,8 @@ POST /hr/employees/
 PATCH /hr/employees/{id}/
 ```
 
+Changing another employee's ordinary fields (name, date of birth, gender, marital status, phone, emergency contact) requires holding every permission that employee holds. Otherwise the response is `403` with code `EMPLOYEE_TARGET_EXCEEDS_ACTOR_AUTHORITY`, and nothing in the request is applied.
+
 #### Delete Employee
 ```http
 DELETE /hr/employees/{id}/
