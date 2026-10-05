@@ -841,34 +841,45 @@ class TestEmployeeListing:
 
 
 class TestUserListing:
-    def test_non_staff_lifecycle_administrator_sees_only_themselves(self):
-        """Listing is gated on is_staff, not on the hr.employee.* capabilities."""
-        admin = make_administrator()
-        make_employee("Other", "hr.employee.view")
-        response = client_for(admin.user).get(USERS_URL)
-        assert [row["email"] for row in response.data] == [admin.email]
+    """
+    Since AUD-02 F6 listing other logins needs hr.employee.view; is_staff
+    plays no part (was: staff saw every login, everyone else only themselves).
+    """
 
-    def test_staff_listing_hides_inactive_logins_by_default(self):
-        staff = make_employee("Staff", "hr.employee.view", staff=True)
+    def test_lifecycle_administrator_without_staff_lists_every_login(self):
+        """Was UNSAFE-adjacent: gated on is_staff, not on a capability (F6)."""
+        admin = make_administrator()
+        other = make_employee("Other", "hr.employee.view")
+        emails = {row["email"] for row in client_for(admin.user).get(USERS_URL).data}
+        assert {admin.email, other.email} <= emails
+
+    def test_staff_flag_without_the_capability_sees_only_themselves(self):
+        staff = make_employee("Staff", "hr.employee.create", staff=True)
+        make_employee("Other", "hr.employee.view")
+        response = client_for(staff.user).get(USERS_URL)
+        assert [row["email"] for row in response.data] == [staff.email]
+
+    def test_listing_hides_inactive_logins_by_default(self):
+        viewer = make_employee("Viewer", "hr.employee.view")
         inactive = make_employee("Inactive", "hr.employee.view")
         set_state(inactive, user_active=False, employee_active=True)
-        emails = {row["email"] for row in client_for(staff.user).get(USERS_URL).data}
+        emails = {row["email"] for row in client_for(viewer.user).get(USERS_URL).data}
         assert inactive.email not in emails
 
-    def test_staff_listing_shows_inactive_logins_on_request(self):
-        staff = make_employee("Staff", "hr.employee.view", staff=True)
+    def test_listing_shows_inactive_logins_on_request(self):
+        viewer = make_employee("Viewer", "hr.employee.view")
         inactive = make_employee("Inactive", "hr.employee.view")
         set_state(inactive, user_active=False, employee_active=True)
-        response = client_for(staff.user).get(f"{USERS_URL}?include_inactive=true")
+        response = client_for(viewer.user).get(f"{USERS_URL}?include_inactive=true")
         assert inactive.email in {row["email"] for row in response.data}
 
     def test_user_listing_follows_the_login_flag_not_the_employee_flag(self):
-        staff = make_employee("Staff", "hr.employee.view", staff=True)
+        viewer = make_employee("Viewer", "hr.employee.view")
         diverged = make_employee("Diverged", "hr.employee.view")
         set_state(diverged, user_active=True, employee_active=False)
-        emails = {row["email"] for row in client_for(staff.user).get(USERS_URL).data}
+        emails = {row["email"] for row in client_for(viewer.user).get(USERS_URL).data}
         assert diverged.email in emails
-        assert diverged.pk not in listed_employee_ids(staff)
+        assert diverged.pk not in listed_employee_ids(viewer)
 
 
 # =============================================================================

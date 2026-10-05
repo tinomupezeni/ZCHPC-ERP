@@ -97,11 +97,26 @@ GET /auth/users/me/
 }
 ```
 
-### List Users (Admin)
+### List Users
 
 ```http
 GET /auth/users/
 ```
+
+Requires the `hr.employee.view` permission to see other users' accounts. Without it, the response contains only the caller's own account.
+
+| Query parameter | Effect |
+|---|---|
+| `include_inactive=true` | Also lists deactivated accounts. |
+| `include_archived=true` | Also lists archived employees' accounts. Ignored unless the caller also holds `hr.employee.view_archived`. |
+
+### Get User
+
+```http
+GET /auth/users/{id}/
+```
+
+Callers can always read their own account. Reading anyone else's requires `hr.employee.view` (otherwise `403`, code `EMPLOYEE_VIEW_NOT_AUTHORIZED`). An archived employee's account returns `404` unless the caller also holds `hr.employee.view_archived`.
 
 ### Create User
 

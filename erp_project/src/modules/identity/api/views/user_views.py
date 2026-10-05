@@ -16,10 +16,7 @@ from shared.domain.exceptions import (
     ValidationError,
 )
 
-from modules.hr.application.authorization import (
-    EmployeeAuthorizationPolicy,
-    resolve_actor_permissions,
-)
+from modules.hr.application.authorization import resolve_actor_permissions
 from modules.identity.api.serializers import (
     ChangePasswordRequestSerializer,
     CreateUserRequestSerializer,
@@ -39,6 +36,10 @@ def _error(exc, http_status):
     return Response({"detail": exc.message, "code": exc.code}, status=http_status)
 
 
+def _flag(request, name: str) -> bool:
+    return request.query_params.get(name, "false").lower() == "true"
+
+
 class UserListCreateView(APIView):
     """
     API endpoint for listing and creating users.
@@ -53,26 +54,18 @@ class UserListCreateView(APIView):
         """
         List users.
 
-        Admins see all users, regular users see only themselves.
+        With hr.employee.view, everyone's logins (?include_inactive=true adds
+        disabled ones, ?include_archived=true archived employees' ones with
+        hr.employee.view_archived); without it, only your own. Decided by
+        UserService.
         """
         service = UserService(DjangoUserRepository())
-
-        if request.user.is_staff or request.user.is_superuser:
-            include_inactive = request.query_params.get("include_inactive", "false")
-            users = service.list_users(
-                include_inactive=include_inactive.lower() == "true",
-                # Logins of archived employees (AUD-02) only with
-                # hr.employee.view_archived.
-                include_archived=EmployeeAuthorizationPolicy().may_view_archived(
-                    resolve_actor_permissions(request.user)
-                ),
-            )
-        else:
-            # Non-admin users can only see themselves
-            try:
-                users = [service.get_user(request.user.id)]
-            except NotFoundError:
-                users = []
+        users = service.list_users(
+            actor_permissions=resolve_actor_permissions(request.user),
+            actor_user_id=request.user.id,
+            include_inactive=_flag(request, "include_inactive"),
+            include_archived=_flag(request, "include_archived"),
+        )
 
         serializer = UserResponseSerializer(
             [u.__dict__ for u in users],
@@ -163,30 +156,20 @@ class UserDetailView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Non-admins can only view themselves
-        if not (request.user.is_staff or request.user.is_superuser):
-            if uuid_id != request.user.id:
-                return Response(
-                    {"detail": "Not authorized"},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-
+        # Your own login always; anyone else's needs hr.employee.view, and an
+        # archived employee's also hr.employee.view_archived (UserService).
         service = UserService(DjangoUserRepository())
 
-        # The login of an archived employee (AUD-02) exists only for an actor
-        # holding hr.employee.view_archived.
-        if service.is_archived_account(uuid_id) and not EmployeeAuthorizationPolicy().may_view_archived(
-            resolve_actor_permissions(request.user)
-        ):
-            return Response(
-                {"detail": f"User with ID {uuid_id} not found"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
         try:
-            user = service.get_user(uuid_id)
+            user = service.view_user(
+                uuid_id,
+                actor_permissions=resolve_actor_permissions(request.user),
+                actor_user_id=request.user.id,
+            )
             serializer = UserResponseSerializer(user.__dict__)
             return Response(serializer.data)
+        except AuthorizationError as e:
+            return _error(e, status.HTTP_403_FORBIDDEN)
         except NotFoundError as e:
             return Response(
                 {"detail": e.message},

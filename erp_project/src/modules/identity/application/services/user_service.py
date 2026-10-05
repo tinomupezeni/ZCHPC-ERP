@@ -15,6 +15,8 @@ application login is an employee's login, so there is one policy for both:
 - disable a login: hr.employee.deactivate; re-enable or unlock one:
   hr.employee.reactivate - each refusing the actor's own account and anyone
   holding more than the actor.
+- see other people's logins (list_users, view_user): hr.employee.view;
+  your own needs nothing (AUD-02 F6). is_staff plays no part.
 
 There is no delete (AUD-02): a login and the employee record behind it are
 never destroyed through the application. Access ends through the employee
@@ -226,7 +228,8 @@ class UserService:
 
     def get_user(self, user_id: UUID) -> UserDTO:
         """
-        Get a user by ID.
+        Get a user by ID, with no authorization: for the caller's own login
+        (/users/me/). Reading someone else's goes through view_user.
 
         Args:
             user_id: User's UUID
@@ -269,25 +272,82 @@ class UserService:
         return self._to_dto(user)
 
     def list_users(
-        self, include_inactive: bool = False, include_archived: bool = False
+        self,
+        actor_permissions: PermissionSet | None = None,
+        actor_user_id: UUID | None = None,
+        include_inactive: bool = False,
+        include_archived: bool = False,
     ) -> list[UserDTO]:
         """
-        List all users.
+        The logins this actor may see (AUD-02 F6).
+
+        Without hr.employee.view the list is the actor's own login and
+        nothing else, whatever is asked for. With it, which logins appear is
+        the lifecycle rule:
+
+        - enabled logins always;
+        - disabled ones only when ``include_inactive`` is asked for;
+        - an archived employee's login only when ``include_archived`` is
+          asked for and the actor also holds hr.employee.view_archived
+          (otherwise the request for them is ignored).
 
         Args:
-            include_inactive: Whether to include deactivated users
-            include_archived: Whether to include the logins of archived
-                employees (AUD-02); callers pass True only for an actor
-                holding hr.employee.view_archived
+            actor_permissions: The acting user's permissions (None holds nothing)
+            actor_user_id: The acting user's id, from the authenticated request
+            include_inactive: Whether to include disabled logins
+            include_archived: Whether to include archived employees' logins
 
         Returns:
             List of UserDTOs
         """
-        users = self._user_repo.get_all(include_inactive=include_inactive)
-        if not include_archived:
-            archived = self._archived_login_ids()
-            users = [u for u in users if u.id not in archived]
-        return [self._to_dto(u) for u in users]
+        actor_permissions = actor_permissions or PermissionSet.empty()
+        if not self._policy.may_view_accounts(actor_permissions):
+            own = self._user_repo.get_by_id(actor_user_id) if actor_user_id else None
+            return [self._to_dto(own)] if own is not None else []
+
+        include_archived = include_archived and self._policy.may_view_archived(
+            actor_permissions
+        )
+        # Archived employees' logins are disabled, so fetching them needs the
+        # disabled ones too; include_inactive is applied below instead.
+        users = self._user_repo.get_all(include_inactive=include_inactive or include_archived)
+        archived = self._archived_login_ids()
+        return [
+            self._to_dto(u)
+            for u in users
+            if (include_archived if u.id in archived else u.is_active or include_inactive)
+        ]
+
+    def view_user(
+        self,
+        user_id: UUID,
+        actor_permissions: PermissionSet | None = None,
+        actor_user_id: UUID | None = None,
+    ) -> UserDTO:
+        """
+        One login, as this actor may see it (AUD-02 F6).
+
+        Your own login always. Anyone else's needs hr.employee.view, checked
+        before the target is loaded; an archived employee's login also needs
+        hr.employee.view_archived and otherwise does not exist. Disabled
+        logins are readable.
+
+        Raises:
+            AuthorizationError: If the actor may not see other people's logins
+            NotFoundError: If the login does not exist, or is archived and
+                the actor may not see archived logins
+        """
+        actor_permissions = actor_permissions or PermissionSet.empty()
+        is_self = actor_user_id is not None and actor_user_id == user_id
+        self._policy.authorize_view_account(actor_permissions, is_self=is_self)
+
+        if (
+            not is_self
+            and self.is_archived_account(user_id)
+            and not self._policy.may_view_archived(actor_permissions)
+        ):
+            raise self._not_found(user_id)
+        return self._to_dto(self._get(user_id))
 
     def is_archived_account(self, user_id: UUID) -> bool:
         """Whether this login belongs to an archived employee (AUD-02)."""
@@ -555,12 +615,16 @@ class UserService:
     def _get(self, user_id: UUID) -> User:
         user = self._user_repo.get_by_id(user_id)
         if user is None:
-            raise NotFoundError(
-                f"User with ID {user_id} not found",
-                code="USER_NOT_FOUND",
-                details={"user_id": str(user_id)},
-            )
+            raise self._not_found(user_id)
         return user
+
+    @staticmethod
+    def _not_found(user_id: UUID) -> NotFoundError:
+        return NotFoundError(
+            f"User with ID {user_id} not found",
+            code="USER_NOT_FOUND",
+            details={"user_id": str(user_id)},
+        )
 
     def _account_permissions(self, user_id: UUID) -> PermissionSet:
         """

@@ -645,10 +645,10 @@ class TestOperationalListingsExcludeArchived:
         assert response.status_code == 404
 
     def test_user_administration_hides_archived_logins(self):
-        staff = make_employee("Staff", "hr.employee.view", staff=True)
+        viewer = make_employee("Viewer", "hr.employee.view")
         archived = archived_employee()
-        client = client_for(staff.user)
-        listed = client.get("/api/v2/auth/users/?include_inactive=true")
+        client = client_for(viewer.user)
+        listed = client.get("/api/v2/auth/users/?include_inactive=true&include_archived=true")
         assert archived.email not in {row["email"] for row in listed.data}
         assert client.get(f"/api/v2/auth/users/{archived.user_id}/").status_code == 404
 
@@ -686,10 +686,13 @@ class TestArchiveHistoryAccess:
         assert response.status_code == 200
 
     def test_the_capability_shows_archived_logins_in_user_administration(self):
-        staff = make_employee("Staff", "hr.employee.view", VIEW_ARCHIVED, staff=True)
+        historian = make_employee("Historian", "hr.employee.view", VIEW_ARCHIVED)
         archived = archived_employee()
-        client = client_for(staff.user)
+        client = client_for(historian.user)
+        # Asked for explicitly (AUD-02 F6); holding the capability is not enough.
         listed = client.get("/api/v2/auth/users/?include_inactive=true")
+        assert archived.email not in {row["email"] for row in listed.data}
+        listed = client.get("/api/v2/auth/users/?include_archived=true")
         assert archived.email in {row["email"] for row in listed.data}
         assert client.get(f"/api/v2/auth/users/{archived.user_id}/").status_code == 200
 

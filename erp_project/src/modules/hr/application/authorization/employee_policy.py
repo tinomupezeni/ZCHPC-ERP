@@ -36,6 +36,10 @@ Rules (confirmed REM-01 decisions - capability-based, no job-title hierarchy):
 - Archiving an employee (AUD-02) needs ``hr.employee.archive`` and the same
   target rule. Reading archived employees' records needs
   ``hr.employee.view_archived``; ordinary employee access does not include it.
+- Seeing another person's login (AUD-02 F6) needs ``hr.employee.view``.
+  Everyone may see their own. It is a read: there is no target-authority
+  ("covers") check, so a viewer sees accounts above them too. Which of those
+  logins are listed is a separate lifecycle rule, applied by UserService.
 
 Superusers resolve to PermissionSet.full_access() via
 resolve_actor_permissions, so they pass every capability and "covers" check
@@ -253,6 +257,29 @@ class EmployeeAuthorizationPolicy:
     def may_view_archived(self, actor_permissions: PermissionSet | None) -> bool:
         return (actor_permissions or PermissionSet.empty()).has_permission(
             EmployeeManagementPermissions.VIEW_ARCHIVED
+        )
+
+    def may_view_accounts(self, actor_permissions: PermissionSet | None) -> bool:
+        """Whether the actor may see other people's logins (AUD-02 F6)."""
+        return (actor_permissions or PermissionSet.empty()).has_permission(
+            EmployeeManagementPermissions.VIEW
+        )
+
+    def authorize_view_account(
+        self, actor_permissions: PermissionSet, *, is_self: bool
+    ) -> None:
+        """
+        Reading one login (AUD-02 F6): your own always; anyone else's needs
+        hr.employee.view. Checked before the target is loaded, so a refusal
+        says nothing about whether the account exists.
+        """
+        if is_self:
+            return
+        self._require(
+            actor_permissions,
+            EmployeeManagementPermissions.VIEW,
+            "Viewing another user's account",
+            "EMPLOYEE_VIEW_NOT_AUTHORIZED",
         )
 
     @staticmethod

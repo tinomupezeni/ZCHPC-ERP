@@ -54,6 +54,11 @@ class EmployeeManagementPermissions:
     # and from each other; no role is granted either automatically.
     ARCHIVE = "hr.employee.archive"
     VIEW_ARCHIVED = "hr.employee.view_archived"
+    # AUD-02 F6: seeing other people's logins (GET /auth/users/, and
+    # /auth/users/<id>/ for anyone but yourself). Read-only and independent
+    # of every capability above: holding one of them does not imply this,
+    # and this implies none of them. No role is granted it automatically.
+    VIEW = "hr.employee.view"
     # No operation requires this since AUD-02 removed account deletion; it is
     # kept because roles may already hold it. Whether the archive transition
     # reuses it is decided with that transition.

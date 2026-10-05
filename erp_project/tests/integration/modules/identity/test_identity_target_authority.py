@@ -341,9 +341,10 @@ class TestStaffFlagIsNotPartOfTargetAuthority:
     """
     DECISION. resolve_actor_permissions models superuser as full access but
     has no representation of is_staff, so a staff-only login holds "nothing"
-    and any capability holder covers it. is_staff currently grants: listing
-    every login (/auth/users/), reading the login audit log (/auth/logs/,
-    IsAdminUser), and Django admin sign-in. This records today's behaviour.
+    and any capability holder covers it. is_staff currently grants: reading
+    the login audit log (/auth/logs/, IsAdminUser) and Django admin sign-in
+    (listing logins needs hr.employee.view since AUD-02 F6). This records
+    today's behaviour.
     """
 
     def test_a_lifecycle_manager_can_disable_a_staff_only_login(self):
