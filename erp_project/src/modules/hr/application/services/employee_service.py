@@ -320,8 +320,8 @@ class EmployeeService:
                     code="POSITION_DEPARTMENT_MISMATCH",
                 )
 
-        # An archived employee is given no new reports (AUD-02).
-        self._ensure_not_archived_manager(command.reports_to_id)
+        # The manager exists and is not archived (AUD-02, F9).
+        self._ensure_valid_manager(command.reports_to_id)
 
         # A requested EC number is checked here only for its format; whether
         # it is free is decided under the allocation lock below.
@@ -513,7 +513,8 @@ class EmployeeService:
                 permissions the actor does not; or if it sends an ordinary
                 field (ORDINARY_FIELDS) for an employee who holds
                 permissions the actor does not (AUD-02 F1).
-            NotFoundError: If employee not found
+            NotFoundError: If the employee, or a department, position or
+                manager the command names, is not found (AUD-02 F9)
             ValidationError: If validation fails (including an unknown role_id), or
                 DUPLICATE_EMAIL if another employee holds the email (AUD-02 F9)
         """
@@ -529,10 +530,8 @@ class EmployeeService:
         if not employee:
             raise NotFoundError(f"Employee with ID {command.employee_id} not found")
 
-        # An archived employee's record is closed (AUD-02), and an archived
-        # employee is given no new reports.
+        # An archived employee's record is closed (AUD-02).
         employee.ensure_not_archived("edited")
-        self._ensure_not_archived_manager(command.reports_to_id)
 
         # Target authority (AUD-01 F2): judged on the employee as they stand,
         # and only when the role or department actually changes.
@@ -552,6 +551,10 @@ class EmployeeService:
                 actor_permissions,
                 target_permissions=self._effective_permissions(employee),
             )
+
+        # The records it now points at exist and agree (AUD-02 F9), judged
+        # after authorization and before anything is written.
+        self._validate_assignment_references(command, employee)
 
         # An employee email is one employee's (AUD-02 F9), in any letter case.
         if command.email is not None and self._employees.exists_by_email(
@@ -797,13 +800,54 @@ class EmployeeService:
             source="hr.employee.archive",
         )
 
-    def _ensure_not_archived_manager(self, reports_to_id: int | None) -> None:
-        """An archived employee is given no new reports (AUD-02)."""
+    def _ensure_valid_manager(self, reports_to_id: int | None) -> None:
+        """
+        A reports_to manager exists (AUD-02 F9) and is not archived: an
+        archived employee is given no new reports (AUD-02). A deactivated
+        one may be.
+        """
         if reports_to_id is None:
             return
         manager = self._employees.get_by_id(reports_to_id)
-        if manager is not None:
-            manager.ensure_not_archived("assigned as a manager")
+        if manager is None:
+            raise NotFoundError(f"Employee with ID {reports_to_id} not found")
+        manager.ensure_not_archived("assigned as a manager")
+
+    def _validate_assignment_references(
+        self, command: UpdateEmployeeCommand, employee: Employee
+    ) -> None:
+        """
+        The department, position and manager an update names exist, and a
+        position belongs to the employee's department - the one in the same
+        request, or the one they are in - as create already requires
+        (AUD-02 F9). Who may change them is decided elsewhere.
+
+        Raises:
+            NotFoundError: An unknown department, position or manager
+            ValidationError: POSITION_DEPARTMENT_MISMATCH; EMPLOYEE_ARCHIVED
+                for an archived manager
+        """
+        if command.department_id is not None and not self._departments.get_by_id(
+            command.department_id
+        ):
+            raise NotFoundError(f"Department with ID {command.department_id} not found")
+
+        if command.position_id is not None:
+            position = self._positions.get_by_id(command.position_id)
+            if not position:
+                raise NotFoundError(f"Position with ID {command.position_id} not found")
+            department_id = (
+                command.department_id
+                if command.department_id is not None
+                else employee.department_id
+            )
+            if department_id and position.department_id != department_id:
+                raise ValidationError(
+                    message="Position does not belong to the specified department",
+                    code="POSITION_DEPARTMENT_MISMATCH",
+                )
+
+        self._ensure_valid_manager(command.reports_to_id)
 
     def get_employee(
         self, employee_id: int, actor_permissions: PermissionSet | None = None

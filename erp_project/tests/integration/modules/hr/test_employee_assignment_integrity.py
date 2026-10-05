@@ -40,9 +40,6 @@ MISSING = 987654
 # EmployeeId accepts only EMP + digits.
 _numbers = count(92501)
 
-# Fixed by the next commit ("enforce employee assignment integrity").
-F9_FIX = pytest.mark.xfail(strict=True, reason="AUD-02 F9 slice 3: not yet fixed")
-
 
 def make_employee(label, *permissions, **extra):
     email = f"{label.lower()}{next(_numbers)}@zchpc.test"
@@ -101,7 +98,6 @@ def lifecycle():
 
 @pytest.mark.django_db(transaction=True)
 class TestUnknownReferences:
-    @F9_FIX
     @pytest.mark.parametrize("field", ["position_id", "department_id", "reports_to_id"])
     def test_on_update(self, field):
         boss = make_employee("Boss", "*")
@@ -111,7 +107,6 @@ class TestUnknownReferences:
         assert response.status_code == status.HTTP_404_NOT_FOUND, getattr(response, "data", None)
         assert snapshot(target) == before
 
-    @F9_FIX
     def test_reports_to_on_create(self):
         response, email = create(make_employee("Boss", "*"), reports_to_id=MISSING)
         assert response.status_code == status.HTTP_404_NOT_FOUND, getattr(response, "data", None)
@@ -132,7 +127,6 @@ class TestUnknownReferences:
 
 @pytest.mark.django_db
 class TestPositionBelongsToDepartment:
-    @F9_FIX
     def test_update_to_another_departments_position(self):
         boss = make_employee("Boss", "*")
         home, other = department(), department()
@@ -143,7 +137,6 @@ class TestPositionBelongsToDepartment:
         assert response.data["code"] == "POSITION_DEPARTMENT_MISMATCH"
         assert snapshot(target) == before
 
-    @F9_FIX
     def test_update_with_a_department_the_position_is_not_in(self):
         boss = make_employee("Boss", "*")
         home, other = department(), department()

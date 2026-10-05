@@ -33,7 +33,7 @@ from modules.hr.application.services import (
 )
 from modules.hr.infrastructure.persistence.department_repository import DjangoDepartmentRepository
 from modules.hr.infrastructure.persistence.employee_repository import DjangoEmployeeRepository
-from modules.hr.infrastructure.persistence.models import Employees, Position, Role
+from modules.hr.infrastructure.persistence.models import Department, Employees, Position, Role
 from modules.hr.infrastructure.persistence.position_repository import DjangoPositionRepository
 from modules.identity.domain.value_objects import PermissionSet
 from modules.payroll.infrastructure.persistence.models import PayrollProfile
@@ -346,7 +346,12 @@ class TestServiceLevelEnforcement:
     def test_fields_outside_f1_are_not_judged_by_it(self):
         """position, employee type and reports_to keep today's rules (F9's to decide)."""
         target = make_employee("Admin", "*")
-        position = Position.objects.create(title=f"Pos{next(_numbers)}")
+        # A position always has a department (domain rule, checked on update
+        # since AUD-02 F9); the target has none, so any department fits.
+        position = Position.objects.create(
+            title=f"Pos{next(_numbers)}",
+            department=Department.objects.create(name=f"Dept{next(_numbers)}"),
+        )
         employee = employee_service().update_employee(
             UpdateEmployeeCommand(
                 employee_id=target.pk, position_id=position.pk, employee_type="Contract"
