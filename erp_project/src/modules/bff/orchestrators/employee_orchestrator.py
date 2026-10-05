@@ -12,6 +12,29 @@ _policy = PayrollAuthorizationPolicy()
 _PROFILE_KEYS = ("usd_salary", "zig_salary", "pay_frequency")
 _BANK_KEYS = ("bank_name", "bank_account")
 _STATUTORY_KEYS = ("nssa_number", "zimra_tax_number", "paye_number")
+# HR fields written through EmployeeService.update_employee, so they are held
+# to the same rules as PATCH /hr/employees/<id>/ - including authority over
+# the employee (AUD-02 F1/F8). Same names as UpdateEmployeeCommand's fields.
+_HR_SERVICE_KEYS = ("first_name", "surname", "phone")
+
+
+def _employee_service():
+    from modules.hr.application.services import EmployeeService
+    from modules.hr.infrastructure.persistence.department_repository import (
+        DjangoDepartmentRepository,
+    )
+    from modules.hr.infrastructure.persistence.employee_repository import (
+        DjangoEmployeeRepository,
+    )
+    from modules.hr.infrastructure.persistence.position_repository import (
+        DjangoPositionRepository,
+    )
+
+    return EmployeeService(
+        employee_repository=DjangoEmployeeRepository(),
+        department_repository=DjangoDepartmentRepository(),
+        position_repository=DjangoPositionRepository(),
+    )
 
 
 def _may(authorize, actor, employee_pk) -> bool:
@@ -32,6 +55,11 @@ class EmployeeOrchestrator:
     view is returned as nulls, and a write touching a section the actor may not
     manage is refused outright, before anything (including the HR fields in the
     same request) is saved.
+
+    first_name, surname and phone are written by EmployeeService, not here, so
+    the HR API's rules apply to them unchanged (AUD-02 F8): editing another
+    employee's needs authority over that employee. Everything in one request
+    commits together or not at all.
     """
 
     @staticmethod
@@ -96,16 +124,29 @@ class EmployeeOrchestrator:
         if touches_statutory:
             _policy.authorize_manage_statutory_profile(actor, employee_pk)
 
+        if employee_pk is None:
+            return None
+
+        from modules.hr.application.services import UpdateEmployeeCommand
+
+        hr_changes = {key: data[key] for key in _HR_SERVICE_KEYS if key in data}
+
         try:
             with transaction.atomic():
-                employee = Employees.objects.get(uuid=uuid)
+                # 1. Update HR fields. The service authorizes before it writes;
+                # a refusal here, or any failure below, rolls the whole
+                # request back.
+                if hr_changes:
+                    _employee_service().update_employee(
+                        UpdateEmployeeCommand(employee_id=employee_pk, **hr_changes),
+                        actor_permissions=actor.permissions,
+                        actor_employee_id=actor.employee_id,
+                    )
 
-                # 1. Update HR fields
-                if 'first_name' in data: employee.first_name = data['first_name']
-                if 'surname' in data: employee.surname = data['surname']
-                if 'email' in data: employee.email = data['email']
-                if 'phone' in data: employee.phone = data['phone']
-                employee.save()
+                employee = Employees.objects.get(uuid=uuid)
+                if 'email' in data:
+                    employee.email = data['email']
+                    employee.save()
 
                 # 2. Update Payroll Profile
                 if touches_profile:

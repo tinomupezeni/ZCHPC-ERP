@@ -5,7 +5,7 @@ from modules.bff.orchestrators.employee_orchestrator import EmployeeOrchestrator
 from modules.bff.serializers.unified_employee import UnifiedEmployeeProfileSerializer
 from modules.payroll.api.actors import payroll_actor_from_request
 from modules.payroll.api.errors import error_response
-from shared.domain.exceptions import AuthorizationError
+from shared.domain.exceptions import AuthorizationError, ValidationError
 from modules.hr.application.authorization import (
     EmployeeAuthorizationPolicy,
     resolve_actor_permissions,
@@ -57,7 +57,8 @@ class BFFEmployeeDetailView(APIView):
             updated_profile_data = EmployeeOrchestrator.update_full_profile(
                 uuid, request.data, payroll_actor_from_request(request)
             )
-        except AuthorizationError as e:
+        except (AuthorizationError, ValidationError) as e:
+            # ValidationError: the HR fields are validated by EmployeeService.
             return error_response(e)
 
         if not updated_profile_data:
