@@ -22,7 +22,7 @@ from itertools import count
 
 import pytest
 from django.contrib.auth import get_user_model
-from django.db import connection
+from django.db import connection, transaction
 from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
@@ -49,9 +49,6 @@ EXCEEDS = "EMPLOYEE_TARGET_EXCEEDS_ACTOR_AUTHORITY"
 
 # EmployeeId accepts only EMP + digits.
 _numbers = count(93501)
-
-# Fixed by the next commit ("harden employee login attachment").
-F9_FIX = pytest.mark.xfail(strict=True, reason="AUD-02 F9 slice 1: not yet fixed")
 
 
 def make_employee(label, *permissions, superuser=False):
@@ -115,7 +112,6 @@ def diverge(employee):
 
 @pytest.mark.django_db
 class TestMixedCaseLogins:
-    @F9_FIX
     def test_a_mixed_case_privileged_login_is_protected_by_f7(self):
         root_email = mixed_case_email("Root")
         root = User.objects.create_superuser(email=root_email, password=PASSWORD)
@@ -130,7 +126,6 @@ class TestMixedCaseLogins:
         assert logins_for(root_email) == 1
         assert User.objects.get(pk=root.pk).email == root_email
 
-    @F9_FIX
     def test_the_privileged_login_can_still_sign_in(self):
         root_email = mixed_case_email("Root")
         User.objects.create_superuser(email=root_email, password=PASSWORD)
@@ -141,7 +136,6 @@ class TestMixedCaseLogins:
         )
         assert response.status_code == status.HTTP_200_OK, getattr(response, "data", None)
 
-    @F9_FIX
     def test_a_mixed_case_login_the_actor_covers_is_attached_not_duplicated(self):
         bare_email = mixed_case_email("Bare")
         bare = User.objects.create_user(email=bare_email, password=PASSWORD)
@@ -159,15 +153,15 @@ class TestMixedCaseLogins:
         assert response.data["code"] == EXCEEDS
         assert not Employees.objects.filter(user_id=root.pk).exists()
 
-    @F9_FIX
     def test_logins_differing_only_by_case_are_never_attached(self):
         """Pre-existing ambiguity: refuse rather than pick one."""
         email = mixed_case_email("Twin")
         User.objects.create_user(email=email, password=PASSWORD)
         User.objects.create_user(email=email.lower(), password=PASSWORD)
+        boss = make_employee("Boss", "*")
         employees_before = Employees.objects.count()
 
-        response = create(make_employee("Boss", "*"), email.lower())
+        response = create(boss, email.lower())
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST, getattr(response, "data", None)
         assert Employees.objects.count() == employees_before
@@ -181,7 +175,6 @@ class TestMixedCaseLogins:
 
 @pytest.mark.django_db(transaction=True)
 class TestAlreadyAttachedLogin:
-    @F9_FIX
     @pytest.mark.parametrize("case", ["same", "upper"], ids=["same-case", "different-case"])
     def test_its_email_is_taken(self, case):
         holder = make_employee("Holder", "hr.employee.view")
@@ -198,13 +191,12 @@ class TestAlreadyAttachedLogin:
         assert Employees.objects.get(pk=holder.pk).user_id == holder.user_id
         assert logins_for(login_email) == 1
 
-    @F9_FIX
     def test_the_signal_does_not_attach_it_either(self):
         """Records created outside EmployeeService follow the same rule."""
         holder = make_employee("Holder", "hr.employee.view")
         login_email = holder.user.email
         diverge(holder)
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError), transaction.atomic():
             Employees.objects.create(
                 first_name="Direct", surname="Orm", email=login_email,
                 employee_id=f"EMP{next(_numbers)}",
@@ -226,7 +218,6 @@ class TestDuplicateEmployeeEmail:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["code"] == "DUPLICATE_EMAIL"
 
-    @F9_FIX
     @pytest.mark.parametrize("case", ["same", "upper"], ids=["same-case", "different-case"])
     def test_on_update(self, case):
         boss = make_employee("Boss", "*")
@@ -247,7 +238,6 @@ class TestDuplicateEmployeeEmail:
         )
         assert response.status_code == status.HTTP_200_OK, response.data
 
-    @F9_FIX
     def test_a_lost_race_on_create_is_duplicate_email_not_a_database_error(self, monkeypatch):
         """Both requests pass the duplicate check; the unique index decides."""
         email = f"race{next(_numbers)}@zchpc.test"

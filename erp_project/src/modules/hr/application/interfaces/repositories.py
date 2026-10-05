@@ -70,8 +70,8 @@ class IEmployeeRepository(ABC):
         return None
 
     @abstractmethod
-    def exists_by_email(self, email: str) -> bool:
-        """Check if an employee with the given email exists."""
+    def exists_by_email(self, email: str, exclude_id: int | None = None) -> bool:
+        """Check if an employee (other than ``exclude_id``) holds this email, in any case."""
         ...
 
     @abstractmethod

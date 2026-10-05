@@ -152,9 +152,12 @@ class DjangoEmployeeRepository(IEmployeeRepository):
         with connection.cursor() as cursor:
             cursor.execute("SELECT pg_advisory_xact_lock(%s)", [_EMPLOYEE_ID_ALLOCATION_LOCK])
 
-    def exists_by_email(self, email: str) -> bool:
-        """Check if an employee with the given email exists."""
-        return self.model.objects.filter(email__iexact=email).exists()
+    def exists_by_email(self, email: str, exclude_id: int | None = None) -> bool:
+        """Check if an employee (other than ``exclude_id``) holds this email, in any case."""
+        queryset = self.model.objects.filter(email__iexact=email)
+        if exclude_id is not None:
+            queryset = queryset.exclude(pk=exclude_id)
+        return queryset.exists()
 
     def exists_by_national_id(self, national_id: str) -> bool:
         """Check if an employee with the given national ID exists."""

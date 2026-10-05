@@ -7,7 +7,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 
 from shared.domain.exceptions import AuthorizationError, ValidationError, NotFoundError
 from shared.domain.value_objects import Email, NationalId, PhoneNumber, EmployeeId
@@ -270,7 +270,8 @@ class EmployeeService:
         Raises:
             AuthorizationError: If the actor lacks a required capability or
                 may not assign the requested role.
-            ValidationError: If validation fails (including an unknown role_id)
+            ValidationError: If validation fails (including an unknown role_id), or
+                DUPLICATE_EMAIL / AMBIGUOUS_LOGIN_EMAIL for the email (AUD-02 F9)
         """
         actor_permissions = actor_permissions or PermissionSet.empty()
         self._policy.authorize_create(actor_permissions)
@@ -287,7 +288,7 @@ class EmployeeService:
             ),
         )
         self._authorize_payroll_data_changes(command, actor_permissions, None)
-        self._authorize_login_attachment(command, actor_permissions)
+        login_id = command.user_id or self._authorize_login_attachment(command, actor_permissions)
         # Validate email uniqueness
         if command.email and self._employees.exists_by_email(command.email):
             raise ValidationError(
@@ -336,6 +337,48 @@ class EmployeeService:
         # path. All writes happen in one transaction so a failure partway
         # through doesn't leave an employee without their profile rows.
         # The EC number is allocated in the same transaction (AUD-02).
+        try:
+            employee = self._add_employee(command, requested_employee_id, login_id)
+        except IntegrityError as exc:
+            # A concurrent request took the email after the check above
+            # (AUD-02 F9); the unique index refused this one.
+            self._raise_if_email_taken(exc, command.email)
+
+        # Publish event
+        self._event_bus.publish(
+            EmployeeHiredEvent(
+                employee_id=employee.id,
+                employee_number=str(employee.employee_id),
+                first_name=employee.first_name,
+                surname=employee.surname,
+                department_id=employee.department_id,
+                position_id=employee.position_id,
+                date_joined=employee.date_joined,
+            )
+        )
+
+        return employee
+
+    def _raise_if_email_taken(
+        self, exc: IntegrityError, email: str | None, exclude_id: int | None = None
+    ) -> None:
+        """
+        Turn a unique-index refusal of the employee email into the same
+        DUPLICATE_EMAIL the up-front check gives; re-raise anything else.
+        """
+        if email and self._employees.exists_by_email(email, exclude_id=exclude_id):
+            raise ValidationError(
+                message=f"Employee with email {email} already exists",
+                code="DUPLICATE_EMAIL",
+            ) from exc
+        raise exc
+
+    def _add_employee(
+        self,
+        command: CreateEmployeeCommand,
+        requested_employee_id: EmployeeId | None,
+        login_id: UUID | None,
+    ) -> Employee:
         with transaction.atomic():
             employee_id = self._allocate_employee_id(requested_employee_id)
 
@@ -343,7 +386,7 @@ class EmployeeService:
             employee = Employee(
                 id=0,  # Will be set by repository
                 employee_id=employee_id,
-                user_id=command.user_id,
+                user_id=login_id,
                 first_name=command.first_name,
                 surname=command.surname,
                 national_id=NationalId(command.national_id) if command.national_id else None,
@@ -373,20 +416,6 @@ class EmployeeService:
                 self._save_bank_account(employee.id, command)
             self._save_statutory_info(employee.id, command)
             self._save_leave_profile(employee.id, command.leave_days_entitled)
-
-        # Publish event
-        self._event_bus.publish(
-            EmployeeHiredEvent(
-                employee_id=employee.id,
-                employee_number=str(employee.employee_id),
-                first_name=employee.first_name,
-                surname=employee.surname,
-                department_id=employee.department_id,
-                position_id=employee.position_id,
-                date_joined=employee.date_joined,
-            )
-        )
-
         return employee
 
     def _allocate_employee_id(self, requested: EmployeeId | None) -> EmployeeId:
@@ -419,33 +448,38 @@ class EmployeeService:
 
     def _authorize_login_attachment(
         self, command: CreateEmployeeCommand, actor_permissions: PermissionSet
-    ) -> None:
+    ) -> UUID | None:
         """
         Establish, before anything is created, whether the new employee would
         be attached to an existing login, and that the actor may do that
-        (AUD-02 F7).
+        (AUD-02 F7). Returns that login's id, which the new record is created
+        with, or None.
 
-        modules.hr.signals attaches a new employee to the login whose email
-        equals the employee's stored (normalized) email, when that login has
-        no employee record yet. The same login is resolved here, so the
-        authorization decision and the link the signal then makes cannot
-        disagree. A caller that supplies user_id names the login itself
-        (identity's create_user, for the login it has just created).
+        The login is resolved by the one attachment rule (login_attachment:
+        case-insensitive, never a login that already belongs to an employee,
+        AUD-02 F9), and the record names it, so the post_save signal does not
+        resolve it again: what was authorized is what gets linked. A caller
+        that supplies user_id names the login itself (identity's create_user,
+        for the login it has just created).
+
+        Raises:
+            AuthorizationError: If the actor may not attach that login
+            ValidationError: DUPLICATE_EMAIL if the email's login belongs to
+                another employee; AMBIGUOUS_LOGIN_EMAIL if logins differ
+                only by case
         """
         if command.user_id is not None or not command.email:
-            return
+            return None
 
-        from modules.identity.infrastructure.persistence.models import CustomUser
+        from modules.hr.infrastructure.persistence.login_attachment import attachable_login
 
-        login = (
-            CustomUser.objects.filter(email=Email(command.email).value, employee_profile__isnull=True)
-            .first()
-        )
+        login = attachable_login(Email(command.email).value)
         if login is None:
-            return
+            return None
         self._policy.authorize_login_attachment_target(
             actor_permissions, target_permissions=resolve_actor_permissions(login)
         )
+        return login.pk
 
     def update_employee(
         self,
@@ -480,7 +514,8 @@ class EmployeeService:
                 field (ORDINARY_FIELDS) for an employee who holds
                 permissions the actor does not (AUD-02 F1).
             NotFoundError: If employee not found
-            ValidationError: If validation fails (including an unknown role_id)
+            ValidationError: If validation fails (including an unknown role_id), or
+                DUPLICATE_EMAIL if another employee holds the email (AUD-02 F9)
         """
         self._authorize_assignment(
             actor_permissions,
@@ -516,6 +551,15 @@ class EmployeeService:
             self._policy.authorize_update_target(
                 actor_permissions,
                 target_permissions=self._effective_permissions(employee),
+            )
+
+        # An employee email is one employee's (AUD-02 F9), in any letter case.
+        if command.email is not None and self._employees.exists_by_email(
+            command.email, exclude_id=employee.id
+        ):
+            raise ValidationError(
+                message=f"Employee with email {command.email} already exists",
+                code="DUPLICATE_EMAIL",
             )
 
         changes = []
@@ -585,8 +629,13 @@ class EmployeeService:
                 ))
                 changes.append("emergency_contact")
 
-            # Save
-            self._employees.update(employee)
+            # Save (its own savepoint, so a unique-index refusal - a
+            # concurrent request taking the email - leaves this transaction
+            # usable for the check that names it).
+            try:
+                self._employees.update(employee)
+            except IntegrityError as exc:
+                self._raise_if_email_taken(exc, command.email, exclude_id=employee.id)
 
         if salary_change_event:
             self._event_bus.publish(salary_change_event)
