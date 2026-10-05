@@ -34,9 +34,6 @@ BFF = "bff.employee.view"
 # EmployeeId accepts only EMP + digits.
 _numbers = count(91501)
 
-# Fixed by the next commit ("validate bff employee email updates").
-F9_FIX = pytest.mark.xfail(strict=True, reason="AUD-02 F9 slice 4: not yet fixed")
-
 
 def make_employee(label, *permissions):
     email = f"{label.lower()}{next(_numbers)}@zchpc.test"
@@ -68,7 +65,6 @@ def stored(employee):
 
 @pytest.mark.django_db(transaction=True)
 class TestInvalidAndTakenEmails:
-    @F9_FIX
     @pytest.mark.parametrize("email", ["not-an-email", ""], ids=["malformed", "blank"])
     def test_an_invalid_email_is_a_400_and_not_stored(self, email):
         actor, target = make_employee("Boss", "bff.*", "*"), make_employee("Target", BFF)
@@ -77,7 +73,6 @@ class TestInvalidAndTakenEmails:
         assert response.status_code == status.HTTP_400_BAD_REQUEST, getattr(response, "data", None)
         assert stored(target) == before
 
-    @F9_FIX
     @pytest.mark.parametrize("case", ["same", "upper"], ids=["same-case", "different-case"])
     def test_another_employees_email_is_duplicate_email(self, case):
         actor = make_employee("Boss", "bff.*", "*")
@@ -89,7 +84,6 @@ class TestInvalidAndTakenEmails:
         assert response.data["code"] == "DUPLICATE_EMAIL"
         assert stored(target) == before
 
-    @F9_FIX
     def test_a_refused_email_writes_nothing_else_in_the_request(self):
         actor = make_employee("Boss", "bff.*", "*")
         target, other = make_employee("Target", BFF), make_employee("Other", BFF)
