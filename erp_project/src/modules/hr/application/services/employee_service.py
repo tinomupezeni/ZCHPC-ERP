@@ -123,8 +123,10 @@ class UpdateEmployeeCommand:
 
 
 # The UpdateEmployeeCommand fields that need authority over the employee and
-# nothing else (AUD-02 F1). Role, department and payroll data have their own
-# rules; position, employee type, reports_to, email and leave entitlement are
+# nothing else (AUD-02 F1). Position, employee type and reports_to join them
+# (AUD-02 F9 slice 2): they grant no runtime authority, so - unlike role and
+# department - they need no hr.employee.manage_assignments. Role, department
+# and payroll data have their own rules; email and leave entitlement are
 # deliberately not classified here.
 ORDINARY_FIELDS = (
     "first_name",
@@ -136,6 +138,9 @@ ORDINARY_FIELDS = (
     "emergency_contact_name",
     "emergency_contact_number",
     "emergency_contact_relationship",
+    "position_id",
+    "employee_type",
+    "reports_to_id",
 )
 
 

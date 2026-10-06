@@ -59,9 +59,6 @@ FIELDS = ("position_id", "employee_type", "reports_to_id")
 # EmployeeId accepts only EMP + digits.
 _numbers = count(90501)
 
-# Fixed by the next commit ("enforce assignment target authority").
-F9_FIX = pytest.mark.xfail(strict=True, reason="AUD-02 F9 slice 2: not yet fixed")
-
 
 def make_employee(label, *permissions, superuser=False):
     """An employee in their own department, whose role grants exactly ``permissions``."""
@@ -134,28 +131,24 @@ def employee_service():
 
 
 class TestLowerAuthorityIsRefused:
-    @F9_FIX
     def test_lower_authority_cannot_update_position_on_higher_authority_employee(self):
         actor, target = make_employee("Clerk", *VIEWER), make_employee("Admin", "*")
         before = placement(target)
         assert_refused(edit(actor, target, {"position_id": valid_change("position_id", target)}))
         assert placement(target) == before
 
-    @F9_FIX
     def test_lower_authority_cannot_update_employee_type_on_higher_authority_employee(self):
         actor, target = make_employee("Clerk", *VIEWER), make_employee("Admin", "*")
         before = placement(target)
         assert_refused(edit(actor, target, {"employee_type": valid_change("employee_type", target)}))
         assert placement(target) == before
 
-    @F9_FIX
     def test_lower_authority_cannot_update_reports_to_on_higher_authority_employee(self):
         actor, target = make_employee("Clerk", *VIEWER), make_employee("Admin", "*")
         before = placement(target)
         assert_refused(edit(actor, target, {"reports_to_id": valid_change("reports_to_id", target)}))
         assert placement(target) == before
 
-    @F9_FIX
     def test_lower_authority_cannot_make_a_higher_target_report_to_themselves(self):
         """The privilege-flavoured case: re-pointing a superior under oneself."""
         actor, target = make_employee("Clerk", *VIEWER), make_employee("Admin", "*")
@@ -163,7 +156,6 @@ class TestLowerAuthorityIsRefused:
         assert_refused(edit(actor, target, {"reports_to_id": actor.pk}))
         assert placement(target) == before
 
-    @F9_FIX
     @pytest.mark.parametrize("field", FIELDS)
     def test_a_superuser_linked_target_is_protected(self, field):
         actor, target = make_employee("Clerk", *SENIOR), make_employee("Root", superuser=True)
@@ -171,7 +163,6 @@ class TestLowerAuthorityIsRefused:
         assert_refused(edit(actor, target, {field: valid_change(field, target)}))
         assert placement(target) == before
 
-    @F9_FIX
     @pytest.mark.parametrize("field", FIELDS)
     def test_a_deactivated_higher_target_stays_protected(self, field):
         actor, target = make_employee("Clerk", *VIEWER), make_employee("Admin", "*")
@@ -180,7 +171,6 @@ class TestLowerAuthorityIsRefused:
         assert_refused(edit(actor, target, {field: valid_change(field, target)}))
         assert placement(target) == before
 
-    @F9_FIX
     @pytest.mark.parametrize("field", FIELDS)
     def test_the_assignment_capability_does_not_replace_target_authority(self, field):
         actor = make_employee("Assigner", *VIEWER, "hr.employee.manage_assignments")
@@ -233,7 +223,6 @@ class TestCoveredTargetsAreEditable:
 
 
 class TestAtomicity:
-    @F9_FIX
     def test_assignment_field_updates_are_atomic_when_target_authority_fails(self):
         actor, target = make_employee("Clerk", *VIEWER), make_employee("Admin", "*")
         before = placement(target)
@@ -254,7 +243,6 @@ class TestAtomicity:
 
 
 class TestServiceLevelEnforcement:
-    @F9_FIX
     @pytest.mark.parametrize("field", FIELDS)
     def test_service_refuses_a_lower_actor_without_http(self, field):
         target = make_employee("Admin", "*")

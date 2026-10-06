@@ -25,8 +25,9 @@ Rules (confirmed REM-01 decisions - capability-based, no job-title hierarchy):
   currently holds (AUD-01 F2), so nobody can demote or move someone above
   them.
 - Editing an employee's ordinary fields (name, date of birth, gender,
-  marital status, phone, emergency contact) needs authority over that
-  employee in the same sense (AUD-02 F1). There is no separate capability:
+  marital status, phone, emergency contact; and position, employee type and
+  reporting line, which grant no authority - AUD-02 F9) needs authority over
+  that employee in the same sense (AUD-02 F1). There is no separate capability:
   reaching the hr routes is the prerequisite, authority over the target is
   the rule. Yourself and your peers are covered.
 - Deactivating an employee needs ``hr.employee.deactivate``, may not target

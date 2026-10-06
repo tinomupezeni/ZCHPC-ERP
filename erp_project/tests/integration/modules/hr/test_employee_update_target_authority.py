@@ -344,18 +344,32 @@ class TestServiceLevelEnforcement:
         assert employee.surname == "Edited"
 
     def test_fields_outside_f1_are_not_judged_by_it(self):
-        """position, employee type and reports_to keep today's rules (F9's to decide)."""
+        """
+        Email is still not classified (AUD-02 F1/F8/F9), so F1 does not judge
+        it. Position, employee type and reports_to joined F1's fields in F9
+        slice 2 (test_employee_assignment_target_authority).
+        """
         target = make_employee("Admin", "*")
-        # A position always has a department (domain rule, checked on update
-        # since AUD-02 F9); the target has none, so any department fits.
+        email = f"moved{next(_numbers)}@zchpc.test"
+        employee = employee_service().update_employee(
+            UpdateEmployeeCommand(employee_id=target.pk, email=email),
+            actor_permissions=PermissionSet.from_list(["hr.employee.view"]),
+        )
+        assert employee.email.value == email
+
+    def test_assignment_fields_are_judged_by_it(self):
+        """F9 slice 2: position, employee type and reports_to are F1 fields now."""
+        target = make_employee("Admin", "*")
         position = Position.objects.create(
             title=f"Pos{next(_numbers)}",
             department=Department.objects.create(name=f"Dept{next(_numbers)}"),
         )
-        employee = employee_service().update_employee(
-            UpdateEmployeeCommand(
-                employee_id=target.pk, position_id=position.pk, employee_type="Contract"
-            ),
-            actor_permissions=PermissionSet.from_list(["hr.employee.view"]),
-        )
-        assert employee.position_id == position.pk
+        with pytest.raises(AuthorizationError) as raised:
+            employee_service().update_employee(
+                UpdateEmployeeCommand(
+                    employee_id=target.pk, position_id=position.pk, employee_type="Contract"
+                ),
+                actor_permissions=PermissionSet.from_list(["hr.employee.view"]),
+            )
+        assert raised.value.code == EXCEEDS
+        assert Employees.objects.get(pk=target.pk).position_id is None
