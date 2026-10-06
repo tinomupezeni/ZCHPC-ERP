@@ -214,16 +214,21 @@ class Employee(AggregateRoot[int]):
         contract_from: date | None = None,
         contract_to: date | None = None,
     ) -> None:
-        """Update contract dates."""
-        if contract_from is not None:
-            self.contract_from = contract_from
-        if contract_to is not None:
-            if self.contract_from and contract_to < self.contract_from:
-                raise ValidationError(
-                    message="Contract end date must be after start date",
-                    code="INVALID_CONTRACT_DATES",
-                )
-            self.contract_to = contract_to
+        """
+        Update contract dates; a date not given is kept. The end may not come
+        before the start, judged on the dates the employee ends up with -
+        so moving only the start past the current end is refused too
+        (AUD-02 F9). Equal dates are valid. Nothing changes on refusal.
+        """
+        new_from = contract_from if contract_from is not None else self.contract_from
+        new_to = contract_to if contract_to is not None else self.contract_to
+        if new_from and new_to and new_to < new_from:
+            raise ValidationError(
+                message="Contract end date must be after start date",
+                code="INVALID_CONTRACT_DATES",
+            )
+        self.contract_from = new_from
+        self.contract_to = new_to
         self.updated_at = datetime.utcnow()
 
     def deactivate(self) -> bool:

@@ -42,6 +42,7 @@ from modules.hr.domain.value_objects import (
 )
 from modules.hr.domain.events import (
     EmployeeHiredEvent,
+    ContractUpdatedEvent,
     EmployeeUpdatedEvent,
     SalaryChangedEvent,
 )
@@ -141,6 +142,9 @@ ORDINARY_FIELDS = (
     "position_id",
     "employee_type",
     "reports_to_id",
+    # Contract dates (AUD-02 F9): ordinary attributes, under the same rule.
+    "contract_from",
+    "contract_to",
 )
 
 
@@ -406,13 +410,16 @@ class EmployeeService:
                 employee_type=EmploymentType.from_string(command.employee_type),
                 reports_to_id=command.reports_to_id,
                 date_joined=command.date_joined or date.today(),
-                contract_from=command.contract_from,
-                contract_to=command.contract_to,
                 emergency_contact=EmergencyContact(
                     name=command.emergency_contact_name or "",
                     number=command.emergency_contact_number or "",
                     relationship=command.emergency_contact_relationship or "",
                 ),
+            )
+            # Contract dates through the domain, so its ordering rule holds
+            # on create as on update (AUD-02 F9); a refusal creates nothing.
+            employee.update_contract(
+                contract_from=command.contract_from, contract_to=command.contract_to
             )
 
             self._employees.add(employee)
@@ -637,6 +644,21 @@ class EmployeeService:
                 ))
                 changes.append("emergency_contact")
 
+            # Contract dates through the domain, so its ordering rule holds
+            # (AUD-02 F9); a refusal rolls back everything above.
+            contract_event = None
+            if command.contract_from is not None or command.contract_to is not None:
+                employee.update_contract(
+                    contract_from=command.contract_from, contract_to=command.contract_to
+                )
+                changes.append("contract")
+                contract_event = ContractUpdatedEvent(
+                    employee_id=employee.id,
+                    employee_number=str(employee.employee_id),
+                    contract_from=employee.contract_from,
+                    contract_to=employee.contract_to,
+                )
+
             # Save (its own savepoint, so a unique-index refusal - a
             # concurrent request taking the email - leaves this transaction
             # usable for the check that names it).
@@ -647,6 +669,8 @@ class EmployeeService:
 
         if salary_change_event:
             self._event_bus.publish(salary_change_event)
+        if contract_event:
+            self._event_bus.publish(contract_event)
 
         # Publish update event
         if changes:

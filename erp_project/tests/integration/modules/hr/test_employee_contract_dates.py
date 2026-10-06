@@ -55,9 +55,6 @@ JAN_2026, DEC_2026 = date(2026, 1, 1), date(2026, 12, 31)
 # EmployeeId accepts only EMP + digits.
 _numbers = count(89501)
 
-# Fixed by the next commit ("enforce contract date integrity").
-F9_FIX = pytest.mark.xfail(strict=True, reason="AUD-02 F9 contract dates: not yet fixed")
-
 
 def make_employee(label, *permissions, superuser=False, **extra):
     email = f"{label.lower()}{next(_numbers)}@zchpc.test"
@@ -70,9 +67,11 @@ def make_employee(label, *permissions, superuser=False, **extra):
         role = Role.objects.create(
             name=f"ROLE_{label}_{next(_numbers)}", display_name=label, permissions=list(permissions)
         )
+    # A phone is set because of a separate, pre-existing defect: any employee
+    # repository update stores a missing phone as "" (see test_employee_archive).
     return Employees.objects.create(
-        user=user, first_name=label, surname="Person", email=email, role=role,
-        employee_id=f"EMP{next(_numbers)}", **extra,
+        user=user, first_name=label, surname="Person", email=email, phone="0771234567",
+        role=role, employee_id=f"EMP{next(_numbers)}", **extra,
     )
 
 
@@ -123,31 +122,26 @@ def employee_service(event_bus=None):
 
 
 class TestUpdateStoresDates:
-    @F9_FIX
     def test_both_dates(self):
         boss, target = make_employee("Boss", "*"), on_contract()
         assert_status(edit(boss, target, {"contract_from": "2027-01-01", "contract_to": "2027-12-31"}), 200)
         assert contract(target) == (date(2027, 1, 1), date(2027, 12, 31))
 
-    @F9_FIX
     def test_only_contract_from(self):
         boss, target = make_employee("Boss", "*"), on_contract()
         assert_status(edit(boss, target, {"contract_from": "2026-06-01"}), 200)
         assert contract(target) == (date(2026, 6, 1), DEC_2026)
 
-    @F9_FIX
     def test_only_contract_to(self):
         boss, target = make_employee("Boss", "*"), on_contract()
         assert_status(edit(boss, target, {"contract_to": "2027-06-30"}), 200)
         assert contract(target) == (JAN_2026, date(2027, 6, 30))
 
-    @F9_FIX
     def test_equal_dates_are_valid(self):
         boss, target = make_employee("Boss", "*"), on_contract()
         assert_status(edit(boss, target, {"contract_from": "2027-03-01", "contract_to": "2027-03-01"}), 200)
         assert contract(target) == (date(2027, 3, 1), date(2027, 3, 1))
 
-    @F9_FIX
     def test_other_fields_are_untouched(self):
         boss, target = make_employee("Boss", "*"), on_contract()
         before = Employees.objects.filter(pk=target.pk).values("first_name", "surname", "phone").get()
@@ -167,7 +161,6 @@ class TestUpdateStoresDates:
 
 
 class TestUpdateOrdering:
-    @F9_FIX
     def test_end_before_start_in_one_request(self):
         boss, target = make_employee("Boss", "*"), on_contract()
         response = edit(boss, target, {"contract_from": "2027-06-01", "contract_to": "2027-01-01"})
@@ -175,7 +168,6 @@ class TestUpdateOrdering:
         assert response.data["code"] == INVALID
         assert contract(target) == (JAN_2026, DEC_2026)
 
-    @F9_FIX
     def test_an_end_before_the_existing_start(self):
         boss, target = make_employee("Boss", "*"), on_contract()
         response = edit(boss, target, {"contract_to": "2025-12-31"})
@@ -183,7 +175,6 @@ class TestUpdateOrdering:
         assert response.data["code"] == INVALID
         assert contract(target) == (JAN_2026, DEC_2026)
 
-    @F9_FIX
     def test_a_start_after_the_existing_end(self):
         boss, target = make_employee("Boss", "*"), on_contract()
         response = edit(boss, target, {"contract_from": "2027-01-01"})
@@ -191,7 +182,6 @@ class TestUpdateOrdering:
         assert response.data["code"] == INVALID
         assert contract(target) == (JAN_2026, DEC_2026)
 
-    @F9_FIX
     def test_a_refusal_writes_nothing_else_in_the_request(self):
         boss, target = make_employee("Boss", "*"), on_contract()
         response = edit(boss, target, {"first_name": "Changed", "contract_to": "2025-12-31"})
@@ -223,19 +213,16 @@ class TestNullAndOmissionAreUnchanged:
 
 
 class TestAuthorization:
-    @F9_FIX
     def test_self(self):
         actor = on_contract("Self", *VIEWER)
         assert_status(edit(actor, actor, {"contract_to": "2027-06-30"}), 200)
         assert contract(actor)[1] == date(2027, 6, 30)
 
-    @F9_FIX
     def test_a_covered_target_without_manage_assignments(self):
         actor, target = make_employee("Senior", *SENIOR), on_contract("Clerk", *VIEWER)
         assert_status(edit(actor, target, {"contract_to": "2027-06-30"}), 200)
         assert contract(target)[1] == date(2027, 6, 30)
 
-    @F9_FIX
     @pytest.mark.parametrize(
         "permissions",
         [VIEWER, (*VIEWER, "hr.employee.manage_assignments")],
@@ -248,7 +235,6 @@ class TestAuthorization:
         assert response.data["code"] == EXCEEDS
         assert contract(target) == (JAN_2026, DEC_2026)
 
-    @F9_FIX
     def test_superuser(self):
         actor, target = make_employee("Root", superuser=True), on_contract("Admin", "*")
         assert_status(edit(actor, target, {"contract_to": "2027-06-30"}), 200)
@@ -277,7 +263,6 @@ class TestCreate:
         response, _ = self._create(contract_from="2026-01-01", contract_to="2026-01-01")
         assert_status(response, 201)
 
-    @F9_FIX
     def test_end_before_start_is_refused_and_nothing_is_created(self):
         response, email = self._create(contract_from="2026-12-31", contract_to="2026-01-01")
         assert_status(response, 400)
@@ -292,7 +277,6 @@ class TestCreate:
 
 
 class TestContractUpdatedEvent:
-    @F9_FIX
     def test_published_when_the_dates_are_updated(self):
         target, bus = on_contract(), RecordingBus()
         employee_service(bus).update_employee(
