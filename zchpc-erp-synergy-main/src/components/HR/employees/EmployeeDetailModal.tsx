@@ -154,9 +154,13 @@ export default function EmployeeDetailModal({
       type?: string;
       options?: DropdownOption[] | null;
       editName?: string;
+      // Shown but not editable here: PATCH /hr/employees/<id>/ does not
+      // accept it, so an edit would be silently dropped.
+      readOnly?: boolean;
     }
   ) => {
-    const fieldName = isEditing && options?.editName ? options.editName : name;
+    const editable = isEditing && !options?.readOnly;
+    const fieldName = editable && options?.editName ? options.editName : name;
     return (
       <Field
         label={label}
@@ -166,7 +170,7 @@ export default function EmployeeDetailModal({
         options={options?.options}
         value={formData[fieldName]}
         displayValue={employee[name]}
-        isEditing={isEditing}
+        isEditing={editable}
         onChange={handleChange}
       />
     );
@@ -308,6 +312,7 @@ export default function EmployeeDetailModal({
                       {renderField("Phone", "phone", { icon: Phone })}
                       {renderField("National ID", "national_id", {
                         icon: ShieldCheck,
+                        readOnly: true,
                       })}
                       {renderField("Date of Birth", "date_of_birth", {
                         type: "date",
@@ -350,6 +355,7 @@ export default function EmployeeDetailModal({
                       {renderField("Date Joined", "date_joined", {
                         type: "date",
                         icon: Calendar,
+                        readOnly: true,
                       })}
                     </div>
                   </Section>
@@ -372,9 +378,13 @@ export default function EmployeeDetailModal({
                           type: "number",
                         })}
                       </div>
-                      {renderField("Bank Name", "bank_name", { icon: Building })}
+                      {renderField("Bank Name", "bank_name", {
+                        icon: Building,
+                        readOnly: true,
+                      })}
                       {renderField("Account Number", "bank_account", {
                         icon: CreditCard,
+                        readOnly: true,
                       })}
                     </div>
                   </Section>
