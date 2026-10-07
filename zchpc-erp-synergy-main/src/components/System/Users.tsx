@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   Card,
   CardContent,
@@ -17,13 +17,16 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { UserPlus, Search, Edit, Trash2, User as UserIcon } from "lucide-react";
+import { UserPlus, Search, Edit, UserX, User as UserIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns"; 
-import {deleteUserMethod} from '@/services/hr.services'
+import { format } from "date-fns";
+import { deactivateUser } from '@/services/hr.services'
 
-export default function Users({ setAddUser, users }) {
+export default function Users({ setAddUser, users, onUsersChanged }) {
   const [searchTerm, setSearchTerm] = useState("");
+  // The user whose deactivation is in flight; one request per action.
+  const [deactivatingId, setDeactivatingId] = useState(null);
+  const deactivating = useRef(false);
 
   // 1. Fixed Status Logic (Handle 'is_active')
   const getStatusBadge = (isActive) => {
@@ -45,17 +48,32 @@ export default function Users({ setAddUser, users }) {
     // setEditUserModal(true);
   };
 
-  const deleteUser = (id) => {
-    // Use UUID for deletion
-    deleteUserMethod(id)
-      .then(() => {
-        toast.success("User deleted successfully");
-        // Ideally refresh the list from parent or context here
-      })
-      .catch((error) => {
-        console.log(error);
-        toast.error("Error deleting user");
-      });
+  // Users are never deleted (AUD-02); deactivating ends their access and can
+  // be reversed. The backend decides who may deactivate whom.
+  const handleDeactivate = async (user) => {
+    if (deactivating.current) return;
+    const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.email;
+    if (!confirm(`Deactivate ${name}? They will no longer be able to sign in. This can be reversed.`)) {
+      return;
+    }
+
+    deactivating.current = true;
+    setDeactivatingId(user.id);
+    try {
+      await deactivateUser(user.id);
+      toast.success("User deactivated successfully.");
+      onUsersChanged?.();
+    } catch (error) {
+      if (error.response?.status === 404) {
+        toast.error("This account no longer exists.");
+        onUsersChanged?.();
+      } else {
+        toast.error(error.response?.data?.detail || "Failed to deactivate user.");
+      }
+    } finally {
+      deactivating.current = false;
+      setDeactivatingId(null);
+    }
   };
 
   // Filter logic updated to check first_name, last_name and email
@@ -161,13 +179,18 @@ export default function Users({ setAddUser, users }) {
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => deleteUser(user.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {user.is_active && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Deactivate"
+                              disabled={deactivatingId !== null}
+                              onClick={() => handleDeactivate(user)}
+                            >
+                              <UserX className="mr-1 h-4 w-4" />
+                              {deactivatingId === user.id ? "Deactivating..." : "Deactivate"}
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
