@@ -49,9 +49,6 @@ SENIOR = ("hr.employee.view", "bff.employee.view", "hr.employee.create", "hr.rol
 # EmployeeId accepts only EMP + digits.
 _numbers = count(88501)
 
-# Fixed by the next commit ("enforce employee email target authority").
-F9_FIX = pytest.mark.xfail(strict=True, reason="AUD-02 F9 email authority: not yet fixed")
-
 
 def make_employee(label, *permissions, superuser=False):
     email = f"{label.lower()}{next(_numbers)}@zchpc.test"
@@ -123,7 +120,6 @@ def employee_service():
 
 
 class TestLowerAuthorityIsRefused:
-    @F9_FIX
     @pytest.mark.parametrize("path", PATHS)
     def test_lower_authority_cannot_change_a_higher_employees_email(self, path):
         actor, target = make_employee("Clerk", *VIEWER), make_employee("Admin", "*")
@@ -131,7 +127,6 @@ class TestLowerAuthorityIsRefused:
         assert_refused(PATHS[path](actor, target, {"email": new_email()}))
         assert stored_email(target) == before
 
-    @F9_FIX
     @pytest.mark.parametrize("path", PATHS)
     def test_a_superuser_linked_employee_is_protected(self, path):
         actor, target = make_employee("Clerk", *SENIOR), make_employee("Root", superuser=True)
@@ -139,7 +134,6 @@ class TestLowerAuthorityIsRefused:
         assert_refused(PATHS[path](actor, target, {"email": new_email()}))
         assert stored_email(target) == before
 
-    @F9_FIX
     def test_manage_assignments_does_not_replace_target_authority(self):
         actor = make_employee("Assigner", *VIEWER, "hr.employee.manage_assignments")
         target = make_employee("Admin", "*")
@@ -147,14 +141,12 @@ class TestLowerAuthorityIsRefused:
         assert_refused(hr_patch(actor, target, {"email": new_email()}))
         assert stored_email(target) == before
 
-    @F9_FIX
     def test_authority_is_judged_before_the_emails_own_checks(self):
         """A refused actor learns nothing about which addresses are taken."""
         actor, target = make_employee("Clerk", *VIEWER), make_employee("Admin", "*")
         taken = make_employee("Other", *VIEWER)
         assert_refused(hr_patch(actor, target, {"email": taken.email}))
 
-    @F9_FIX
     def test_the_service_refuses_without_http(self):
         target = make_employee("Admin", "*")
         before = stored_email(target)

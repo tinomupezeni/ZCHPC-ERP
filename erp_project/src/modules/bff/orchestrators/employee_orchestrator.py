@@ -14,8 +14,8 @@ _BANK_KEYS = ("bank_name", "bank_account")
 _STATUTORY_KEYS = ("nssa_number", "zimra_tax_number", "paye_number")
 # HR fields written through EmployeeService.update_employee, so they are held
 # to the same rules as PATCH /hr/employees/<id>/: authority over the employee
-# for the ordinary fields (AUD-02 F1/F8), and the email's validation and
-# uniqueness (AUD-02 F9). Same names as UpdateEmployeeCommand's fields.
+# for all four (AUD-02 F1/F8/F9), and the email's validation and uniqueness
+# (AUD-02 F9). Same names as UpdateEmployeeCommand's fields.
 _HR_SERVICE_KEYS = ("first_name", "surname", "phone", "email")
 
 
@@ -59,8 +59,8 @@ class EmployeeOrchestrator:
 
     first_name, surname, phone and email are written by EmployeeService, not
     here, so the HR API's rules apply to them unchanged: editing another
-    employee's ordinary fields needs authority over that employee (AUD-02
-    F8), and an email is validated and must not be another employee's
+    employee's needs authority over that employee (AUD-02 F8; email since
+    F9), and an email is validated and must not be another employee's
     (AUD-02 F9). Everything in one request commits together or not at all.
     """
 

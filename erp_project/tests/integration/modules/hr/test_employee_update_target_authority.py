@@ -345,17 +345,19 @@ class TestServiceLevelEnforcement:
 
     def test_fields_outside_f1_are_not_judged_by_it(self):
         """
-        Email is still not classified (AUD-02 F1/F8/F9), so F1 does not judge
-        it. Position, employee type and reports_to joined F1's fields in F9
-        slice 2 (test_employee_assignment_target_authority).
+        Leave entitlement is still not classified (it is not on the HTTP
+        update serializer, only on the service command), so F1 does not judge
+        it. Position, employee type and reports_to (F9 slice 2), contract
+        dates and email (F9) joined F1's fields since.
         """
+        from modules.leave.infrastructure.persistence.models import LeaveProfile
+
         target = make_employee("Admin", "*")
-        email = f"moved{next(_numbers)}@zchpc.test"
-        employee = employee_service().update_employee(
-            UpdateEmployeeCommand(employee_id=target.pk, email=email),
+        employee_service().update_employee(
+            UpdateEmployeeCommand(employee_id=target.pk, leave_days_entitled=12),
             actor_permissions=PermissionSet.from_list(["hr.employee.view"]),
         )
-        assert employee.email.value == email
+        assert LeaveProfile.objects.get(employee_id=target.pk).leave_days_entitled == 12
 
     def test_assignment_fields_are_judged_by_it(self):
         """F9 slice 2: position, employee type and reports_to are F1 fields now."""

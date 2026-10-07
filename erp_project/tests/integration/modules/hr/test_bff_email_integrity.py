@@ -9,9 +9,10 @@ the BFF's other HR fields (F8), so it is validated before anything is
 written: an invalid address or one another employee holds is a 400, and
 nothing in the request - payroll sections included - is saved.
 
-Who may change another employee's email is not decided here: email is not
-one of F1's ordinary fields, so it carries no target-authority check on
-either path, as before.
+Who may change another employee's email is decided separately: since AUD-02
+F9 it is an ordinary field, so changing another employee's needs authority
+over them on either path (test_employee_email_authority). The actors here
+cover their targets.
 """
 
 from decimal import Decimal

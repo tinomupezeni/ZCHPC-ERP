@@ -9,7 +9,7 @@ inherits F1 exactly: editing another employee's needs covering them, else 403
 EMPLOYEE_TARGET_EXCEEDS_ACTOR_AUTHORITY, and nothing in the request - payroll
 sections included - is written.
 
-Out of this slice: the employee email (not classified by F1), payroll's own
+Out of this slice: the employee email (classified later, by F9), payroll's own
 target rule, and the frontend's call shape.
 
 Every request carries a real JWT, so RBACMiddleware is on the path.
@@ -274,12 +274,17 @@ class TestMixedRequestsAreAtomic:
 
 
 class TestSliceBoundaries:
-    def test_email_is_not_an_f8_field(self):
-        """Email is not classified by F1/F8; this only records that F8 did not judge it."""
+    def test_email_is_judged_by_the_same_rule_since_f9(self):
+        """
+        F8 left email unclassified; AUD-02 F9 made it an ordinary field, and
+        the BFF - writing it through EmployeeService - judges it the same way
+        (test_employee_email_authority).
+        """
         actor = make_employee("Clerk", BFF)
         target = make_employee("Admin", "*")
-        response = bff_put(actor, target, {"email": f"moved{next(_numbers)}@zchpc.test"})
-        assert response.status_code == status.HTTP_200_OK, response.data
+        before = snapshot(target)
+        assert_refused(bff_put(actor, target, {"email": f"moved{next(_numbers)}@zchpc.test"}))
+        assert snapshot(target) == before
 
     def test_archived_target_keeps_its_existing_answers(self):
         target = make_employee("Archived", "*")

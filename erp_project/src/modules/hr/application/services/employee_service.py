@@ -127,8 +127,8 @@ class UpdateEmployeeCommand:
 # nothing else (AUD-02 F1). Position, employee type and reports_to join them
 # (AUD-02 F9 slice 2): they grant no runtime authority, so - unlike role and
 # department - they need no hr.employee.manage_assignments. Role, department
-# and payroll data have their own rules; email and leave entitlement are
-# deliberately not classified here.
+# and payroll data have their own rules; leave entitlement is deliberately not
+# classified here.
 ORDINARY_FIELDS = (
     "first_name",
     "surname",
@@ -145,6 +145,9 @@ ORDINARY_FIELDS = (
     # Contract dates (AUD-02 F9): ordinary attributes, under the same rule.
     "contract_from",
     "contract_to",
+    # The employee's contact email (AUD-02 F9). Not the login's email, which
+    # cannot be changed after creation, so this moves no sign-in or authority.
+    "email",
 )
 
 
