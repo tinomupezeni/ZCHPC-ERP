@@ -1,0 +1,5 @@
+# Generated on the VM by seed-eval.sh / deploy.sh - never commit
+credentials.txt
+.credentials.*
+.prod-snapshot.*
+.env

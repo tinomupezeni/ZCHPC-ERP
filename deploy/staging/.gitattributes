@@ -1,0 +1,2 @@
+# These files run on the Linux VM: always LF, never CRLF
+* text eol=lf
