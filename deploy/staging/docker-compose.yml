@@ -1,0 +1,134 @@
+# =============================================================================
+# ZCHPC ERP - isolated STAGING stack (project: erp-staging)
+# =============================================================================
+# Runs on the production VM next to the production project `zchpc-erp`.
+# Isolation rules (do not relax without reading deploy/staging/README in AUDIT.md §9):
+#   - project name is pinned here AND passed as `-p erp-staging` by deploy.sh
+#   - NO container_name anywhere   -> names are erp-staging-<svc>-1, never zchpc_*
+#   - NO `name:` / `external:` on volumes or networks -> erp-staging_* only
+#   - database is NEVER published on the host
+#   - images come from ${*_IMAGE}, never `:latest`, never pulled (deploy.sh uses --pull never)
+#   - no DJANGO_SUPERUSER_* (accounts come from seed-eval.sh)
+# Always run through deploy.sh, never `docker compose` by hand.
+# =============================================================================
+name: erp-staging
+
+x-staging-labels: &staging-labels
+  labels:
+    zchpc.env: "staging"
+
+services:
+  db:
+    <<: *staging-labels
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB must be set}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    networks:
+      - internal
+    # no `ports:` - the staging database is reachable only inside erp-staging_internal
+
+  api:
+    <<: *staging-labels
+    image: ${API_IMAGE:?API_IMAGE must be set (e.g. erp-staging/api:<sha>)}
+    restart: unless-stopped
+    command: ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "2", "erp_root.wsgi:application"]
+    environment:
+      DEBUG: "False"
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB:?POSTGRES_DB must be set}
+      DB_USER: ${POSTGRES_USER:?POSTGRES_USER must be set}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      ALLOWED_HOSTS: ${STAGING_HOSTS:?STAGING_HOSTS must be set}
+      CORS_ALLOW_ALL_ORIGINS: "False"
+      CORS_ALLOWED_ORIGINS: ${STAGING_ORIGINS:?STAGING_ORIGINS must be set}
+      CSRF_TRUSTED_ORIGINS: ${STAGING_ORIGINS:?STAGING_ORIGINS must be set}
+      DRF_NUM_PROXIES: ${DRF_NUM_PROXIES:-0}
+      ZCHPC_ENV: staging
+    volumes:
+      - api_static:/app/staticfiles
+      - api_media:/app/mediafiles
+    ports:
+      - "0.0.0.0:${STAGING_API_PORT:-18000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8000/api/v2/health/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+    networks:
+      - internal
+
+  frontend:
+    <<: *staging-labels
+    image: ${FRONTEND_IMAGE:?FRONTEND_IMAGE must be set (e.g. erp-staging/frontend:<sha>)}
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:${STAGING_FRONTEND_PORT:-13000}:80"
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:80/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+    networks:
+      - internal
+
+  portal:
+    <<: *staging-labels
+    image: ${PORTAL_IMAGE:?PORTAL_IMAGE must be set (e.g. erp-staging/portal:<sha>)}
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:${STAGING_PORTAL_PORT:-13001}:80"
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:80/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+    networks:
+      - internal
+
+# Project-scoped names only: erp-staging_db_data, erp-staging_api_static, ...
+volumes:
+  db_data: {}
+  api_static: {}
+  api_media: {}
+
+# Project-scoped name only: erp-staging_internal
+networks:
+  internal: {}
