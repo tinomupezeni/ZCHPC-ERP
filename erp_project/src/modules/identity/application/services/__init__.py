@@ -12,6 +12,8 @@ from modules.identity.application.services.user_service import (
     UpdateUserCommand,
     UpdateUserResult,
     UserService,
+    disable_login,
+    enable_login,
     generate_temp_password,
 )
 
@@ -24,4 +26,6 @@ __all__ = [
     "UpdateUserCommand",
     "UpdateUserResult",
     "generate_temp_password",
+    "disable_login",
+    "enable_login",
 ]

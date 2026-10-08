@@ -13,8 +13,14 @@ application login is an employee's login, so there is one policy for both:
   through REM-01's assignment rules (manage_assignments, role must exist,
   no role above the actor's own permissions, no self-escalation);
 - disable a login: hr.employee.deactivate; re-enable or unlock one:
-  hr.employee.reactivate; permanently delete one: hr.employee.delete - each
-  refusing the actor's own account and anyone holding more than the actor.
+  hr.employee.reactivate - each refusing the actor's own account and anyone
+  holding more than the actor.
+- see other people's logins (list_users, view_user): hr.employee.view;
+  your own needs nothing (AUD-02 F6). is_staff plays no part.
+
+There is no delete (AUD-02): a login and the employee record behind it are
+never destroyed through the application. Access ends through the employee
+lifecycle (update_user is_active=False -> EmployeeLifecycleService).
 
 Staff and superuser status are never written here. They are platform-level
 flags granted only by operator bootstrap (createsuperuser, seed_admin,
@@ -28,7 +34,6 @@ replaces it (change_password). Reactivation never restores the previous
 password; it issues a new temporary one.
 """
 
-import logging
 import secrets
 import string
 
@@ -48,7 +53,6 @@ from modules.identity.application.interfaces import (
 from modules.identity.domain.entities import User
 from modules.identity.domain.value_objects import PermissionSet
 
-logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -97,6 +101,39 @@ def generate_temp_password(length: int = 12) -> str:
     """
     alphabet = string.ascii_letters + string.digits + "!@#$%"
     return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+def disable_login(user_repository: IUserRepository, user_id: UUID) -> bool:
+    """
+    Switch a login off. Returns True if it was on.
+
+    SimpleJWT refuses a disabled login on every request and on refresh, so
+    this also ends every token already issued to it.
+    """
+    user = user_repository.get_by_id(user_id)
+    if user is None or not user.is_active:
+        return False
+    user.deactivate()
+    user_repository.update(user)
+    return True
+
+
+def enable_login(user_repository: IUserRepository, user_id: UUID) -> str | None:
+    """
+    Switch a disabled login back on (REM-07).
+
+    The previous password is never restored: a new temporary one is issued
+    and returned once, and the owner must replace it. Returns None, and
+    changes nothing, if the login is missing or already enabled.
+    """
+    user = user_repository.get_by_id(user_id)
+    if user is None or user.is_active:
+        return None
+    temporary_password = generate_temp_password()
+    user.issue_temporary_password(temporary_password)
+    user.activate()
+    user_repository.update(user)
+    return temporary_password
 
 
 class UserService:
@@ -191,7 +228,8 @@ class UserService:
 
     def get_user(self, user_id: UUID) -> UserDTO:
         """
-        Get a user by ID.
+        Get a user by ID, with no authorization: for the caller's own login
+        (/users/me/). Reading someone else's goes through view_user.
 
         Args:
             user_id: User's UUID
@@ -233,18 +271,96 @@ class UserService:
             )
         return self._to_dto(user)
 
-    def list_users(self, include_inactive: bool = False) -> list[UserDTO]:
+    def list_users(
+        self,
+        actor_permissions: PermissionSet | None = None,
+        actor_user_id: UUID | None = None,
+        include_inactive: bool = False,
+        include_archived: bool = False,
+    ) -> list[UserDTO]:
         """
-        List all users.
+        The logins this actor may see (AUD-02 F6).
+
+        Without hr.employee.view the list is the actor's own login and
+        nothing else, whatever is asked for. With it, which logins appear is
+        the lifecycle rule:
+
+        - enabled logins always;
+        - disabled ones only when ``include_inactive`` is asked for;
+        - an archived employee's login only when ``include_archived`` is
+          asked for and the actor also holds hr.employee.view_archived
+          (otherwise the request for them is ignored).
 
         Args:
-            include_inactive: Whether to include deactivated users
+            actor_permissions: The acting user's permissions (None holds nothing)
+            actor_user_id: The acting user's id, from the authenticated request
+            include_inactive: Whether to include disabled logins
+            include_archived: Whether to include archived employees' logins
 
         Returns:
             List of UserDTOs
         """
-        users = self._user_repo.get_all(include_inactive=include_inactive)
-        return [self._to_dto(u) for u in users]
+        actor_permissions = actor_permissions or PermissionSet.empty()
+        if not self._policy.may_view_accounts(actor_permissions):
+            own = self._user_repo.get_by_id(actor_user_id) if actor_user_id else None
+            return [self._to_dto(own)] if own is not None else []
+
+        include_archived = include_archived and self._policy.may_view_archived(
+            actor_permissions
+        )
+        # Archived employees' logins are disabled, so fetching them needs the
+        # disabled ones too; include_inactive is applied below instead.
+        users = self._user_repo.get_all(include_inactive=include_inactive or include_archived)
+        archived = self._archived_login_ids()
+        return [
+            self._to_dto(u)
+            for u in users
+            if (include_archived if u.id in archived else u.is_active or include_inactive)
+        ]
+
+    def view_user(
+        self,
+        user_id: UUID,
+        actor_permissions: PermissionSet | None = None,
+        actor_user_id: UUID | None = None,
+    ) -> UserDTO:
+        """
+        One login, as this actor may see it (AUD-02 F6).
+
+        Your own login always. Anyone else's needs hr.employee.view, checked
+        before the target is loaded; an archived employee's login also needs
+        hr.employee.view_archived and otherwise does not exist. Disabled
+        logins are readable.
+
+        Raises:
+            AuthorizationError: If the actor may not see other people's logins
+            NotFoundError: If the login does not exist, or is archived and
+                the actor may not see archived logins
+        """
+        actor_permissions = actor_permissions or PermissionSet.empty()
+        is_self = actor_user_id is not None and actor_user_id == user_id
+        self._policy.authorize_view_account(actor_permissions, is_self=is_self)
+
+        if (
+            not is_self
+            and self.is_archived_account(user_id)
+            and not self._policy.may_view_archived(actor_permissions)
+        ):
+            raise self._not_found(user_id)
+        return self._to_dto(self._get(user_id))
+
+    def is_archived_account(self, user_id: UUID) -> bool:
+        """Whether this login belongs to an archived employee (AUD-02)."""
+        return user_id in self._archived_login_ids()
+
+    @staticmethod
+    def _archived_login_ids() -> set:
+        from modules.hr.infrastructure.persistence.models import Employees
+
+        return set(
+            Employees.objects.filter(lifecycle_status="ARCHIVED", user__isnull=False)
+            .values_list("user_id", flat=True)
+        )
 
     def update_user(
         self,
@@ -256,10 +372,17 @@ class UserService:
         Update a user.
 
         Anyone may change their own name. Changing another user's name needs
-        hr.employee.create (authority over provisioning logins). Disabling a
+        hr.employee.create (authority over provisioning logins) and authority
+        over that user (AUD-02 F7), and an archived employee's login cannot be
+        renamed at all. Disabling a
         login needs hr.employee.deactivate and re-enabling one needs
         hr.employee.reactivate; both refuse the actor's own account and
         anyone holding permissions the actor lacks.
+
+        Disabling or re-enabling the login of an employee is an employee
+        lifecycle transition (AUD-02): the employee record moves with it
+        (ACTIVE <-> DEACTIVATED) through EmployeeLifecycleService, so the two
+        cannot be left disagreeing. An archived employee is refused.
 
         Re-enabling a disabled login never restores its previous password: a
         new temporary one is issued, returned once, and must be replaced by
@@ -277,6 +400,8 @@ class UserService:
         Raises:
             AuthorizationError: If the actor may not make this change
             NotFoundError: If user not found
+            ValidationError: If the account's employee is archived and the
+                request renames it or changes its access
         """
         actor_permissions = actor_permissions or PermissionSet.empty()
         is_self = actor_user_id is not None and actor_user_id == command.user_id
@@ -293,6 +418,18 @@ class UserService:
 
         user = self._get(command.user_id)
 
+        if renames and not is_self:
+            # Renaming another login also needs authority over it (AUD-02 F7).
+            self._policy.authorize_rename_target(
+                actor_permissions, target_permissions=self._account_permissions(user.id)
+            )
+        if renames and self.is_archived_account(user.id):
+            # An archived employee's identity is closed (AUD-02 Slice 6).
+            raise ValidationError(
+                "An archived employee's account cannot be renamed",
+                code="EMPLOYEE_ARCHIVED",
+            )
+
         if command.is_active is not None:
             authorize_target = (
                 self._policy.authorize_reactivate_target
@@ -305,69 +442,68 @@ class UserService:
                 is_self=is_self,
             )
 
-        # Apply updates
-        if command.first_name is not None:
-            user.first_name = command.first_name.strip()
-
-        if command.last_name is not None:
-            user.last_name = command.last_name.strip()
-
+        # Enabling or disabling access is an employee lifecycle transition
+        # (AUD-02): the login and the employee record change together, in
+        # this transaction, or not at all.
         temp_password = None
-        if command.is_active is not None:
-            if command.is_active:
-                if not user.is_active:
-                    temp_password = generate_temp_password()
-                    user.issue_temporary_password(temp_password)
-                user.activate()
-            else:
-                user.deactivate()
+        with transaction.atomic():
+            if command.is_active is not None:
+                temp_password = self._set_access(user.id, command.is_active, actor_user_id)
+                user = self._get(user.id)
 
-        self._user_repo.update(user)
+            if renames:
+                if command.first_name is not None:
+                    user.first_name = command.first_name.strip()
+                if command.last_name is not None:
+                    user.last_name = command.last_name.strip()
+                self._user_repo.update(user)
 
         return UpdateUserResult(user=self._to_dto(user), temp_password=temp_password)
 
-    def delete_user(
-        self,
-        user_id: UUID,
-        actor_permissions: PermissionSet | None = None,
-        actor_user_id: UUID | None = None,
-    ) -> bool:
+    def _set_access(
+        self, user_id: UUID, active: bool, actor_user_id: UUID | None = None
+    ) -> str | None:
         """
-        Permanently delete a user. Employees.user cascades, so this also
-        deletes the linked employee record and everything that cascades
-        from it; it therefore needs its own capability, hr.employee.delete.
+        Enable or disable this account through the one transition authority.
 
-        Args:
-            user_id: User's UUID
-            actor_permissions: The acting user's permissions (None holds nothing)
-            actor_user_id: The acting user's id, from the authenticated request
+        A login that belongs to an employee goes through
+        EmployeeLifecycleService, which moves the employee and the login
+        together. A login with no employee record (e.g. a bootstrap
+        superuser) has no employment lifecycle; only its switch changes.
 
-        Returns:
-            True if deleted
-
-        Raises:
-            AuthorizationError: If the actor may not delete this account
-            NotFoundError: If user not found
+        Returns the temporary password issued if a login was re-enabled.
         """
-        actor_permissions = actor_permissions or PermissionSet.empty()
-        self._policy.authorize_delete(actor_permissions)
+        from modules.hr.infrastructure.persistence.models import Employees
 
-        user = self._get(user_id)
-        self._policy.authorize_delete_target(
-            actor_permissions,
-            target_permissions=self._account_permissions(user.id),
-            is_self=actor_user_id is not None and actor_user_id == user.id,
+        employee_id = (
+            Employees.objects.filter(user_id=user_id).values_list("pk", flat=True).first()
+        )
+        if employee_id is None:
+            if active:
+                return enable_login(self._user_repo, user_id)
+            disable_login(self._user_repo, user_id)
+            return None
+
+        lifecycle = self._lifecycle_service()
+        if active:
+            return lifecycle.reactivate(
+                employee_id, actor_user_id=actor_user_id, source="identity.user.update"
+            ).temporary_password
+        lifecycle.deactivate(
+            employee_id, actor_user_id=actor_user_id, source="identity.user.update"
+        )
+        return None
+
+    def _lifecycle_service(self):
+        from modules.hr.application.services import EmployeeLifecycleService
+        from modules.hr.infrastructure.persistence.employee_repository import (
+            DjangoEmployeeRepository,
         )
 
-        # AuditLog only records login events, so the deletion is recorded in
-        # the application log.
-        logger.warning(
-            "Account %s (%s) permanently deleted by user %s",
-            user.id,
-            user.email.value,
-            actor_user_id,
+        return EmployeeLifecycleService(
+            employee_repository=DjangoEmployeeRepository(),
+            user_repository=self._user_repo,
         )
-        return self._user_repo.delete(user_id)
 
     def unlock_user(
         self,
@@ -479,12 +615,16 @@ class UserService:
     def _get(self, user_id: UUID) -> User:
         user = self._user_repo.get_by_id(user_id)
         if user is None:
-            raise NotFoundError(
-                f"User with ID {user_id} not found",
-                code="USER_NOT_FOUND",
-                details={"user_id": str(user_id)},
-            )
+            raise self._not_found(user_id)
         return user
+
+    @staticmethod
+    def _not_found(user_id: UUID) -> NotFoundError:
+        return NotFoundError(
+            f"User with ID {user_id} not found",
+            code="USER_NOT_FOUND",
+            details={"user_id": str(user_id)},
+        )
 
     def _account_permissions(self, user_id: UUID) -> PermissionSet:
         """

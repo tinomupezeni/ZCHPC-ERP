@@ -36,6 +36,10 @@ def _error(exc, http_status):
     return Response({"detail": exc.message, "code": exc.code}, status=http_status)
 
 
+def _flag(request, name: str) -> bool:
+    return request.query_params.get(name, "false").lower() == "true"
+
+
 class UserListCreateView(APIView):
     """
     API endpoint for listing and creating users.
@@ -50,19 +54,18 @@ class UserListCreateView(APIView):
         """
         List users.
 
-        Admins see all users, regular users see only themselves.
+        With hr.employee.view, everyone's logins (?include_inactive=true adds
+        disabled ones, ?include_archived=true archived employees' ones with
+        hr.employee.view_archived); without it, only your own. Decided by
+        UserService.
         """
         service = UserService(DjangoUserRepository())
-
-        if request.user.is_staff or request.user.is_superuser:
-            include_inactive = request.query_params.get("include_inactive", "false")
-            users = service.list_users(include_inactive=include_inactive.lower() == "true")
-        else:
-            # Non-admin users can only see themselves
-            try:
-                users = [service.get_user(request.user.id)]
-            except NotFoundError:
-                users = []
+        users = service.list_users(
+            actor_permissions=resolve_actor_permissions(request.user),
+            actor_user_id=request.user.id,
+            include_inactive=_flag(request, "include_inactive"),
+            include_archived=_flag(request, "include_archived"),
+        )
 
         serializer = UserResponseSerializer(
             [u.__dict__ for u in users],
@@ -134,7 +137,11 @@ class UserDetailView(APIView):
 
     GET /api/v2/auth/users/{id}/
     PATCH /api/v2/auth/users/{id}/
-    DELETE /api/v2/auth/users/{id}/
+
+    There is deliberately no DELETE (AUD-02): an employee's identity and
+    history are never destroyed through the application. DELETE gets DRF's
+    405 Method Not Allowed and changes nothing; access is ended through the
+    lifecycle instead (PATCH is_active=false, or the hr deactivate endpoint).
     """
 
     permission_classes = [IsAuthenticated]
@@ -149,20 +156,20 @@ class UserDetailView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Non-admins can only view themselves
-        if not (request.user.is_staff or request.user.is_superuser):
-            if uuid_id != request.user.id:
-                return Response(
-                    {"detail": "Not authorized"},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-
+        # Your own login always; anyone else's needs hr.employee.view, and an
+        # archived employee's also hr.employee.view_archived (UserService).
         service = UserService(DjangoUserRepository())
 
         try:
-            user = service.get_user(uuid_id)
+            user = service.view_user(
+                uuid_id,
+                actor_permissions=resolve_actor_permissions(request.user),
+                actor_user_id=request.user.id,
+            )
             serializer = UserResponseSerializer(user.__dict__)
             return Response(serializer.data)
+        except AuthorizationError as e:
+            return _error(e, status.HTTP_403_FORBIDDEN)
         except NotFoundError as e:
             return Response(
                 {"detail": e.message},
@@ -211,33 +218,9 @@ class UserDetailView(APIView):
                 {"detail": e.message},
                 status=status.HTTP_404_NOT_FOUND,
             )
-
-    def delete(self, request, user_id: str):
-        """Permanently delete a user (needs hr.employee.delete, checked by UserService)."""
-        try:
-            uuid_id = UUID(user_id)
-        except ValueError:
-            return Response(
-                {"detail": "Invalid user ID"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        service = UserService(DjangoUserRepository())
-
-        try:
-            service.delete_user(
-                uuid_id,
-                actor_permissions=resolve_actor_permissions(request.user),
-                actor_user_id=request.user.id,
-            )
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        except AuthorizationError as e:
-            return _error(e, status.HTTP_403_FORBIDDEN)
-        except NotFoundError as e:
-            return Response(
-                {"detail": e.message},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        except ValidationError as e:
+            # e.g. the account's employee is archived (AUD-02)
+            return _error(e, status.HTTP_400_BAD_REQUEST)
 
 
 class CurrentUserView(APIView):

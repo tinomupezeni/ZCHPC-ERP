@@ -19,6 +19,13 @@ class IEmployeeRepository(ABC):
         """Get employee by database ID."""
         ...
 
+    def get_by_id_for_update(self, employee_id: int) -> Employee | None:
+        """
+        Get employee by database ID for a read-modify-write inside a
+        transaction. Implementations backed by a database should lock the row.
+        """
+        return self.get_by_id(employee_id)
+
     @abstractmethod
     def get_by_employee_id(self, employee_id: EmployeeId | str) -> Employee | None:
         """Get employee by employee number (EMP0001)."""
@@ -54,9 +61,17 @@ class IEmployeeRepository(ABC):
         """Get the highest employee ID number."""
         ...
 
+    def lock_employee_id_allocation(self) -> None:
+        """
+        Hold EC number allocation for the rest of the current transaction, so
+        no concurrent creation can choose the same number. Implementations
+        backed by a concurrent database should lock; the default does nothing.
+        """
+        return None
+
     @abstractmethod
-    def exists_by_email(self, email: str) -> bool:
-        """Check if an employee with the given email exists."""
+    def exists_by_email(self, email: str, exclude_id: int | None = None) -> bool:
+        """Check if an employee (other than ``exclude_id``) holds this email, in any case."""
         ...
 
     @abstractmethod
@@ -83,12 +98,6 @@ class IEmployeeRepository(ABC):
     def update(self, employee: Employee) -> None:
         """Update an existing employee."""
         ...
-
-    @abstractmethod
-    def delete(self, employee_id: int) -> bool:
-        """Hard delete an employee. Returns True if deleted."""
-        ...
-
 
 class IDepartmentRepository(ABC):
     """

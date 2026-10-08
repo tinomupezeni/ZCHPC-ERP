@@ -442,36 +442,42 @@ class TestUpdate:
 
 
 class TestDelete:
-    def test_staff_without_capability_cannot_delete_a_normal_account(self):
+    """
+    Changed by AUD-02 Slice 4: accounts are no longer deleted through the
+    API at all, so REM-08's delete authorization (hr.employee.delete, no
+    self-deletion, no deleting anyone above you) has nothing left to guard.
+    Every caller - including those REM-08 allowed - is refused with 405 and
+    nothing changes.
+    """
+
+    def test_staff_without_capability_is_refused(self):
         actor = make_employee("Staff", "hr.employee.view", staff=True)
         target = make_employee("Target", "hr.employee.view")
         response = client_for(actor.user).delete(user_url(target.user.id))
-        assert response.status_code == status.HTTP_403_FORBIDDEN, response.data
-        assert response.data["code"] == "EMPLOYEE_DELETE_NOT_AUTHORIZED"
+        assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
         assert User.objects.filter(pk=target.user.pk).exists()
         assert Employees.objects.filter(pk=target.pk).exists()
 
-    def test_capability_holder_cannot_delete_a_privileged_account(self):
+    def test_privileged_account_is_refused(self):
         actor = make_employee("Deleter", EMP.DELETE, "hr.*")
         root = make_user("Root", superuser=True)
         response = client_for(actor.user).delete(user_url(root.id))
-        assert response.status_code == status.HTTP_403_FORBIDDEN, response.data
+        assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
         assert User.objects.filter(pk=root.pk).exists()
 
-    def test_nobody_can_delete_their_own_account(self):
+    def test_own_account_is_refused(self):
         actor = make_employee("Deleter", EMP.DELETE, "*")
         response = client_for(actor.user).delete(user_url(actor.user.id))
-        assert response.status_code == status.HTTP_403_FORBIDDEN, response.data
-        assert response.data["code"] == "EMPLOYEE_SELF_DELETION"
+        assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
         assert User.objects.filter(pk=actor.user.pk).exists()
 
-    def test_authorized_delete_removes_login_and_employee(self):
+    def test_former_delete_capability_no_longer_deletes(self):
         actor = make_employee("Deleter", EMP.DELETE, "hr.employee.view")
         target = make_employee("Target", "hr.employee.view")
         response = client_for(actor.user).delete(user_url(target.user.id))
-        assert response.status_code == status.HTTP_204_NO_CONTENT
-        assert not User.objects.filter(pk=target.user.pk).exists()
-        assert not Employees.objects.filter(pk=target.pk).exists()
+        assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+        assert User.objects.filter(pk=target.user.pk).exists()
+        assert Employees.objects.filter(pk=target.pk).exists()
 
 
 class TestUnlock:
@@ -505,8 +511,7 @@ class TestServiceLayerFailsClosed:
             service.update_user(UpdateUserCommand(user_id=target.id, is_active=True))
         with pytest.raises(AuthorizationError):
             service.update_user(UpdateUserCommand(user_id=target.id, first_name="X"))
-        with pytest.raises(AuthorizationError):
-            service.delete_user(target.id)
+        assert not hasattr(service, "delete_user")  # AUD-02: no delete at all
         with pytest.raises(AuthorizationError):
             service.unlock_user(target.id)
         assert not User.objects.filter(email="svc@zchpc.test").exists()

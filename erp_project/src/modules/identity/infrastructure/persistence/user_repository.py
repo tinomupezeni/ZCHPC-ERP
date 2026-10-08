@@ -94,12 +94,6 @@ class DjangoUserRepository(IUserRepository):
             must_change_password=user.must_change_password,
         )
 
-    @transaction.atomic
-    def delete(self, user_id: UUID) -> bool:
-        """Delete a user by ID. Returns True if deleted."""
-        deleted, _ = self.model.objects.filter(id=user_id).delete()
-        return deleted > 0
-
     def _to_entity(self, db_user) -> User:
         """Convert Django model to domain entity."""
         return User(

@@ -24,15 +24,29 @@ Rules (confirmed REM-01 decisions - capability-based, no job-title hierarchy):
   over that employee: the actor must hold every permission the target
   currently holds (AUD-01 F2), so nobody can demote or move someone above
   them.
+- Editing an employee's ordinary fields (name, date of birth, gender,
+  marital status, phone, emergency contact; and position, employee type,
+  reporting line and contact email, which grant no authority - AUD-02 F9;
+  the login's own email is not editable) needs authority over
+  that employee in the same sense (AUD-02 F1). There is no separate capability:
+  reaching the hr routes is the prerequisite, authority over the target is
+  the rule. Yourself and your peers are covered.
 - Deactivating an employee needs ``hr.employee.deactivate``, may not target
   the actor themselves, and may not target anyone whose effective
   permissions the actor does not hold (so, for example, only a full-access
   actor can deactivate a full-access one).
 - Account operations on an employee's login through the identity API
   (REM-08) follow the same shape: re-enabling or unlocking a login needs
-  ``hr.employee.reactivate``, permanently deleting one needs
-  ``hr.employee.delete``, and both refuse the actor themselves and anyone
-  holding permissions the actor lacks.
+  ``hr.employee.reactivate``, and refuses the actor themselves and anyone
+  holding permissions the actor lacks. There is no delete operation to
+  authorize (AUD-02).
+- Archiving an employee (AUD-02) needs ``hr.employee.archive`` and the same
+  target rule. Reading archived employees' records needs
+  ``hr.employee.view_archived``; ordinary employee access does not include it.
+- Seeing another person's login (AUD-02 F6) needs ``hr.employee.view``.
+  Everyone may see their own. It is a read: there is no target-authority
+  ("covers") check, so a viewer sees accounts above them too. Which of those
+  logins are listed is a separate lifecycle rule, applied by UserService.
 
 Superusers resolve to PermissionSet.full_access() via
 resolve_actor_permissions, so they pass every capability and "covers" check
@@ -122,6 +136,68 @@ class EmployeeAuthorizationPolicy:
                 code="EMPLOYEE_TARGET_EXCEEDS_ACTOR_AUTHORITY",
             )
 
+    def authorize_update_target(
+        self,
+        actor_permissions: PermissionSet,
+        *,
+        target_permissions: PermissionSet,
+    ) -> None:
+        """
+        Editing an employee's ordinary fields (AUD-02 F1) needs authority
+        over that employee as they stand. Judged whenever such a field is
+        sent, changed or not. Acting on oneself always passes (an actor
+        covers their own permissions).
+        """
+        self._require_covers(
+            actor_permissions,
+            target_permissions,
+            "You cannot edit an employee who holds permissions you do not hold.",
+        )
+
+    def authorize_rename_target(
+        self,
+        actor_permissions: PermissionSet,
+        *,
+        target_permissions: PermissionSet,
+    ) -> None:
+        """
+        Renaming another login (AUD-02 F7) also needs authority over it as it
+        stands. Renaming yourself needs neither, and callers do not ask.
+        """
+        self._require_covers(
+            actor_permissions,
+            target_permissions,
+            "You cannot rename an account that holds permissions you do not hold.",
+        )
+
+    def authorize_login_attachment_target(
+        self,
+        actor_permissions: PermissionSet,
+        *,
+        target_permissions: PermissionSet,
+    ) -> None:
+        """
+        Creating an employee whose email matches an existing login attaches
+        the new record to that login (AUD-02 F7): it gains an employee
+        record, a department, any role given, and an employment lifecycle
+        that from then on decides whether it may log in. That needs
+        authority over the login as it stands. A login that holds nothing
+        is covered by anyone allowed to create employees.
+        """
+        self._require_covers(
+            actor_permissions,
+            target_permissions,
+            "You cannot attach an employee record to an existing account that "
+            "holds permissions you do not hold.",
+        )
+
+    @staticmethod
+    def _require_covers(
+        actor_permissions: PermissionSet, target_permissions: PermissionSet, message: str
+    ) -> None:
+        if not actor_permissions.covers(target_permissions):
+            raise AuthorizationError(message, code="EMPLOYEE_TARGET_EXCEEDS_ACTOR_AUTHORITY")
+
     def authorize_deactivate(self, actor_permissions: PermissionSet) -> None:
         """Capability check; runs before the target is loaded."""
         self._require(
@@ -170,16 +246,16 @@ class EmployeeAuthorizationPolicy:
             self_code="EMPLOYEE_SELF_REACTIVATION",
         )
 
-    def authorize_delete(self, actor_permissions: PermissionSet) -> None:
-        """Capability to permanently delete a login and its employee record (REM-08)."""
+    def authorize_archive(self, actor_permissions: PermissionSet) -> None:
+        """Capability to permanently close an employment lifecycle (AUD-02)."""
         self._require(
             actor_permissions,
-            EmployeeManagementPermissions.DELETE,
-            "Deleting an account",
-            "EMPLOYEE_DELETE_NOT_AUTHORIZED",
+            EmployeeManagementPermissions.ARCHIVE,
+            "Archiving an employee",
+            "EMPLOYEE_ARCHIVE_NOT_AUTHORIZED",
         )
 
-    def authorize_delete_target(
+    def authorize_archive_target(
         self,
         actor_permissions: PermissionSet,
         *,
@@ -190,8 +266,45 @@ class EmployeeAuthorizationPolicy:
             actor_permissions,
             target_permissions,
             is_self,
-            "delete",
-            self_code="EMPLOYEE_SELF_DELETION",
+            "archive",
+            self_code="EMPLOYEE_SELF_ARCHIVE",
+        )
+
+    def authorize_view_archived(self, actor_permissions: PermissionSet) -> None:
+        """Capability to read the records of archived employees (AUD-02)."""
+        self._require(
+            actor_permissions,
+            EmployeeManagementPermissions.VIEW_ARCHIVED,
+            "Viewing archived employees",
+            "EMPLOYEE_VIEW_ARCHIVED_NOT_AUTHORIZED",
+        )
+
+    def may_view_archived(self, actor_permissions: PermissionSet | None) -> bool:
+        return (actor_permissions or PermissionSet.empty()).has_permission(
+            EmployeeManagementPermissions.VIEW_ARCHIVED
+        )
+
+    def may_view_accounts(self, actor_permissions: PermissionSet | None) -> bool:
+        """Whether the actor may see other people's logins (AUD-02 F6)."""
+        return (actor_permissions or PermissionSet.empty()).has_permission(
+            EmployeeManagementPermissions.VIEW
+        )
+
+    def authorize_view_account(
+        self, actor_permissions: PermissionSet, *, is_self: bool
+    ) -> None:
+        """
+        Reading one login (AUD-02 F6): your own always; anyone else's needs
+        hr.employee.view. Checked before the target is loaded, so a refusal
+        says nothing about whether the account exists.
+        """
+        if is_self:
+            return
+        self._require(
+            actor_permissions,
+            EmployeeManagementPermissions.VIEW,
+            "Viewing another user's account",
+            "EMPLOYEE_VIEW_NOT_AUTHORIZED",
         )
 
     @staticmethod

@@ -130,7 +130,7 @@ const SettingsPage = () => {
         </TabsList>
 
         <TabsContent value="users">
-          <Users setAddUser={setAddUser} users={users} />
+          <Users setAddUser={setAddUser} users={users} onUsersChanged={fetchUsers} />
         </TabsContent>
         <TabsContent value="logs">
           <Logs fetchLogs={Server.fetchLogs()} />

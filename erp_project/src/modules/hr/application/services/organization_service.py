@@ -4,6 +4,8 @@ Organization application service for departments and positions.
 
 from dataclasses import dataclass
 
+from django.db import transaction
+
 from shared.domain.exceptions import AuthorizationError, ValidationError, NotFoundError
 from shared.infrastructure import EventBus
 
@@ -142,6 +144,7 @@ class DepartmentService:
 
         return department
 
+    @transaction.atomic
     def update_department(
         self, command: UpdateDepartmentCommand, actor_permissions: PermissionSet | None = None
     ) -> Department:
@@ -187,12 +190,16 @@ class DepartmentService:
             # still refer to a real employee, or PurchaseRequestDecision's
             # non-nullable actor reference would fail later, on approval,
             # for reasons invisible from this endpoint.
-            head = self._employees.get_by_id(command.head_id)
+            # Locked so an archive of the same employee cannot slip in
+            # between this check and the save (AUD-02).
+            head = self._employees.get_by_id_for_update(command.head_id)
             if head is None:
                 raise ValidationError(
                     message=f"Employee with ID {command.head_id} does not exist",
                     code="INVALID_DEPARTMENT_HEAD",
                 )
+            # An archived employee holds no structural authority (AUD-02).
+            head.ensure_not_archived("appointed department head")
             changes.append("head")
 
         department.update(

@@ -7,7 +7,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from shared.domain.exceptions import AuthorizationError, NotFoundError, ValidationError
+from shared.domain.exceptions import (
+    AuthorizationError,
+    ConflictError,
+    NotFoundError,
+    ValidationError,
+)
 
 from modules.hr.api.serializers import (
     CreateEmployeeRequestSerializer,
@@ -36,6 +41,21 @@ def get_employee_service() -> EmployeeService:
     )
 
 
+def _reason(request) -> str | None:
+    """The optional free-text reason for a lifecycle change, or None if malformed."""
+    reason = request.data.get("reason", "")
+    if reason is None:
+        return ""
+    return reason.strip() if isinstance(reason, str) else None
+
+
+def _invalid_reason():
+    return Response(
+        {"error": "reason must be text", "code": "INVALID_REQUEST"},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
 def _actor_employee_id(request) -> int | None:
     """The authenticated caller's own employee record id - never from request data."""
     # Reverse one-to-one: an AttributeError subclass when there is no profile.
@@ -61,6 +81,9 @@ class EmployeeListCreateView(APIView):
         # Optional filters
         department_id = request.query_params.get("department_id")
         include_inactive = request.query_params.get("include_inactive", "false").lower() == "true"
+        # Archived employees (AUD-02) are listed only on request, and only to
+        # an actor holding hr.employee.view_archived.
+        include_archived = request.query_params.get("include_archived", "false").lower() == "true"
 
         if department_id:
             employees = service.get_employees_by_department(
@@ -69,11 +92,17 @@ class EmployeeListCreateView(APIView):
         else:
             employees = service.get_active_employees(actor_permissions=actor_permissions)
 
-        # If include_inactive, get all
-        if include_inactive:
-            repo = DjangoEmployeeRepository()
-            all_employees = repo.get_all(include_inactive=True)
-            employees = [service._to_dto(e, actor_permissions) for e in all_employees]
+        # If include_inactive (or include_archived), get all
+        if include_inactive or include_archived:
+            try:
+                employees = service.get_all_employees(
+                    actor_permissions, include_archived=include_archived
+                )
+            except AuthorizationError as e:
+                return Response(
+                    {"error": e.message, "code": e.code},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
         serializer = EmployeeListItemSerializer(employees, many=True)
         return Response(serializer.data)
@@ -215,7 +244,9 @@ class EmployeeDetailView(APIView):
     def delete(self, request, employee_id: int):
         """Deactivate an employee (soft delete)."""
         service = get_employee_service()
-        reason = request.data.get("reason", "")
+        reason = _reason(request)
+        if reason is None:
+            return _invalid_reason()
 
         try:
             employee = service.deactivate_employee(
@@ -223,6 +254,7 @@ class EmployeeDetailView(APIView):
                 reason,
                 actor_permissions=resolve_actor_permissions(request.user),
                 actor_employee_id=_actor_employee_id(request),
+                actor_user_id=request.user.id,
             )
             return Response(
                 {"message": f"Employee {employee.full_name} deactivated"},
@@ -238,6 +270,131 @@ class EmployeeDetailView(APIView):
                 {"error": str(e)},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        except ValidationError as e:
+            # e.g. the employee is archived (AUD-02): not a deactivation target
+            return Response(
+                {"error": e.message, "code": e.code},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
+class EmployeeReactivateView(APIView):
+    """
+    Reactivate a deactivated employee (AUD-02).
+
+    POST: DEACTIVATED -> ACTIVE, re-enabling the employee's login
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, employee_id: int):
+        """Reactivate an employee (needs hr.employee.reactivate, checked by EmployeeService)."""
+        service = get_employee_service()
+        reason = _reason(request)
+        if reason is None:
+            return _invalid_reason()
+
+        try:
+            result = service.reactivate_employee(
+                employee_id,
+                actor_permissions=resolve_actor_permissions(request.user),
+                actor_employee_id=_actor_employee_id(request),
+                actor_user_id=request.user.id,
+                reason=reason,
+            )
+        except AuthorizationError as e:
+            return Response(
+                {"error": e.message, "code": e.code},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except NotFoundError as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except ValidationError as e:
+            return Response(
+                {"error": e.message, "code": e.code},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        employee = result.employee
+        return Response(
+            {
+                "id": employee.id,
+                "employee_id": str(employee.employee_id),
+                "full_name": employee.full_name,
+                "is_active": employee.is_active,
+                "lifecycle_status": employee.lifecycle_status.value,
+                # One-time temporary password of the re-enabled login (null
+                # if no login was re-enabled); the owner must replace it at
+                # first sign-in. REM-07.
+                "temporary_password": result.temporary_password,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class EmployeeArchiveView(APIView):
+    """
+    Archive an employee (AUD-02): permanently close their employment
+    lifecycle. Not a deletion - the record and its history remain.
+
+    POST: ACTIVE or DEACTIVATED -> ARCHIVED, disabling the employee's login
+        body: {"vacate_department_headships": false, "reason": "..."}
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, employee_id: int):
+        """Archive an employee (needs hr.employee.archive, checked by EmployeeService)."""
+        vacate = request.data.get("vacate_department_headships", False)
+        if not isinstance(vacate, bool):
+            return Response(
+                {"error": "vacate_department_headships must be true or false",
+                 "code": "INVALID_REQUEST"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        reason = _reason(request)
+        if reason is None:
+            return _invalid_reason()
+
+        try:
+            result = get_employee_service().archive_employee(
+                employee_id,
+                actor_permissions=resolve_actor_permissions(request.user),
+                actor_employee_id=_actor_employee_id(request),
+                vacate_department_headships=vacate,
+                actor_user_id=request.user.id,
+                reason=reason,
+            )
+        except AuthorizationError as e:
+            return Response(
+                {"error": e.message, "code": e.code},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except NotFoundError as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except ConflictError as e:
+            return Response(
+                {"error": e.message, "code": e.code, "details": e.details},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        employee = result.employee
+        return Response(
+            {
+                "id": employee.id,
+                "employee_id": str(employee.employee_id),
+                "full_name": employee.full_name,
+                "is_active": employee.is_active,
+                "lifecycle_status": employee.lifecycle_status.value,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class EmployeeSalaryView(APIView):

@@ -2,6 +2,10 @@
 HR application services.
 """
 
+from modules.hr.application.services.employee_lifecycle_service import (
+    EmployeeLifecycleService,
+    LifecycleTransitionResult,
+)
 from modules.hr.application.services.employee_service import (
     CreateEmployeeCommand,
     EmployeeService,
@@ -26,6 +30,9 @@ __all__ = [
     "EmployeeService",
     "CreateEmployeeCommand",
     "UpdateEmployeeCommand",
+    # Employee lifecycle transitions
+    "EmployeeLifecycleService",
+    "LifecycleTransitionResult",
     # Department service
     "DepartmentService",
     "CreateDepartmentCommand",

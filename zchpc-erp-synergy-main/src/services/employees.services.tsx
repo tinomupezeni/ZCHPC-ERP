@@ -8,11 +8,14 @@ export const getEmployees = () => {
   return apiClient.get("/hr/employees/");
 };
 
-export const getEmployeeById = (id: string) => {
-  return apiClient.get(`/bff/employees/${id}/`);
+// The HR employee record, by its integer id (Employees.id from GET /hr/employees/).
+export const getEmployeeById = (id: number | string) => {
+  return apiClient.get(`/hr/employees/${id}/`);
 };
-export const updateEmployee = (id, data) => {
-  return apiClient.patch(`/bff/employees/${id}/`, data);
+// Partial update: send only the fields that changed - the backend authorizes
+// each field it receives (AUD-02).
+export const updateEmployee = (id: number | string, data) => {
+  return apiClient.patch(`/hr/employees/${id}/`, data);
 };
 
 export const deleteEmployee = (id) => {
