@@ -21,6 +21,15 @@ import { UserPlus, Search, Edit, UserX, User as UserIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { deactivateUser } from '@/services/hr.services'
+import { NO_PERMISSION, readApiError } from '@/lib/apiErrors'
+
+// What the user is told when deactivation is refused, by the backend's code.
+const DEACTIVATE_REFUSALS: Record<string, string> = {
+  EMPLOYEE_DEACTIVATE_NOT_AUTHORIZED: "You don't have permission to deactivate user accounts.",
+  EMPLOYEE_TARGET_EXCEEDS_ACTOR_AUTHORITY: "You don't have permission to deactivate this user.",
+  EMPLOYEE_SELF_DEACTIVATION: "You can't deactivate your own account.",
+  EMPLOYEE_ARCHIVED: "This employee has been archived, so their account can't be changed.",
+};
 
 export default function Users({ setAddUser, users, onUsersChanged }) {
   const [searchTerm, setSearchTerm] = useState("");
@@ -53,7 +62,7 @@ export default function Users({ setAddUser, users, onUsersChanged }) {
   const handleDeactivate = async (user) => {
     if (deactivating.current) return;
     const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.email;
-    if (!confirm(`Deactivate ${name}? They will no longer be able to sign in. This can be reversed.`)) {
+    if (!confirm(`Deactivate ${name}? They will no longer be able to sign in. The account can be reactivated later.`)) {
       return;
     }
 
@@ -61,14 +70,19 @@ export default function Users({ setAddUser, users, onUsersChanged }) {
     setDeactivatingId(user.id);
     try {
       await deactivateUser(user.id);
-      toast.success("User deactivated successfully.");
+      toast.success(`${name} has been deactivated.`);
       onUsersChanged?.();
     } catch (error) {
-      if (error.response?.status === 404) {
-        toast.error("This account no longer exists.");
+      const { status, code } = readApiError(error);
+      if (status === 404) {
+        toast.error(`${name}'s account no longer exists. The list has been refreshed.`);
         onUsersChanged?.();
+      } else if (code && DEACTIVATE_REFUSALS[code]) {
+        toast.error(DEACTIVATE_REFUSALS[code]);
+      } else if (status === 403) {
+        toast.error(NO_PERMISSION);
       } else {
-        toast.error(error.response?.data?.detail || "Failed to deactivate user.");
+        toast.error(`We couldn't deactivate ${name}. Please try again.`);
       }
     } finally {
       deactivating.current = false;
