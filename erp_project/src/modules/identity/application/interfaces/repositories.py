@@ -49,10 +49,8 @@ class IUserRepository(ABC):
         """Update an existing user."""
         pass
 
-    @abstractmethod
-    def delete(self, user_id: UUID) -> bool:
-        """Delete a user by ID. Returns True if deleted."""
-        pass
+    # Deliberately no delete (AUD-02): a login is never destroyed through the
+    # application; access ends through the employee lifecycle.
 
 
 class IRoleRepository(ABC):

@@ -20,3 +20,9 @@ class EmailBackend(ModelBackend):
             if user.check_password(password) and self.user_can_authenticate(user):
                 return user
         return None
+
+    def user_can_authenticate(self, user):
+        """Also refuse a login whose employee is not in active employment (AUD-02)."""
+        from modules.identity.infrastructure.account_access import employment_allows_access
+
+        return super().user_can_authenticate(user) and employment_allows_access(user)

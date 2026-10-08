@@ -665,7 +665,9 @@ class TestBffEmployeeProfile:
     def test_non_payroll_edit_needs_no_payroll_capability_and_creates_no_payroll_rows(self):
         bare = make_employee("Bare", "B2")
         client, _ = client_with("bff.employee.view", suffix="A9")
-        response = client.put(self.url(bare), {"phone": "0777"}, format="json")
+        # A valid number: since AUD-02 F8 the BFF's phone goes through
+        # EmployeeService, which validates it.
+        response = client.put(self.url(bare), {"phone": "0771234567"}, format="json")
         assert response.status_code == status.HTTP_200_OK, response.data
         assert not PayrollProfile.objects.filter(employee=bare).exists()
         assert not EmployeeBankAccount.objects.filter(employee=bare).exists()

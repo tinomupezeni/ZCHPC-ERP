@@ -30,9 +30,9 @@ class JWTAuthenticationMiddleware:
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]  # Remove 'Bearer ' prefix
             try:
-                from rest_framework_simplejwt.authentication import JWTAuthentication
+                from .jwt_authentication import EmployeeLifecycleJWTAuthentication
 
-                jwt_auth = JWTAuthentication()
+                jwt_auth = EmployeeLifecycleJWTAuthentication()
                 validated_token = jwt_auth.get_validated_token(token)
                 user = jwt_auth.get_user(validated_token)
                 request.user = user

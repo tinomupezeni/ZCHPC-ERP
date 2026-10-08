@@ -370,8 +370,10 @@ class Command(BaseCommand):
                 employee.role = role
                 changed_fields.append("role")
             if not employee.is_active:
+                # is_active mirrors lifecycle_status (AUD-02); set both.
+                employee.lifecycle_status = "ACTIVE"
                 employee.is_active = True
-                changed_fields.append("is_active")
+                changed_fields.extend(["lifecycle_status", "is_active"])
             if changed_fields:
                 employee.save(update_fields=changed_fields)
         else:

@@ -7,7 +7,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 
 from shared.domain.exceptions import AuthorizationError, ValidationError, NotFoundError
 from shared.domain.value_objects import Email, NationalId, PhoneNumber, EmployeeId
@@ -16,6 +16,10 @@ from shared.infrastructure import EventBus
 from modules.hr.application.authorization import (
     EmployeeAuthorizationPolicy,
     resolve_actor_permissions,
+)
+from modules.hr.application.services.employee_lifecycle_service import (
+    EmployeeLifecycleService,
+    LifecycleTransitionResult,
 )
 from modules.hr.application.interfaces import (
     IEmployeeRepository,
@@ -38,7 +42,7 @@ from modules.hr.domain.value_objects import (
 )
 from modules.hr.domain.events import (
     EmployeeHiredEvent,
-    EmployeeTerminatedEvent,
+    ContractUpdatedEvent,
     EmployeeUpdatedEvent,
     SalaryChangedEvent,
 )
@@ -119,6 +123,34 @@ class UpdateEmployeeCommand:
     emergency_contact_relationship: str | None = None
 
 
+# The UpdateEmployeeCommand fields that need authority over the employee and
+# nothing else (AUD-02 F1). Position, employee type and reports_to join them
+# (AUD-02 F9 slice 2): they grant no runtime authority, so - unlike role and
+# department - they need no hr.employee.manage_assignments. Role, department
+# and payroll data have their own rules; leave entitlement is deliberately not
+# classified here.
+ORDINARY_FIELDS = (
+    "first_name",
+    "surname",
+    "date_of_birth",
+    "gender",
+    "marital_status",
+    "phone",
+    "emergency_contact_name",
+    "emergency_contact_number",
+    "emergency_contact_relationship",
+    "position_id",
+    "employee_type",
+    "reports_to_id",
+    # Contract dates (AUD-02 F9): ordinary attributes, under the same rule.
+    "contract_from",
+    "contract_to",
+    # The employee's contact email (AUD-02 F9). Not the login's email, which
+    # cannot be changed after creation, so this moves no sign-in or authority.
+    "email",
+)
+
+
 class EmployeeService:
     """
     Application service for employee operations.
@@ -130,6 +162,7 @@ class EmployeeService:
         department_repository: IDepartmentRepository,
         position_repository: IPositionRepository,
         event_bus: EventBus | None = None,
+        lifecycle_service: EmployeeLifecycleService | None = None,
     ):
         """Initialize service with repositories."""
         self._employees = employee_repository
@@ -137,6 +170,10 @@ class EmployeeService:
         self._positions = position_repository
         self._event_bus = event_bus or EventBus.get_instance()
         self._policy = EmployeeAuthorizationPolicy()
+        # The one transition authority for lifecycle state (AUD-02).
+        self._lifecycle = lifecycle_service or EmployeeLifecycleService(
+            employee_repository=employee_repository, event_bus=self._event_bus
+        )
 
     def _role_permissions(self, role_id: int | None) -> PermissionSet | None:
         """
@@ -245,7 +282,8 @@ class EmployeeService:
         Raises:
             AuthorizationError: If the actor lacks a required capability or
                 may not assign the requested role.
-            ValidationError: If validation fails (including an unknown role_id)
+            ValidationError: If validation fails (including an unknown role_id), or
+                DUPLICATE_EMAIL / AMBIGUOUS_LOGIN_EMAIL for the email (AUD-02 F9)
         """
         actor_permissions = actor_permissions or PermissionSet.empty()
         self._policy.authorize_create(actor_permissions)
@@ -262,6 +300,7 @@ class EmployeeService:
             ),
         )
         self._authorize_payroll_data_changes(command, actor_permissions, None)
+        login_id = command.user_id or self._authorize_login_attachment(command, actor_permissions)
         # Validate email uniqueness
         if command.email and self._employees.exists_by_email(command.email):
             raise ValidationError(
@@ -293,47 +332,15 @@ class EmployeeService:
                     code="POSITION_DEPARTMENT_MISMATCH",
                 )
 
-        # Use provided employee ID or generate a new one
-        if command.employee_id and command.employee_id.strip():
-            # Validate custom employee_id uniqueness
-            if self._employees.exists_by_employee_id(command.employee_id.strip()):
-                raise ValidationError(
-                    message=f"Employee with EC Number {command.employee_id} already exists",
-                    code="DUPLICATE_EMPLOYEE_ID",
-                )
-            employee_id = EmployeeId(command.employee_id.strip())
-        else:
-            # Auto-generate employee ID
-            id_generator = SequentialEmployeeIdGenerator(self._employees.get_max_employee_id)
-            employee_id = id_generator.next_id()
+        # The manager exists and is not archived (AUD-02, F9).
+        self._ensure_valid_manager(command.reports_to_id)
 
-        # Create employee entity
-        employee = Employee(
-            id=0,  # Will be set by repository
-            employee_id=employee_id,
-            user_id=command.user_id,
-            first_name=command.first_name,
-            surname=command.surname,
-            national_id=NationalId(command.national_id) if command.national_id else None,
-            date_of_birth=command.date_of_birth,
-            gender=Gender.from_string(command.gender) if command.gender else None,
-            marital_status=MaritalStatus.from_string(command.marital_status) if command.marital_status else None,
-            email=Email(command.email) if command.email else None,
-            phone=PhoneNumber(command.phone) if command.phone else None,
-            department_id=command.department_id,
-            position_id=command.position_id,
-            role_id=command.role_id,
-            employee_type=EmploymentType.from_string(command.employee_type),
-            reports_to_id=command.reports_to_id,
-            date_joined=command.date_joined or date.today(),
-            contract_from=command.contract_from,
-            contract_to=command.contract_to,
-            is_active=True,
-            emergency_contact=EmergencyContact(
-                name=command.emergency_contact_name or "",
-                number=command.emergency_contact_number or "",
-                relationship=command.emergency_contact_relationship or "",
-            ),
+        # A requested EC number is checked here only for its format; whether
+        # it is free is decided under the allocation lock below.
+        requested_employee_id = (
+            EmployeeId(command.employee_id.strip())
+            if command.employee_id and command.employee_id.strip()
+            else None
         )
 
         # Save. Salary, banking, statutory, and leave data live in the
@@ -341,13 +348,13 @@ class EmployeeService:
         # aggregate) - see _get_payroll_info() for the corresponding read
         # path. All writes happen in one transaction so a failure partway
         # through doesn't leave an employee without their profile rows.
-        with transaction.atomic():
-            self._employees.add(employee)
-            self._save_payroll_info(employee.id, command)
-            if command.bank_name or command.bank_account:
-                self._save_bank_account(employee.id, command)
-            self._save_statutory_info(employee.id, command)
-            self._save_leave_profile(employee.id, command.leave_days_entitled)
+        # The EC number is allocated in the same transaction (AUD-02).
+        try:
+            employee = self._add_employee(command, requested_employee_id, login_id)
+        except IntegrityError as exc:
+            # A concurrent request took the email after the check above
+            # (AUD-02 F9); the unique index refused this one.
+            self._raise_if_email_taken(exc, command.email)
 
         # Publish event
         self._event_bus.publish(
@@ -363,6 +370,131 @@ class EmployeeService:
         )
 
         return employee
+
+    def _raise_if_email_taken(
+        self, exc: IntegrityError, email: str | None, exclude_id: int | None = None
+    ) -> None:
+        """
+        Turn a unique-index refusal of the employee email into the same
+        DUPLICATE_EMAIL the up-front check gives; re-raise anything else.
+        """
+        if email and self._employees.exists_by_email(email, exclude_id=exclude_id):
+            raise ValidationError(
+                message=f"Employee with email {email} already exists",
+                code="DUPLICATE_EMAIL",
+            ) from exc
+        raise exc
+
+    def _add_employee(
+        self,
+        command: CreateEmployeeCommand,
+        requested_employee_id: EmployeeId | None,
+        login_id: UUID | None,
+    ) -> Employee:
+        with transaction.atomic():
+            employee_id = self._allocate_employee_id(requested_employee_id)
+
+            # Create employee entity
+            employee = Employee(
+                id=0,  # Will be set by repository
+                employee_id=employee_id,
+                user_id=login_id,
+                first_name=command.first_name,
+                surname=command.surname,
+                national_id=NationalId(command.national_id) if command.national_id else None,
+                date_of_birth=command.date_of_birth,
+                gender=Gender.from_string(command.gender) if command.gender else None,
+                marital_status=MaritalStatus.from_string(command.marital_status) if command.marital_status else None,
+                email=Email(command.email) if command.email else None,
+                phone=PhoneNumber(command.phone) if command.phone else None,
+                department_id=command.department_id,
+                position_id=command.position_id,
+                role_id=command.role_id,
+                employee_type=EmploymentType.from_string(command.employee_type),
+                reports_to_id=command.reports_to_id,
+                date_joined=command.date_joined or date.today(),
+                emergency_contact=EmergencyContact(
+                    name=command.emergency_contact_name or "",
+                    number=command.emergency_contact_number or "",
+                    relationship=command.emergency_contact_relationship or "",
+                ),
+            )
+            # Contract dates through the domain, so its ordering rule holds
+            # on create as on update (AUD-02 F9); a refusal creates nothing.
+            employee.update_contract(
+                contract_from=command.contract_from, contract_to=command.contract_to
+            )
+
+            self._employees.add(employee)
+            self._save_payroll_info(employee.id, command)
+            if command.bank_name or command.bank_account:
+                self._save_bank_account(employee.id, command)
+            self._save_statutory_info(employee.id, command)
+            self._save_leave_profile(employee.id, command.leave_days_entitled)
+        return employee
+
+    def _allocate_employee_id(self, requested: EmployeeId | None) -> EmployeeId:
+        """
+        The EC number for a new employee (AUD-02). Must run inside the
+        transaction that adds the employee.
+
+        An EC number belongs to one employee for all time: the holder's row
+        is never deleted and the number on it never changes, so any number a
+        row holds - whatever its lifecycle state - is consumed. Allocation is
+        serialized for the rest of the transaction, so the check below and
+        the insert cannot interleave with another creation.
+
+        A requested number is accepted only if no employee holds it (compared
+        in its normalized form, e.g. "emp0007" is EMP0007); otherwise the next
+        number after the highest one held is issued.
+
+        Raises:
+            ValidationError: DUPLICATE_EMPLOYEE_ID if the requested number is held
+        """
+        self._employees.lock_employee_id_allocation()
+        if requested is not None:
+            if self._employees.exists_by_employee_id(requested.value):
+                raise ValidationError(
+                    message=f"Employee with EC Number {requested.value} already exists",
+                    code="DUPLICATE_EMPLOYEE_ID",
+                )
+            return requested
+        return SequentialEmployeeIdGenerator(self._employees.get_max_employee_id).next_id()
+
+    def _authorize_login_attachment(
+        self, command: CreateEmployeeCommand, actor_permissions: PermissionSet
+    ) -> UUID | None:
+        """
+        Establish, before anything is created, whether the new employee would
+        be attached to an existing login, and that the actor may do that
+        (AUD-02 F7). Returns that login's id, which the new record is created
+        with, or None.
+
+        The login is resolved by the one attachment rule (login_attachment:
+        case-insensitive, never a login that already belongs to an employee,
+        AUD-02 F9), and the record names it, so the post_save signal does not
+        resolve it again: what was authorized is what gets linked. A caller
+        that supplies user_id names the login itself (identity's create_user,
+        for the login it has just created).
+
+        Raises:
+            AuthorizationError: If the actor may not attach that login
+            ValidationError: DUPLICATE_EMAIL if the email's login belongs to
+                another employee; AMBIGUOUS_LOGIN_EMAIL if logins differ
+                only by case
+        """
+        if command.user_id is not None or not command.email:
+            return None
+
+        from modules.hr.infrastructure.persistence.login_attachment import attachable_login
+
+        login = attachable_login(Email(command.email).value)
+        if login is None:
+            return None
+        self._policy.authorize_login_attachment_target(
+            actor_permissions, target_permissions=resolve_actor_permissions(login)
+        )
+        return login.pk
 
     def update_employee(
         self,
@@ -393,9 +525,13 @@ class EmployeeService:
                 department_id without EmployeeManagementPermissions
                 .MANAGE_ASSIGNMENTS, assigns a role the actor may not grant,
                 or changes the role/department of an employee who holds
-                permissions the actor does not.
-            NotFoundError: If employee not found
-            ValidationError: If validation fails (including an unknown role_id)
+                permissions the actor does not; or if it sends an ordinary
+                field (ORDINARY_FIELDS) for an employee who holds
+                permissions the actor does not (AUD-02 F1).
+            NotFoundError: If the employee, or a department, position or
+                manager the command names, is not found (AUD-02 F9)
+            ValidationError: If validation fails (including an unknown role_id), or
+                DUPLICATE_EMAIL if another employee holds the email (AUD-02 F9)
         """
         self._authorize_assignment(
             actor_permissions,
@@ -409,6 +545,9 @@ class EmployeeService:
         if not employee:
             raise NotFoundError(f"Employee with ID {command.employee_id} not found")
 
+        # An archived employee's record is closed (AUD-02).
+        employee.ensure_not_archived("edited")
+
         # Target authority (AUD-01 F2): judged on the employee as they stand,
         # and only when the role or department actually changes.
         if (command.role_id is not None and command.role_id != employee.role_id) or (
@@ -417,6 +556,28 @@ class EmployeeService:
             self._policy.authorize_assignment_target(
                 actor_permissions,
                 target_permissions=self._effective_permissions(employee),
+            )
+
+        # Ordinary fields (AUD-02 F1): authority over the employee whenever
+        # one is sent. Every check above and here runs before anything is
+        # written, so a refused request changes nothing.
+        if any(getattr(command, field) is not None for field in ORDINARY_FIELDS):
+            self._policy.authorize_update_target(
+                actor_permissions,
+                target_permissions=self._effective_permissions(employee),
+            )
+
+        # The records it now points at exist and agree (AUD-02 F9), judged
+        # after authorization and before anything is written.
+        self._validate_assignment_references(command, employee)
+
+        # An employee email is one employee's (AUD-02 F9), in any letter case.
+        if command.email is not None and self._employees.exists_by_email(
+            command.email, exclude_id=employee.id
+        ):
+            raise ValidationError(
+                message=f"Employee with email {command.email} already exists",
+                code="DUPLICATE_EMAIL",
             )
 
         changes = []
@@ -486,11 +647,33 @@ class EmployeeService:
                 ))
                 changes.append("emergency_contact")
 
-            # Save
-            self._employees.update(employee)
+            # Contract dates through the domain, so its ordering rule holds
+            # (AUD-02 F9); a refusal rolls back everything above.
+            contract_event = None
+            if command.contract_from is not None or command.contract_to is not None:
+                employee.update_contract(
+                    contract_from=command.contract_from, contract_to=command.contract_to
+                )
+                changes.append("contract")
+                contract_event = ContractUpdatedEvent(
+                    employee_id=employee.id,
+                    employee_number=str(employee.employee_id),
+                    contract_from=employee.contract_from,
+                    contract_to=employee.contract_to,
+                )
+
+            # Save (its own savepoint, so a unique-index refusal - a
+            # concurrent request taking the email - leaves this transaction
+            # usable for the check that names it).
+            try:
+                self._employees.update(employee)
+            except IntegrityError as exc:
+                self._raise_if_email_taken(exc, command.email, exclude_id=employee.id)
 
         if salary_change_event:
             self._event_bus.publish(salary_change_event)
+        if contract_event:
+            self._event_bus.publish(contract_event)
 
         # Publish update event
         if changes:
@@ -510,6 +693,7 @@ class EmployeeService:
         reason: str = "",
         actor_permissions: PermissionSet | None = None,
         actor_employee_id: int | None = None,
+        actor_user_id=None,
     ) -> Employee:
         """
         Deactivate an employee (soft delete) and disable their login.
@@ -545,23 +729,157 @@ class EmployeeService:
         )
 
         # The employee record and its login go inactive together or not at
-        # all. SimpleJWT rejects an inactive user on every request and on
-        # token refresh, so this also ends any session already issued.
-        employee.deactivate()
-        with transaction.atomic():
-            self._employees.update(employee)
-            if employee.user_id is not None:
-                self._disable_login(employee.user_id)
+        # all, through the one transition authority (AUD-02).
+        return self._lifecycle.deactivate(
+            employee.id, reason, actor_user_id=actor_user_id, source="hr.employee.deactivate"
+        ).employee
 
-        self._event_bus.publish(
-            EmployeeTerminatedEvent(
-                employee_id=employee.id,
-                employee_number=str(employee.employee_id),
-                reason=reason,
-            )
+    def reactivate_employee(
+        self,
+        employee_id: int,
+        actor_permissions: PermissionSet | None = None,
+        actor_employee_id: int | None = None,
+        actor_user_id=None,
+        reason: str = "",
+    ) -> LifecycleTransitionResult:
+        """
+        Reactivate a deactivated employee and re-enable their login.
+
+        The same employee record returns to ACTIVE: identity, EC number,
+        role and department are untouched. A re-enabled login is issued a
+        temporary password (REM-07), carried on the result.
+
+        Args:
+            employee_id: Employee ID
+            actor_permissions: The acting user's permissions. None holds
+                nothing. Needs hr.employee.reactivate, checked before the
+                target is loaded, and must cover the target's own (dormant)
+                permissions.
+            actor_employee_id: The acting employee's own record id, from the
+                authenticated request; reactivating it is refused.
+
+        Returns:
+            The transition result (employee, and any temporary password)
+
+        Raises:
+            AuthorizationError: If the actor may not reactivate this employee.
+            NotFoundError: If employee not found
+            ValidationError: If the employee is archived
+        """
+        actor_permissions = actor_permissions or PermissionSet.empty()
+        self._policy.authorize_reactivate(actor_permissions)
+
+        employee = self._employees.get_by_id(employee_id)
+        if not employee:
+            raise NotFoundError(f"Employee with ID {employee_id} not found")
+
+        self._policy.authorize_reactivate_target(
+            actor_permissions,
+            target_permissions=self._effective_permissions(employee),
+            is_self=actor_employee_id is not None and actor_employee_id == employee.id,
         )
 
-        return employee
+        return self._lifecycle.reactivate(
+            employee.id, actor_user_id=actor_user_id, reason=reason, source="hr.employee.reactivate"
+        )
+
+    def archive_employee(
+        self,
+        employee_id: int,
+        actor_permissions: PermissionSet | None = None,
+        actor_employee_id: int | None = None,
+        vacate_department_headships: bool = False,
+        actor_user_id=None,
+        reason: str = "",
+    ) -> LifecycleTransitionResult:
+        """
+        Archive an employee: permanently close their employment lifecycle
+        (AUD-02). See EmployeeLifecycleService.archive.
+
+        Args:
+            employee_id: Employee ID
+            actor_permissions: The acting user's permissions. None holds
+                nothing. Needs hr.employee.archive, checked before the target
+                is loaded, and must cover the target's own permissions.
+            actor_employee_id: The acting employee's own record id, from the
+                authenticated request; archiving it is refused.
+            vacate_department_headships: Explicitly leave any department the
+                employee heads without a head.
+
+        Raises:
+            AuthorizationError: If the actor may not archive this employee.
+            NotFoundError: If employee not found
+            ConflictError: If structural authority blocks the archive
+        """
+        actor_permissions = actor_permissions or PermissionSet.empty()
+        self._policy.authorize_archive(actor_permissions)
+
+        employee = self._employees.get_by_id(employee_id)
+        if not employee:
+            raise NotFoundError(f"Employee with ID {employee_id} not found")
+
+        self._policy.authorize_archive_target(
+            actor_permissions,
+            target_permissions=self._effective_permissions(employee),
+            is_self=actor_employee_id is not None and actor_employee_id == employee.id,
+        )
+
+        return self._lifecycle.archive(
+            employee.id,
+            vacate_department_headships=vacate_department_headships,
+            actor_user_id=actor_user_id,
+            reason=reason,
+            source="hr.employee.archive",
+        )
+
+    def _ensure_valid_manager(self, reports_to_id: int | None) -> None:
+        """
+        A reports_to manager exists (AUD-02 F9) and is not archived: an
+        archived employee is given no new reports (AUD-02). A deactivated
+        one may be.
+        """
+        if reports_to_id is None:
+            return
+        manager = self._employees.get_by_id(reports_to_id)
+        if manager is None:
+            raise NotFoundError(f"Employee with ID {reports_to_id} not found")
+        manager.ensure_not_archived("assigned as a manager")
+
+    def _validate_assignment_references(
+        self, command: UpdateEmployeeCommand, employee: Employee
+    ) -> None:
+        """
+        The department, position and manager an update names exist, and a
+        position belongs to the employee's department - the one in the same
+        request, or the one they are in - as create already requires
+        (AUD-02 F9). Who may change them is decided elsewhere.
+
+        Raises:
+            NotFoundError: An unknown department, position or manager
+            ValidationError: POSITION_DEPARTMENT_MISMATCH; EMPLOYEE_ARCHIVED
+                for an archived manager
+        """
+        if command.department_id is not None and not self._departments.get_by_id(
+            command.department_id
+        ):
+            raise NotFoundError(f"Department with ID {command.department_id} not found")
+
+        if command.position_id is not None:
+            position = self._positions.get_by_id(command.position_id)
+            if not position:
+                raise NotFoundError(f"Position with ID {command.position_id} not found")
+            department_id = (
+                command.department_id
+                if command.department_id is not None
+                else employee.department_id
+            )
+            if department_id and position.department_id != department_id:
+                raise ValidationError(
+                    message="Position does not belong to the specified department",
+                    code="POSITION_DEPARTMENT_MISMATCH",
+                )
+
+        self._ensure_valid_manager(command.reports_to_id)
 
     def get_employee(
         self, employee_id: int, actor_permissions: PermissionSet | None = None
@@ -571,9 +889,14 @@ class EmployeeService:
 
         Salary/bank fields are populated only for an actor holding the matching
         payroll view capability; otherwise they are None (see _to_dto).
+
+        An archived employee is returned only to an actor holding
+        hr.employee.view_archived; to anyone else they do not exist (AUD-02).
         """
         employee = self._employees.get_by_id(employee_id)
         if not employee:
+            return None
+        if employee.is_archived and not self._policy.may_view_archived(actor_permissions):
             return None
         return self._to_dto(employee, actor_permissions)
 
@@ -591,6 +914,28 @@ class EmployeeService:
     ) -> list[EmployeeDTO]:
         """Get all active employees."""
         employees = self._employees.get_all(include_inactive=False)
+        return [self._to_dto(e, actor_permissions) for e in employees]
+
+    def get_all_employees(
+        self,
+        actor_permissions: PermissionSet | None = None,
+        include_archived: bool = False,
+    ) -> list[EmployeeDTO]:
+        """
+        Every employee, active or deactivated. Archived employees are left
+        out unless asked for, which needs hr.employee.view_archived (AUD-02).
+
+        Raises:
+            AuthorizationError: If archived employees are asked for without
+                the capability
+        """
+        if include_archived:
+            self._policy.authorize_view_archived(actor_permissions or PermissionSet.empty())
+        employees = [
+            employee
+            for employee in self._employees.get_all(include_inactive=True)
+            if include_archived or not employee.is_archived
+        ]
         return [self._to_dto(e, actor_permissions) for e in employees]
 
     def get_employees_by_department(
@@ -726,12 +1071,6 @@ class EmployeeService:
             if user is not None:
                 return resolve_actor_permissions(user)
         return self._role_permissions(employee.role_id) or PermissionSet.empty()
-
-    def _disable_login(self, user_id: UUID) -> None:
-        """Deactivate the identity account linked to an employee."""
-        from modules.identity.infrastructure.persistence.models import CustomUser
-
-        CustomUser.objects.filter(pk=user_id).update(is_active=False)
 
     def _save_leave_profile(self, employee_id: int, leave_days_entitled: int) -> None:
         """Create or update the employee's LeaveProfile row."""

@@ -36,8 +36,10 @@ export const addUser = async (data) => {
   return response; // Return the whole response so the component can access .data
 };
 
-export const deleteUserMethod = async (id) => {
-  return await apiClient.delete(`/auth/users/${id}/`);
+// Users are never deleted (AUD-02): access is ended by deactivating the login,
+// which the backend applies to the employee lifecycle and authorizes itself.
+export const deactivateUser = async (id) => {
+  return await apiClient.patch(`/auth/users/${id}/`, { is_active: false });
 };
 
 // --- Dashboard & Analytics ---

@@ -41,29 +41,32 @@ def create_employee_user_account(sender, instance, created, **kwargs):
     The plaintext is handed back once on ``instance.temporary_password`` so
     the service creating the employee can return it to its authorized
     creator; it is never stored or logged.
+
+    An existing login with the same email is attached instead, chosen by the
+    one rule EmployeeService authorized against (login_attachment, AUD-02
+    F9). EmployeeService already names that login on the record, so this
+    only resolves it for records created some other way. A login that cannot
+    be attached raises, rolling back the caller's transaction (EmployeeService
+    and the repository always create inside one).
     """
+    from modules.hr.infrastructure.persistence.login_attachment import attachable_login
     from modules.identity.application.services import generate_temp_password
     from modules.identity.infrastructure.persistence.models import CustomUser
 
     if created and not instance.user and instance.email:
-        try:
-            existing_user = CustomUser.objects.filter(email=instance.email).first()
+        existing_user = attachable_login(instance.email)
 
-            if existing_user:
-                sender.objects.filter(pk=instance.pk).update(user=existing_user)
-            else:
-                temporary_password = generate_temp_password()
-                user = CustomUser.objects.create_user(
-                    email=instance.email,
-                    password=temporary_password,
-                    first_name=instance.first_name,
-                    last_name=instance.surname,
-                    is_active=True,
-                    must_change_password=True,
-                )
-                sender.objects.filter(pk=instance.pk).update(user=user)
-                instance.temporary_password = temporary_password
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Failed to create user for employee {instance.employee_id}: {e}")
+        if existing_user:
+            sender.objects.filter(pk=instance.pk).update(user=existing_user)
+        else:
+            temporary_password = generate_temp_password()
+            user = CustomUser.objects.create_user(
+                email=instance.email,
+                password=temporary_password,
+                first_name=instance.first_name,
+                last_name=instance.surname,
+                is_active=True,
+                must_change_password=True,
+            )
+            sender.objects.filter(pk=instance.pk).update(user=user)
+            instance.temporary_password = temporary_password

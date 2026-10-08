@@ -78,8 +78,11 @@ class AuthService:
                 error="Invalid email or password",
             )
 
-        # Check if account is active
+        # Check if account is active - the login itself, and the employment
+        # lifecycle of the employee behind it (AUD-02).
         can_login, error = user.can_login()
+        if can_login and not self._employment_allows_login(user.id):
+            can_login, error = False, "Account is deactivated"
         if not can_login:
             self._log_failed_login(
                 email=command.email,
@@ -137,6 +140,18 @@ class AuthService:
             access_token=tokens.get("access"),
             refresh_token=tokens.get("refresh"),
         )
+
+    @staticmethod
+    def _employment_allows_login(user_id: UUID) -> bool:
+        """
+        Whether the employee behind this login, if any, is in active
+        employment - the same rule every later request is held to.
+        """
+        from modules.identity.infrastructure.account_access import employment_allows_access
+        from modules.identity.infrastructure.persistence.models import CustomUser
+
+        db_user = CustomUser.objects.filter(pk=user_id).first()
+        return db_user is not None and employment_allows_access(db_user)
 
     def _generate_tokens(self, user: User) -> dict[str, str]:
         """

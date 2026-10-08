@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   Card,
   CardContent,
@@ -17,13 +17,25 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { UserPlus, Search, Edit, Trash2, User as UserIcon } from "lucide-react";
+import { UserPlus, Search, Edit, UserX, User as UserIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns"; 
-import {deleteUserMethod} from '@/services/hr.services'
+import { format } from "date-fns";
+import { deactivateUser } from '@/services/hr.services'
+import { NO_PERMISSION, readApiError } from '@/lib/apiErrors'
 
-export default function Users({ setAddUser, users }) {
+// What the user is told when deactivation is refused, by the backend's code.
+const DEACTIVATE_REFUSALS: Record<string, string> = {
+  EMPLOYEE_DEACTIVATE_NOT_AUTHORIZED: "You don't have permission to deactivate user accounts.",
+  EMPLOYEE_TARGET_EXCEEDS_ACTOR_AUTHORITY: "You don't have permission to deactivate this user.",
+  EMPLOYEE_SELF_DEACTIVATION: "You can't deactivate your own account.",
+  EMPLOYEE_ARCHIVED: "This employee has been archived, so their account can't be changed.",
+};
+
+export default function Users({ setAddUser, users, onUsersChanged }) {
   const [searchTerm, setSearchTerm] = useState("");
+  // The user whose deactivation is in flight; one request per action.
+  const [deactivatingId, setDeactivatingId] = useState(null);
+  const deactivating = useRef(false);
 
   // 1. Fixed Status Logic (Handle 'is_active')
   const getStatusBadge = (isActive) => {
@@ -45,17 +57,37 @@ export default function Users({ setAddUser, users }) {
     // setEditUserModal(true);
   };
 
-  const deleteUser = (id) => {
-    // Use UUID for deletion
-    deleteUserMethod(id)
-      .then(() => {
-        toast.success("User deleted successfully");
-        // Ideally refresh the list from parent or context here
-      })
-      .catch((error) => {
-        console.log(error);
-        toast.error("Error deleting user");
-      });
+  // Users are never deleted (AUD-02); deactivating ends their access and can
+  // be reversed. The backend decides who may deactivate whom.
+  const handleDeactivate = async (user) => {
+    if (deactivating.current) return;
+    const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.email;
+    if (!confirm(`Deactivate ${name}? They will no longer be able to sign in. The account can be reactivated later.`)) {
+      return;
+    }
+
+    deactivating.current = true;
+    setDeactivatingId(user.id);
+    try {
+      await deactivateUser(user.id);
+      toast.success(`${name} has been deactivated.`);
+      onUsersChanged?.();
+    } catch (error) {
+      const { status, code } = readApiError(error);
+      if (status === 404) {
+        toast.error(`${name}'s account no longer exists. The list has been refreshed.`);
+        onUsersChanged?.();
+      } else if (code && DEACTIVATE_REFUSALS[code]) {
+        toast.error(DEACTIVATE_REFUSALS[code]);
+      } else if (status === 403) {
+        toast.error(NO_PERMISSION);
+      } else {
+        toast.error(`We couldn't deactivate ${name}. Please try again.`);
+      }
+    } finally {
+      deactivating.current = false;
+      setDeactivatingId(null);
+    }
   };
 
   // Filter logic updated to check first_name, last_name and email
@@ -161,13 +193,18 @@ export default function Users({ setAddUser, users }) {
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => deleteUser(user.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {user.is_active && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Deactivate"
+                              disabled={deactivatingId !== null}
+                              onClick={() => handleDeactivate(user)}
+                            >
+                              <UserX className="mr-1 h-4 w-4" />
+                              {deactivatingId === user.id ? "Deactivating..." : "Deactivate"}
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

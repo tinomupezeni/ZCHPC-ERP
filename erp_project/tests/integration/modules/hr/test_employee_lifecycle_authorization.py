@@ -538,12 +538,14 @@ class TestDeactivationRevokesAccess:
 
 class TestDeactivationIsAtomic:
     def test_login_disable_failure_rolls_back_the_employee_change(self, monkeypatch):
-        from modules.hr.application.services.employee_service import EmployeeService
+        # The login is disabled by identity's disable_login, called by
+        # EmployeeLifecycleService inside the transition (AUD-02 Slice 3).
+        from modules.identity.application import services as identity_services
 
-        def boom(self, user_id):
+        def boom(user_repository, user_id):
             raise RuntimeError("identity write failed")
 
-        monkeypatch.setattr(EmployeeService, "_disable_login", boom)
+        monkeypatch.setattr(identity_services, "disable_login", boom)
         target = make_employee("Tina", "Target", "A01T")
 
         with pytest.raises(RuntimeError):
