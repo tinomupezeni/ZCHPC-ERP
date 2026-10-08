@@ -16,17 +16,18 @@ Now:
   CHECK_REVOKE_TOKEN - revokes every earlier token;
 - reactivation issues a new temporary password; unlock touches only the
   lockout;
-- migration identity 0005 flags existing surname-password accounts;
+- the flag_surname_passwords command flags existing surname-password
+  accounts (it replaced the work of migration identity 0005);
 - the portal login authenticates through the identity AuthService.
 """
 
 import logging
-from importlib import import_module
+from io import StringIO
 from itertools import count
 
 import pytest
-from django.apps import apps as django_apps
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
@@ -380,14 +381,15 @@ class TestLifecycle:
 
 
 # =============================================================================
-# Existing surname-password accounts (identity migration 0005)
+# Existing surname-password accounts (flag_surname_passwords command)
 # =============================================================================
 
 
-_flag_migration = import_module("modules.identity.migrations.0005_flag_surname_passwords")
+def flag_surname_passwords():
+    call_command("flag_surname_passwords", stdout=StringIO())
 
 
-class TestSurnamePasswordMigration:
+class TestSurnamePasswordCommand:
     def test_flags_only_surname_password_accounts_and_is_idempotent(self):
         legacy = make_employee("Legacy", password="Person")  # surname is "Person"
         strong = make_employee("Strong")
@@ -396,8 +398,8 @@ class TestSurnamePasswordMigration:
         )
         hashes = {u.pk: u.password for u in User.objects.all()}
 
-        _flag_migration.flag_surname_passwords(django_apps, None)
-        _flag_migration.flag_surname_passwords(django_apps, None)
+        flag_surname_passwords()
+        flag_surname_passwords()
 
         assert User.objects.get(pk=legacy.user.pk).must_change_password is True
         assert User.objects.get(pk=strong.user.pk).must_change_password is False
@@ -407,7 +409,7 @@ class TestSurnamePasswordMigration:
 
 class TestFlaggedAccountRotation:
     """
-    The deploy-time operator procedure for accounts migration 0005 flags:
+    The operator procedure for accounts flag_surname_passwords flags:
     disable, then re-enable, the login through the identity API. Re-enabling
     issues a fresh temporary password; the surname stops working.
     """
@@ -417,7 +419,7 @@ class TestFlaggedAccountRotation:
         operator = make_employee(
             "Operator", EMP.DEACTIVATE, EMP.REACTIVATE, "portal.notification.view", "hr.employee.view"
         )
-        _flag_migration.flag_surname_passwords(django_apps, None)
+        flag_surname_passwords()
         assert User.objects.get(pk=legacy.user.pk).must_change_password is True
 
         # Before rotation the surname still authenticates (confined) - the gap
