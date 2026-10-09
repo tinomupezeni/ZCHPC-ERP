@@ -9,7 +9,8 @@
 #   - database is NEVER published on the host
 #   - images come from ${*_IMAGE}, never `:latest`, never pulled (deploy.sh uses --pull never)
 #   - no DJANGO_SUPERUSER_* (accounts come from seed-eval.sh)
-# Always run through deploy.sh, never `docker compose` by hand.
+# Always run through deploy.sh (VM) or local-up.sh (laptop fallback, project
+# erp-staging-local), never `docker compose` by hand.
 # =============================================================================
 name: erp-staging
 

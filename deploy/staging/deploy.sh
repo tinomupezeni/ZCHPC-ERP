@@ -18,6 +18,8 @@
 #
 # Images are built OFF the VM and transferred (VM builds are last resort and
 # need explicit approval). From a clean checkout of `master` on your machine:
+# on Windows make it an LF checkout (git -c core.autocrlf=false worktree add ...),
+# otherwise entrypoint.sh gets a CRLF shebang and the api container cannot start.
 #
 #   SHA=$(git rev-parse --short HEAD)
 #   docker build --target production -t erp-staging/api:$SHA erp_project

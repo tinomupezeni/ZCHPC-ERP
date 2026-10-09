@@ -3,3 +3,7 @@ credentials.txt
 .credentials.*
 .prod-snapshot.*
 .env
+# Local fallback (local-up.sh) - never commit
+.env.local
+.env.local.*
+credentials.local.txt
