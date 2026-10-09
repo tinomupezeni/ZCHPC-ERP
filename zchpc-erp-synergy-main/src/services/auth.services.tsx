@@ -1,5 +1,5 @@
 
-import { User } from '../types/index';
+import { MeAccess, User } from '../types/index';
 import apiClient from './apiClient';
 
 export const login = async (email: string, password: string): Promise<User> => {
@@ -23,6 +23,12 @@ export const getProfile = async (): Promise<User | null> => {
   } catch (error) {
     return null;
   }
+};
+
+// Throws on failure: the caller tells 403 PASSWORD_CHANGE_REQUIRED apart.
+export const getMyAccess = async (): Promise<MeAccess> => {
+  const response = await apiClient.get('/auth/users/me/access/');
+  return response.data;
 };
 
 export const clearTokens = () => {
