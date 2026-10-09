@@ -4,6 +4,9 @@
 # database only. Never restores production data; never touches another project.
 #
 #   sudo ./seed-eval.sh          (run after `./deploy.sh up`; idempotent)
+#   ./seed-eval.sh --local       (laptop fallback only, run by `./local-up.sh seed`:
+#                                 project erp-staging-local, .env.local,
+#                                 credentials.local.txt, no chmod-600 check)
 #
 # Guards (any failure aborts before writing):
 #   - .env identity is erp-staging / staging, file is chmod 600
@@ -21,8 +24,20 @@ set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT="erp-staging"
+ENV_FILE="$DIR/.env"
 MARKER="zchpc-eval-seed"
 CREDS="$DIR/credentials.txt"
+LOCAL=0
+case "${1:-}" in
+  "") ;;
+  --local)
+    LOCAL=1
+    PROJECT="erp-staging-local"
+    ENV_FILE="$DIR/.env.local"
+    CREDS="$DIR/credentials.local.txt"
+    ;;
+  *) echo "usage: seed-eval.sh [--local]" >&2; exit 2 ;;
+esac
 
 # Logins created by the interim seed (seed_admin + seed_pr_test_data).
 ACCOUNTS=(
@@ -38,22 +53,23 @@ ACCOUNTS=(
 die() { echo "SEED ABORT: $*" >&2; exit 1; }
 
 # --- 1. identity ----------------------------------------------------------------
-[ -f "$DIR/.env" ] || die "missing $DIR/.env"
-[ "$(stat -c %a "$DIR/.env")" = "600" ] || die "$DIR/.env must be chmod 600"
+[ -f "$ENV_FILE" ] || die "missing $ENV_FILE"
+# On a laptop (Windows/NTFS) chmod 600 is not representable; the VM path keeps the check.
+[ "$LOCAL" = 1 ] || [ "$(stat -c %a "$ENV_FILE")" = "600" ] || die "$ENV_FILE must be chmod 600"
 set -a
-# shellcheck disable=SC1091
-. "$DIR/.env"
+# shellcheck disable=SC1090
+. "$ENV_FILE"
 set +a
 [ "${COMPOSE_PROJECT_NAME:-}" = "$PROJECT" ] || die "COMPOSE_PROJECT_NAME must be $PROJECT"
 [ "${ZCHPC_ENV:-}" = "staging" ] || die "ZCHPC_ENV must be staging"
 [ -n "${POSTGRES_DB:-}" ] && [ -n "${POSTGRES_USER:-}" ] || die "POSTGRES_DB/POSTGRES_USER must be set"
 
-COMPOSE=(docker compose -p "$PROJECT" -f "$DIR/docker-compose.yml" --env-file "$DIR/.env")
+COMPOSE=(docker compose -p "$PROJECT" -f "$DIR/docker-compose.yml" --env-file "$ENV_FILE")
 
 # --- 2. resolve and verify containers -------------------------------------------
 API="$("${COMPOSE[@]}" ps -q api)"
 DB="$("${COMPOSE[@]}" ps -q db)"
-[ -n "$API" ] && [ -n "$DB" ] || die "api/db not running; run ./deploy.sh up first"
+[ -n "$API" ] && [ -n "$DB" ] || die "api/db not running; run ./deploy.sh up (or ./local-up.sh up) first"
 for c in "$API" "$DB"; do
   label="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$c")"
   [ "$label" = "$PROJECT" ] || die "container $c belongs to project '$label', not $PROJECT"
