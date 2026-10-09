@@ -1,17 +1,20 @@
 import React, { useState, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
-import { navItems } from "./navConfig";
+import { useLocation } from "react-router-dom";
+import { availabilityFor, navItems } from "./navConfig";
 import { SidebarItem } from "./SidebarItem";
 import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import NotAvailable from "@/components/NotAvailable";
 
 export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [collapsed, setCollapsed] = useState(false);
   const { user, access, logout, checkPermission, isLoading } = useAuth();
+  const location = useLocation();
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>(
     {}
   );
@@ -31,6 +34,8 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
           if (item.moduleIdentifier && !activeModules.includes(item.moduleIdentifier)) {
             return false;
           }
+
+          if (availabilityFor(item.path) === "hidden") return false;
 
           return true;
         })
@@ -125,7 +130,9 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
           !collapsed ? "ml-[260px]" : "ml-[70px]"
         )}
       >
-        <div className="p-8">{children}</div>
+        <div className="p-8">
+          {availabilityFor(location.pathname) ? <NotAvailable /> : children}
+        </div>
       </main>
     </div>
   );

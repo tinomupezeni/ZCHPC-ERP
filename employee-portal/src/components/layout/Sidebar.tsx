@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button';
 import { useRole, type RoleGroup } from '@/hooks/useRole';
 import { usePurchaseRequestActionCount } from '@/hooks/usePurchaseRequestActionCount';
 import { usePurchaseRequestReviewerAccess } from '@/hooks/usePurchaseRequestReviewerAccess';
+import { availabilityFor } from './navAvailability';
 
 const PURCHASE_REQUESTS_PATH = '/portal/purchase-requests';
 
@@ -228,7 +229,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   if (canApproveAsDirector) reviewerItems.push(DIRECTOR_APPROVAL_ITEM);
   if (canProcessAsProcurement) reviewerItems.push(PROCUREMENT_PROCESSING_ITEM);
 
-  const navItems = [...baseNavItems];
+  const navItems = baseNavItems.filter((item) => availabilityFor(item.path) !== 'hidden');
   if (reviewerItems.length > 0) {
     const purchaseRequestsIndex = navItems.findIndex(
       (item) => item.path === PURCHASE_REQUESTS_PATH
@@ -317,6 +318,16 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                   <div className="min-w-0">
                     <span className="flex items-center gap-1.5">
                       <span className="truncate">{item.label}</span>
+                      {availabilityFor(item.path) === 'not-available' && (
+                        <span
+                          className={cn(
+                            'text-[10px] font-normal flex-shrink-0',
+                            isActive ? 'text-blue-100' : 'text-slate-400'
+                          )}
+                        >
+                          Not available
+                        </span>
+                      )}
                       {item.path === PURCHASE_REQUESTS_PATH && purchaseRequestActionCount > 0 && (
                         <span
                           className={cn(

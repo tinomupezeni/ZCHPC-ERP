@@ -155,10 +155,12 @@ describe('Sidebar - F20 follow-up: permission-aware Purchase Request review navi
     mockCanProcessAsProcurement = false;
     renderSidebar();
 
-    expect(screen.getByRole('link', { name: /^accounts ledgers & accounts$/i })).toHaveAttribute(
-      'href',
-      '/portal/accounts'
-    );
+    // The "Accounts" ledger link has no page and is hidden for the
+    // evaluation (navAvailability); hiding it must not take the
+    // verification link with it.
+    expect(
+      screen.queryByRole('link', { name: /^accounts ledgers & accounts$/i })
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: /accounts verification/i })
     ).toHaveAttribute('href', '/portal/purchase-requests/accounts');
@@ -177,9 +179,9 @@ describe('Sidebar - F20 follow-up: permission-aware Purchase Request review navi
     expect(
       screen.queryByRole('link', { name: /accounts verification/i })
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /^accounts ledgers & accounts$/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /fuel requisitions/i })).toHaveAttribute(
       'href',
-      '/portal/accounts'
+      '/portal/fuel-requisitions'
     );
   });
 });
@@ -449,5 +451,48 @@ describe('Sidebar - Purchase Requests action badge', () => {
 
     const leaveLink = screen.getByRole('link', { name: /leave/i });
     expect(leaveLink).not.toHaveTextContent('3');
+  });
+});
+
+describe('Sidebar - evaluation availability (navAvailability)', () => {
+  const DEAD_LINKS = [
+    '/portal/employees',
+    '/portal/reports',
+    '/portal/payroll',
+    '/portal/accounts',
+    '/portal/expenses',
+    '/portal/procurement',
+    '/portal/inventory',
+    '/portal/suppliers',
+    '/portal/settings',
+  ];
+
+  it.each(['admin', 'hr', 'manager', 'accountant', 'procurement', 'staff'])(
+    'shows no link to a page that does not exist for the %s role group',
+    (roleGroup) => {
+      mockRoleGroup = roleGroup;
+      mockUseActionCount.mockReturnValue(0);
+      mockCanReviewAsDepartmentHead = false;
+      mockCanVerifyAsAccounts = false;
+      mockCanRecommendAsGM = false;
+      mockCanApproveAsDirector = false;
+      mockCanProcessAsProcurement = false;
+      renderSidebar();
+
+      const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
+      for (const path of DEAD_LINKS) expect(hrefs).not.toContain(path);
+    }
+  );
+
+  it('keeps Leave and Payslips in the menu, marked "Not available"', () => {
+    mockRoleGroup = 'staff';
+    mockUseActionCount.mockReturnValue(0);
+    renderSidebar();
+
+    expect(screen.getByRole('link', { name: /^leave/i })).toHaveTextContent(/not available/i);
+    expect(screen.getByRole('link', { name: /^payslips/i })).toHaveTextContent(/not available/i);
+    expect(screen.getByRole('link', { name: /^attendance/i })).not.toHaveTextContent(
+      /not available/i
+    );
   });
 });

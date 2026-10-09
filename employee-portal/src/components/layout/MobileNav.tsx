@@ -7,6 +7,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { availabilityFor } from './navAvailability';
 
 interface NavItem {
   path: string;
@@ -25,7 +26,9 @@ export function MobileNav() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 md:hidden z-20 safe-area-pb shadow-lg">
       <div className="flex items-center justify-around">
-        {navItems.map((item) => (
+        {navItems
+          .filter((item) => availabilityFor(item.path) !== 'hidden')
+          .map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
@@ -63,6 +66,9 @@ export function MobileNav() {
                   )}
                 >
                   {item.label}
+                  {availabilityFor(item.path) === 'not-available' && (
+                    <span className="sr-only"> (not available)</span>
+                  )}
                 </span>
               </>
             )}

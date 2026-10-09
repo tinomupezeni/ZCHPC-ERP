@@ -4,6 +4,9 @@ import { DollarSign, Search, PlusCircle, Loader, XCircle, Calendar, X, RefreshCw
 import Server from "@/services/Server";
 import { toast } from "sonner";
 import { formatUSD, formatZIG } from "../ui/utils";
+import { availabilityFor } from "@/layout/navConfig";
+
+const fetchRateAvailable = !availabilityFor("action:payroll/fetch-latest-rate");
 
 const CurrencyRates = () => {
   const [rates, setRates] = useState([]);
@@ -110,18 +113,29 @@ const CurrencyRates = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <button
-            onClick={handleFetchLatestRate}
-            disabled={isFetching}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-          >
-            {isFetching ? (
-              <Loader className="h-4 w-4 animate-spin" />
-            ) : (
+          {fetchRateAvailable ? (
+            <button
+              onClick={handleFetchLatestRate}
+              disabled={isFetching}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+            >
+              {isFetching ? (
+                <Loader className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              Fetch Today's Rate
+            </button>
+          ) : (
+            <button
+              disabled
+              title="Not available in this evaluation"
+              className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-400 rounded-lg cursor-not-allowed"
+            >
               <Download className="h-4 w-4" />
-            )}
-            Fetch Today's Rate
-          </button>
+              Fetch Today's Rate (not available in this evaluation)
+            </button>
+          )}
           <button
             onClick={() => setIsModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
