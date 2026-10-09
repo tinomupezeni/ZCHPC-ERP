@@ -84,12 +84,16 @@ class RBACMiddleware:
     PERSONAL_RESOURCE_PATHS = [
         "/api/v2/portal/notifications",
         "/api/v2/auth/users/me/",  # the caller's own login profile
+        # The caller's own role, permissions and headships. Already covered by
+        # the prefix above; listed so it stays personal if that entry changes.
+        "/api/v2/auth/users/me/access/",
         "/api/v2/auth/password/change/",  # the caller's own password
     ]
 
     # REM-07: all an account holding an issued temporary password
     # (must_change_password) may reach, besides the exempt login/refresh and
-    # portal auth routes, until its owner replaces the password.
+    # portal auth routes, until its owner replaces the password. Matched
+    # exactly, so the paths below /users/me/ (such as access/) stay closed.
     PASSWORD_CHANGE_PATHS = [
         "/api/v2/auth/users/me/",
         "/api/v2/auth/password/change/",
@@ -119,8 +123,9 @@ class RBACMiddleware:
         # temporary password may only replace it. Checked before every other
         # branch (media, personal resources, the superuser bypass) so none of
         # them widens it.
-        if getattr(request.user, "must_change_password", False) and not any(
-            path.startswith(p) for p in self.PASSWORD_CHANGE_PATHS
+        if (
+            getattr(request.user, "must_change_password", False)
+            and path not in self.PASSWORD_CHANGE_PATHS
         ):
             return JsonResponse(
                 {

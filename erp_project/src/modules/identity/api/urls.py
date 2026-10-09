@@ -11,6 +11,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from modules.identity.api.views import (
     AuditLogListView,
     ChangePasswordView,
+    CurrentUserAccessView,
     CurrentUserView,
     LoginView,
     SystemModuleViewSet,
@@ -32,6 +33,7 @@ urlpatterns = [
     # Users
     path("users/", UserListCreateView.as_view(), name="user_list"),
     path("users/me/", CurrentUserView.as_view(), name="user_me"),
+    path("users/me/access/", CurrentUserAccessView.as_view(), name="user_me_access"),
     path("password/change/", ChangePasswordView.as_view(), name="password_change"),
     path("users/<str:user_id>/", UserDetailView.as_view(), name="user_detail"),
     path("users/<str:user_id>/unlock/", UnlockUserView.as_view(), name="user_unlock"),
