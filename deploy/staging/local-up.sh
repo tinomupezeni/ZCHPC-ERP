@@ -18,7 +18,7 @@
 #   ./local-up.sh init         create .env.local with freshly generated secrets
 #   ./local-up.sh build [ref]  build the three images from a clean checkout of
 #                              <ref> (default: HEAD) - uncommitted changes are
-#                              never built
+#                              never built - and pull the postgres image
 #   ./local-up.sh up           guardrails, then start db+api, then the frontends
 #   ./local-up.sh seed         evaluation seed (seed-eval.sh --local)
 #   ./local-up.sh stop         stop containers (keeps volumes)
@@ -131,7 +131,12 @@ EOF
     sha="$(git -C "$REPO" rev-parse --short "$ref^{commit}")" || die "unknown ref '$ref'"
     src="$(mktemp -d)"
     trap 'git -C "$REPO" worktree remove --force "$src" >/dev/null 2>&1 || true' EXIT
-    git -C "$REPO" worktree add --detach "$src" "$sha" >/dev/null
+    # LF checkout: with core.autocrlf=true (Windows default) entrypoint.sh gets
+    # a CRLF shebang and the api container fails with "no such file or directory".
+    git -C "$REPO" -c core.autocrlf=false -c core.eol=lf worktree add --detach "$src" "$sha" >/dev/null
+    if head -1 "$src/erp_project/entrypoint.sh" | grep -q $'\r'; then
+      die "erp_project/entrypoint.sh checked out with CRLF; the api image would not start"
+    fi
     echo "== building $sha from a clean checkout"
     if docker image inspect "erp-staging/api:$sha" >/dev/null 2>&1; then
       echo "  --  erp-staging/api:$sha already present (origin-independent), reused"
@@ -141,6 +146,9 @@ EOF
     docker build --build-arg VITE_API_URL="$LOCAL_API_ORIGIN" -t "erp-staging/frontend:$sha-local" "$src/zchpc-erp-synergy-main"
     docker build --build-arg VITE_API_URL="$LOCAL_API_ORIGIN" -t "erp-staging/portal:$sha-local" "$src/employee-portal"
     set_image_tag "$sha"
+    # `up` never pulls; fetch the public db image (postgres) here, once.
+    load_env
+    "${COMPOSE[@]}" pull db
     echo "== built; IMAGE_TAG=$sha recorded in $ENV_FILE"
     ;;
   up)
