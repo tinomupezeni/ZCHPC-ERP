@@ -97,3 +97,5 @@ media/
 
 # virtual environment folders   
 software-env/
+project-documentation/
+.claude/
