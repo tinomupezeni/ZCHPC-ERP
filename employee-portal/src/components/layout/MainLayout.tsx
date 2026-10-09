@@ -1,11 +1,14 @@
 import { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
+import { availabilityFor } from './navAvailability';
+import { NotAvailablePage } from '@/pages/NotAvailablePage';
 
 export function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { pathname } = useLocation();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-100">
@@ -20,7 +23,7 @@ export function MainLayout() {
         {/* Page content */}
         <main className="flex-1 p-4 md:p-6 pb-24 md:pb-6">
           <div className="max-w-7xl mx-auto">
-            <Outlet />
+            {availabilityFor(pathname) ? <NotAvailablePage /> : <Outlet />}
           </div>
         </main>
       </div>

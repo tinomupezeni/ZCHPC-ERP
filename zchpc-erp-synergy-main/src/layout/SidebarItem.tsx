@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { SidebarItemConfig } from "./navConfig";
+import { availabilityFor, SidebarItemConfig } from "./navConfig";
 
 interface SidebarItemProps {
   item: SidebarItemConfig;
@@ -32,6 +32,7 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
   const hasSubItems = !!item.subItems?.length;
 
   const isActive = location.pathname === item.path;
+  const notAvailable = availabilityFor(item.path) === "not-available";
 
   const handleClick = () => {
     if (hasSubItems) {
@@ -75,6 +76,11 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
         {!collapsed && (
           <span className="flex-1 text-left text-[13px] font-medium">
             {item.title}
+            {notAvailable && (
+              <span className="ml-2 text-[10px] font-normal text-slate-400">
+                Not available
+              </span>
+            )}
           </span>
         )}
 

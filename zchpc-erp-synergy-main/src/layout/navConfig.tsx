@@ -21,6 +21,43 @@ export interface SidebarItemConfig {
   subItems?: SidebarItemConfig[];
 }
 
+/**
+ * What the evaluation leaves out (PLAN §4a). This list is the policy; edit
+ * only here.
+ * - "hidden": dropped from the sidebar.
+ * - "not-available": kept in the sidebar, marked "Not available".
+ * Either way MainLayout renders "Not available in this evaluation" for the
+ * route instead of the page, so a direct URL never reaches mock data.
+ * A path also covers its sub-paths. "action:" keys mark a single control.
+ */
+export type Availability = "hidden" | "not-available";
+
+export const EVALUATION_AVAILABILITY: Record<string, Availability> = {
+  // Mock screens (B7)
+  "/accounting": "hidden",
+  "/sales": "hidden",
+  "/inventory": "hidden",
+  "/procurement": "hidden", // incl. its Purchase Requests screen
+  "/hr/hr-training": "hidden",
+  "/hr/hr-training-programs": "hidden",
+  "/hr/hr-training-sessions": "hidden",
+  "/hr/hr-training-enrollments": "hidden",
+  "/hr/hr-training-certifications": "hidden",
+  // Payroll stubs (PY-9, PY-14)
+  "/payroll/salary-setup": "not-available",
+  "/payroll/deductions": "not-available",
+  "/payroll/payroll-period": "not-available",
+  "action:payroll/fetch-latest-rate": "not-available",
+};
+
+export const availabilityFor = (key: string): Availability | undefined => {
+  if (EVALUATION_AVAILABILITY[key]) return EVALUATION_AVAILABILITY[key];
+  const prefix = Object.keys(EVALUATION_AVAILABILITY).find((path) =>
+    key.startsWith(`${path}/`)
+  );
+  return prefix ? EVALUATION_AVAILABILITY[prefix] : undefined;
+};
+
 
 
 export const navItems: SidebarItemConfig[] = [
