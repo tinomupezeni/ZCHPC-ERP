@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { navItems } from "./navConfig";
@@ -6,36 +6,20 @@ import { SidebarItem } from "./SidebarItem";
 import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getActiveModules, SystemModule } from "@/services/system.services";
 
 export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [collapsed, setCollapsed] = useState(false);
-  const { user, logout, checkPermission, isLoading } = useAuth();
-  const [activeModules, setActiveModules] = useState<string[]>([]);
-  const [isModulesLoading, setIsModulesLoading] = useState(true);
+  const { user, access, logout, checkPermission, isLoading } = useAuth();
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>(
     {}
   );
 
-  useEffect(() => {
-    const fetchActiveModules = async () => {
-      try {
-        const modules = await getActiveModules();
-        setActiveModules(modules.map((m: SystemModule) => m.identifier));
-      } catch (error) {
-        console.error("Failed to fetch active modules", error);
-      } finally {
-        setIsModulesLoading(false);
-      }
-    };
-    fetchActiveModules();
-  }, []);
-
   const filteredNavItems = useMemo(() => {
     // If loading, show nothing (or we will show the skeleton below)
-    if (isLoading || isModulesLoading || !user) return [];
+    if (isLoading || !user) return [];
+    const activeModules = access?.active_modules ?? [];
 
     const filterItems = (items: typeof navItems): typeof navItems => {
       return items
@@ -56,12 +40,13 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
         }));
     };
     return filterItems(navItems);
-  }, [user, isLoading, isModulesLoading, activeModules, checkPermission]); // Dependency on 'user' is key for refresh fix
+  }, [user, access, isLoading, checkPermission]);
 
   const userName = `${user?.first_name || ""} ${user?.last_name || ""}`;
   // Get role display name - check multiple sources
   const userRole = user?.employee_profile?.role_display_name
     || user?.employee_profile?.role
+    || access?.role
     || user?.role
     || "Staff";
   const userFallback =

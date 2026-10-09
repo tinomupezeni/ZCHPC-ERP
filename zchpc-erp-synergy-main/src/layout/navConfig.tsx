@@ -13,7 +13,10 @@ export interface SidebarItemConfig {
   title: string;
   icon: React.ElementType;
   path: string;
-  permission: string[]; // A list of roles that can see this
+  // Backend permission modules (the part of a permission before the first
+  // dot, e.g. "payroll" for "payroll.run.process"); the item shows when the
+  // user holds any permission in one of them. "admin" means the full "*" grant.
+  permission: string[];
   moduleIdentifier?: string; // Link to backend system module
   subItems?: SidebarItemConfig[];
 }
@@ -25,13 +28,13 @@ export const navItems: SidebarItemConfig[] = [
     title: "Dashboard",
     icon: LayoutDashboard,
     path: "/dashboard",
-    permission: ["admin"], // Now an array
+    permission: ["admin"],
   },
   {
     title: "HR",
     icon: Users,
     path: "/hr",
-    permission: ["hr", "admin"], // Now an array
+    permission: ["hr"],
     moduleIdentifier: "hr",
     subItems: [
       { title: "Employees", path: "/hr/hr-employees", permission: ["hr"] },
@@ -98,53 +101,53 @@ export const navItems: SidebarItemConfig[] = [
     title: "Payroll",
     icon: CreditCard,
     path: "/payroll",
-    permission: ["hr", "accountant", "admin"], // Now an array with both permissions
+    permission: ["payroll"],
     moduleIdentifier: "payroll",
     subItems: [
       {
         title: "Process Payroll",
         path: "/payroll",
-        permission: ["hr", "accountant"],
+        permission: ["payroll"],
       },
       {
         title: "Salary Setup",
         path: "/payroll/salary-setup",
-        permission: ["hr", "accountant"],
+        permission: ["payroll"],
       },
       {
         title: "Deductions",
         path: "/payroll/deductions",
-        permission: ["hr", "accountant"],
+        permission: ["payroll"],
       },
       {
         title: "Tax Tables",
         path: "/payroll/tax-tables",
-        permission: ["hr", "accountant"],
+        permission: ["payroll"],
       },
       {
         title: "Currencies",
         path: "/payroll/currencies",
-        permission: ["hr", "accountant"],
+        permission: ["payroll"],
       },
       {
         title: "Payroll Period",
         path: "/payroll/payroll-period",
-        permission: ["hr", "accountant"],
+        permission: ["payroll"],
       },
       // {
       //   title: "Process Payroll",
       //   path: "/payroll/process-payroll",
-      //   permission: ["hr", "accountant"],
+      //   permission: ["payroll"],
       // },
       // {
       //   title: "Payslips",
       //   path: "/payroll/payslips",
-      //   permission: ["hr", "accountant"],
+      //   permission: ["payroll"],
       // },
       {
         title: "Compliance Reports",
         path: "/payroll/reports",
-        permission: ["hr", "accountant"],
+        permission: ["payroll"],
       },
     ],
   },
@@ -152,50 +155,50 @@ export const navItems: SidebarItemConfig[] = [
     title: "Sales",
     icon: ShoppingCart,
     path: "/sales",
-    permission: ["sales", "admin"],
+    permission: ["sales"],
     moduleIdentifier: "sales",
   },
   {
     title: "Accounting",
     icon: DollarSign,
     path: "/accounting",
-    permission: ["accountant", "admin"],
+    permission: ["accounts"],
     moduleIdentifier: "accounts",
     subItems: [
       {
         title: "General Ledger",
         path: "/accounting/accounting-general-ledger",
-        permission: ["accountant"],
+        permission: ["accounts"],
       },
       {
         title: "Payroll Process",
         path: "/accounting/accounting-payroll",
-        permission: ["accountant"],
+        permission: ["accounts"],
       },
       {
         title: "Currencies",
         path: "/accounting/accounting-currencies",
-        permission: ["accountant"],
+        permission: ["accounts"],
       },
       {
         title: "Accounts Payable",
         path: "/accounting/accounting-payable",
-        permission: ["accountant"],
+        permission: ["accounts"],
       },
       {
         title: "Accounts Receivable",
         path: "/accounting/accounting-receivable",
-        permission: ["accountant"],
+        permission: ["accounts"],
       },
       {
         title: "Financial Reports",
         path: "/accounting/accounting-reports",
-        permission: ["accountant"],
+        permission: ["accounts"],
       },
       {
         title: "Tax Management",
         path: "/accounting/accounting-tax",
-        permission: ["accountant"],
+        permission: ["accounts"],
       },
     ],
   },
@@ -203,7 +206,7 @@ export const navItems: SidebarItemConfig[] = [
     title: "Procurement",
     icon: FileText,
     path: "/procurement",
-    permission: ["procurement", "admin"],
+    permission: ["procurement"],
     moduleIdentifier: "procurement",
     subItems: [
       {
@@ -242,7 +245,7 @@ export const navItems: SidebarItemConfig[] = [
     title: "Inventory",
     icon: Package,
     path: "/inventory",
-    permission: ["inventory", "admin"],
+    permission: ["inventory"],
     moduleIdentifier: "inventory",
     subItems: [
       { title: "Stock", path: "/inventory/stock", permission: ["inventory"] },

@@ -5,11 +5,13 @@ import React, {
   useEffect,
   ReactNode,
 } from "react";
-import { User } from "../types/index";
+import { isAxiosError } from "axios";
+import { MeAccess, User } from "../types/index";
 import * as authService from "../services/auth.services";
 
 interface AuthContextType {
   user: User | null;
+  access: MeAccess | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<User>;
@@ -19,13 +21,39 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * Load /me/access/ for a signed-in user. A login still holding a temporary
+ * password gets 403 PASSWORD_CHANGE_REQUIRED there (REM-07): that user comes
+ * back flagged so ProtectedRoute sends them to /change-password. Any other
+ * failure leaves access empty rather than signing the user out.
+ */
+const loadAccess = async (
+  user: User
+): Promise<{ user: User; access: MeAccess | null }> => {
+  if (user.must_change_password) return { user, access: null };
+  try {
+    return { user, access: await authService.getMyAccess() };
+  } catch (error) {
+    if (
+      isAxiosError(error) &&
+      error.response?.data?.code === "PASSWORD_CHANGE_REQUIRED"
+    ) {
+      return { user: { ...user, must_change_password: true }, access: null };
+    }
+    console.error("Failed to load /auth/users/me/access/", error);
+    return { user, access: null };
+  }
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [access, setAccess] = useState<MeAccess | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const logout = () => {
     authService.clearTokens();
     setUser(null);
+    setAccess(null);
     if (window.location.pathname !== "/login") {
       window.location.href = "/login";
     }
@@ -41,7 +69,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         try {
           const userProfile = await authService.getProfile();
           if (userProfile) {
-            setUser(userProfile);
+            const loaded = await loadAccess(userProfile);
+            setUser(loaded.user);
+            setAccess(loaded.access);
           } else {
             logout();
           }
@@ -59,63 +89,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = async (email: string, password: string): Promise<User> => {
     setIsLoading(true);
     try {
-      const loggedInUser = await authService.login(email, password);
-      setUser(loggedInUser);
+      const loaded = await loadAccess(await authService.login(email, password));
+      setUser(loaded.user);
+      setAccess(loaded.access);
       setIsLoading(false);
-      return loggedInUser;
+      return loaded.user;
     } catch (error) {
       setUser(null);
+      setAccess(null);
       setIsLoading(false);
       throw error;
     }
   };
 
-  console.log(user);
-  
+  // requiredModules are backend permission modules ("hr", "payroll", ...),
+  // or "admin" for the full "*" grant. A module is held when any permission
+  // starts with it, the same rule the backend route gate applies.
+  const checkPermission = (requiredModules: string[]) => {
+    const permissions = access?.permissions ?? [];
+    if (permissions.includes("*")) return true;
 
- const checkPermission = (requiredModules: string[]) => {
-    if (!user) return false;
-
-    // 1. System Admins (Django Superusers/Staff) see everything
-    if (user.is_staff || user.is_superuser) return true;
-
-    // 2. Get the user's role - check both direct and nested structure
-    const rawRole = user.employee_profile?.role || user.role || "";
-    const userRole = (typeof rawRole === 'string' ? rawRole : "").toUpperCase();
-
-    // 3. Check if user is admin
-    if (userRole === "ADMIN" || userRole === "SYSTEM_ADMINISTRATOR") return true;
-
-    // 4. Role name mappings - map database role names to navConfig permission names
-    // These map to the permission arrays in navConfig.tsx
-    const roleToPermissionMap: Record<string, string[]> = {
-      "HUMAN_RESOURCES": ["hr"],  // HR sees HR and Payroll (both accept "hr")
-      "HR": ["hr"],
-      "ACCOUNTANT": ["accountant"],
-      "PROCUREMENT": ["procurement"],
-      "PROCUREMENT_OFFICER": ["procurement"],
-      "SALES": ["sales"],
-      "SALES_REPRESENTATIVE": ["sales"],
-      "MANAGER": ["hr", "accountant"],  // Manager sees HR, Payroll, Accounting
-      "DEPARTMENT_MANAGER": ["hr", "accountant"],
-      "STAFF": [],  // Staff has no sidebar access
-      "REGULAR_STAFF": [],
-      "INTERN": [],
-      "INVENTORY": ["inventory"],
-    };
-
-    // 5. Get the permissions this role grants
-    const rolePermissions = roleToPermissionMap[userRole] || [];
-
-    // 6. Also include any explicit role_permissions from the backend
-    const backendPermissions: string[] = user?.employee_profile?.role_permissions || [];
-
-    // 7. Combine all permissions
-    const allUserPermissions = [...rolePermissions, ...backendPermissions].map(p => p.toLowerCase());
-
-    // 8. Check if user has any of the required permissions
-    return requiredModules.some((mod) =>
-      allUserPermissions.includes(mod.toLowerCase())
+    const heldModules = new Set(
+      permissions.map((permission) => permission.split(".")[0].toLowerCase())
+    );
+    return requiredModules.some(
+      (module) => module !== "admin" && heldModules.has(module.toLowerCase())
     );
   };
 
@@ -123,6 +121,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     <AuthContext.Provider
       value={{
         user,
+        access,
         isLoading,
         isAuthenticated: !!user,
         login,

@@ -51,7 +51,7 @@ const App = () => {
             <Route
               path="/sales"
               element={
-                <ProtectedRoute requiredPermission={["sales", "admin"]}>
+                <ProtectedRoute requiredPermission={["sales"]}>
                   <MainLayout setOpenTab={setOpenTab}>
                     <SalesPage />
                   </MainLayout>
@@ -61,7 +61,7 @@ const App = () => {
             <Route
               path="/accounting/*"
               element={
-                <ProtectedRoute requiredPermission={["accountant", "admin"]}>
+                <ProtectedRoute requiredPermission={["accounts"]}>
                   <MainLayout setOpenTab={setOpenTab}>
                     <AccountingPage openTab={openTab} />
                   </MainLayout>
@@ -72,7 +72,7 @@ const App = () => {
               path="/payroll/*"
               element={
                 <ProtectedRoute
-                  requiredPermission={["accountant", "hr", "admin"]}
+                  requiredPermission={["payroll"]}
                 >
                   <MainLayout setOpenTab={setOpenTab}>
                     <PayrollPage openTab={openTab} />
@@ -83,7 +83,7 @@ const App = () => {
             <Route
               path="/procurement/*"
               element={
-                <ProtectedRoute requiredPermission={["procurement", "admin"]}>
+                <ProtectedRoute requiredPermission={["procurement"]}>
                   <MainLayout setOpenTab={setOpenTab}>
                     <ProcurementPage openTab={openTab} />
                   </MainLayout>
@@ -93,7 +93,7 @@ const App = () => {
             <Route
               path="/hr/*"
               element={
-                <ProtectedRoute requiredPermission={["hr", "admin"]}>
+                <ProtectedRoute requiredPermission={["hr"]}>
                   <MainLayout setOpenTab={setOpenTab}>
                     <HRPage openTab={openTab} />
                   </MainLayout>
@@ -103,7 +103,7 @@ const App = () => {
             <Route
               path="/inventory/*"
               element={
-                <ProtectedRoute requiredPermission={["inventory", "admin"]}>
+                <ProtectedRoute requiredPermission={["inventory"]}>
                   <MainLayout setOpenTab={setOpenTab}>
                     <InventoryPage />
                   </MainLayout>

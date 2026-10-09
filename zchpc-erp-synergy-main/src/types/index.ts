@@ -30,6 +30,15 @@ export interface User {
   };
 }
 
+// GET /auth/users/me/access/: what the signed-in user may do (INT-01 §2)
+export interface MeAccess {
+  role: string | null;
+  permissions: string[]; // e.g. "procurement.purchase_request.view", or "*"
+  is_department_head: boolean;
+  headed_department_ids: number[];
+  active_modules: string[];
+}
+
 export interface AuthResponse {
   access: string;
   refresh: string;
