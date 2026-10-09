@@ -59,10 +59,13 @@ check() {
     || die "MemAvailable is $((avail / 1024)) MiB, need at least $((MIN_AVAILABLE_KB / 1024)) MiB"
   ok "MemAvailable $((avail / 1024)) MiB"
 
-  # 4. Disk.
-  local free
-  free=$(df -Pk /var/lib/docker 2>/dev/null | awk 'NR==2 {print $4}')
-  [ "${free:-0}" -ge "$MIN_DISK_FREE_KB" ] || die "only $((free / 1024)) MiB free on /var/lib/docker"
+  # 4. Disk, on Docker's own data root (snap Docker uses
+  #    /var/snap/docker/common/var-lib-docker, not /var/lib/docker).
+  local free root
+  root=$(docker info --format '{{.DockerRootDir}}' 2>/dev/null) || die "cannot read Docker's data root (docker info)"
+  [ -n "$root" ] || die "docker info returned an empty DockerRootDir"
+  free=$(df -Pk "$root" 2>/dev/null | awk 'NR==2 {print $4}') || die "cannot read free space on $root"
+  [ "${free:-0}" -ge "$MIN_DISK_FREE_KB" ] || die "only $((free / 1024)) MiB free on $root"
   ok "disk free $((free / 1024 / 1024)) GiB"
 
   # 5. Staging ports must not be any production/old-staging port, and must be
