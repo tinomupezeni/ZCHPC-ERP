@@ -29,6 +29,7 @@ from modules.identity.application.services import (
     UpdateUserCommand,
     UserService,
 )
+from modules.identity.infrastructure.persistence.models import SystemModule
 from modules.identity.infrastructure.persistence.user_repository import DjangoUserRepository
 
 
@@ -245,6 +246,52 @@ class CurrentUserView(APIView):
                 {"detail": "User not found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+
+class CurrentUserAccessView(APIView):
+    """
+    What the caller may do: the summary the front ends shape menus from.
+
+    GET /api/v2/auth/users/me/access/
+
+    Always the authenticated caller - no user id is accepted - and nothing
+    beyond these fields. Menus built from it only show or hide; every route
+    and module policy still decides for itself.
+
+    - permissions: the same grants RBACMiddleware reads (superusers "*").
+    - headed_department_ids: departments whose recorded head (Department.head)
+      is the caller, the headship purchase requests are approved under.
+    - active_modules: identifiers of the installed system modules.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from modules.hr.infrastructure.persistence.structural_assignments import (
+            DjangoStructuralAssignments,
+        )
+
+        user = request.user
+        employee = getattr(user, "employee_profile", None)
+        role = getattr(employee, "role", None)
+        headed = (
+            DjangoStructuralAssignments().departments_headed_by(employee.pk, lock=False)
+            if employee is not None
+            else []
+        )
+        return Response(
+            {
+                "role": role.name if role is not None else None,
+                "permissions": resolve_actor_permissions(user).to_list(),
+                "is_department_head": bool(headed),
+                "headed_department_ids": headed,
+                "active_modules": list(
+                    SystemModule.objects.filter(is_active=True)
+                    .order_by("identifier")
+                    .values_list("identifier", flat=True)
+                ),
+            }
+        )
 
 
 class ChangePasswordView(APIView):

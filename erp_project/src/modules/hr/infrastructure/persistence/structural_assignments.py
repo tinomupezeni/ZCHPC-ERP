@@ -20,14 +20,17 @@ PENDING_DEPARTMENT_HEAD = "PENDING_DEPARTMENT_HEAD"
 class DjangoStructuralAssignments:
     """Reads and releases an employee's department headships."""
 
-    def departments_headed_by(self, employee_id: int) -> list[int]:
+    def departments_headed_by(self, employee_id: int, lock: bool = True) -> list[int]:
         """
         Ids of the departments this employee heads, row-locked until the
         surrounding transaction ends so no headship changes under the caller.
+
+        ``lock=False`` is a plain read, for callers that only report the
+        headships (the caller's own access summary) and hold no transaction.
         """
+        departments = Department.objects.select_for_update() if lock else Department.objects
         return list(
-            Department.objects.select_for_update()
-            .filter(head_id=employee_id)
+            departments.filter(head_id=employee_id)
             .order_by("pk")
             .values_list("pk", flat=True)
         )
