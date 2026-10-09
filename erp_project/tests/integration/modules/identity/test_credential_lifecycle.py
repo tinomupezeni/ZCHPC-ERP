@@ -48,6 +48,8 @@ LOGIN_URL = "/api/v2/auth/token/"
 REFRESH_URL = "/api/v2/auth/token/refresh/"
 PORTAL_LOGIN_URL = "/api/v2/portal/auth/login/"
 PORTAL_ME_URL = "/api/v2/portal/auth/me/"
+PORTAL_DASHBOARD_URL = "/api/v2/portal/dashboard/"
+ACCESS_URL = "/api/v2/auth/users/me/access/"
 PASSWORD = "Str0ng-Initial-Passw0rd"
 NEW_PASSWORD = "Another-Str0ng-Passw0rd!"
 
@@ -462,6 +464,106 @@ class TestFlaggedAccountRotation:
         assert bearer(first.data["access"]).get(ME_URL).status_code == status.HTTP_401_UNAUTHORIZED
         assert bearer(changed.data["access"]).get("/api/v2/portal/notifications/").status_code == 200
         assert login(legacy.email, temporary).status_code == status.HTTP_401_UNAUTHORIZED
+
+
+# =============================================================================
+# First login, end to end: hire -> temporary password -> confined -> change
+# =============================================================================
+
+
+class TestFirstLoginEndToEnd:
+    """
+    The whole first-login journey each front end drives, from a real hire.
+
+    Synergy logs in by email at /auth/token/; the portal by EC number at
+    /portal/auth/login/. Both replace the password at /auth/password/change/
+    with the token they hold, then continue on the fresh pair it returns.
+    """
+
+    def hire_with_role(self, *permissions):
+        role = make_role("ROLE_Hire", permissions)
+        creator = hr_creator()
+        response, employee = hire(creator, surname="Sibanda")
+        # The role is attached directly: assigning it through the API is a
+        # separate, covered capability and not part of the first-login flow.
+        Employees.objects.filter(pk=employee.pk).update(role=role)
+        return response.data["temporary_password"], employee
+
+    def test_synergy_email_login_to_normal_access(self):
+        temporary, employee = self.hire_with_role("hr.employee.view", "portal.*")
+
+        # Login with the temporary password: flagged, and confined.
+        first = login(employee.email, temporary)
+        assert first.status_code == status.HTTP_200_OK, first.data
+        assert first.data["user"]["must_change_password"] is True
+        confined = bearer(first.data["access"])
+        assert confined.get(ME_URL).data["must_change_password"] is True
+        for url in (EMPLOYEES_URL, ACCESS_URL, PORTAL_DASHBOARD_URL):
+            blocked = confined.get(url)
+            assert blocked.status_code == status.HTTP_403_FORBIDDEN, url
+            assert blocked.json()["code"] == "PASSWORD_CHANGE_REQUIRED", url
+
+        # Forced change.
+        changed = confined.post(
+            CHANGE_URL, {"current_password": temporary, "new_password": NEW_PASSWORD}, format="json"
+        )
+        assert changed.status_code == status.HTTP_200_OK, changed.data
+        assert changed.data["must_change_password"] is False
+
+        # Normal access on the fresh pair; the confined token is revoked.
+        fresh = bearer(changed.data["access"])
+        assert fresh.get(ME_URL).data["must_change_password"] is False
+        assert fresh.get(EMPLOYEES_URL).status_code == status.HTTP_200_OK
+        access = fresh.get(ACCESS_URL)
+        assert access.status_code == status.HTTP_200_OK
+        assert sorted(access.json()["permissions"]) == ["hr.employee.view", "portal.*"]
+        assert confined.get(ME_URL).status_code == status.HTTP_401_UNAUTHORIZED
+        refreshed = APIClient().post(REFRESH_URL, {"refresh": changed.data["refresh"]}, format="json")
+        assert refreshed.status_code == status.HTTP_200_OK
+
+        # Next login: only the new password, and no longer flagged.
+        assert login(employee.email, temporary).status_code == status.HTTP_401_UNAUTHORIZED
+        again = login(employee.email, NEW_PASSWORD)
+        assert again.status_code == status.HTTP_200_OK
+        assert again.data["user"]["must_change_password"] is False
+
+    def test_portal_ec_number_login_to_normal_access(self):
+        temporary, employee = self.hire_with_role("portal.*")
+
+        # Login by EC number with the temporary password: flagged, and confined.
+        first = portal_login(employee.employee_id, temporary)
+        assert first.status_code == status.HTTP_200_OK, first.data
+        assert first.data["must_change_password"] is True
+        confined = bearer(first.data["access"])
+        assert confined.get(PORTAL_ME_URL).data["must_change_password"] is True
+        for url in (PORTAL_DASHBOARD_URL, "/api/v2/portal/notifications/", ACCESS_URL):
+            blocked = confined.get(url)
+            assert blocked.status_code == status.HTTP_403_FORBIDDEN, url
+            assert blocked.json()["code"] == "PASSWORD_CHANGE_REQUIRED", url
+
+        # Forced change with the portal's own token.
+        changed = confined.post(
+            CHANGE_URL, {"current_password": temporary, "new_password": NEW_PASSWORD}, format="json"
+        )
+        assert changed.status_code == status.HTTP_200_OK, changed.data
+        assert changed.data["must_change_password"] is False
+
+        # Normal portal access on the fresh pair; the confined token is revoked.
+        fresh = bearer(changed.data["access"])
+        assert fresh.get(PORTAL_ME_URL).data["must_change_password"] is False
+        # (Not /portal/dashboard/: it fails for every user on master, from the
+        # portal leave provider's created_at query - AUDIT §11, unrelated here.)
+        assert fresh.get("/api/v2/portal/notifications/").status_code == status.HTTP_200_OK
+        assert fresh.get(ACCESS_URL).json()["permissions"] == ["portal.*"]
+        assert confined.get(PORTAL_ME_URL).status_code == status.HTTP_401_UNAUTHORIZED
+        refreshed = APIClient().post(REFRESH_URL, {"refresh": changed.data["refresh"]}, format="json")
+        assert refreshed.status_code == status.HTTP_200_OK
+
+        # Next portal login: only the new password, and no longer flagged.
+        assert portal_login(employee.employee_id, temporary).status_code == status.HTTP_401_UNAUTHORIZED
+        again = portal_login(employee.employee_id, NEW_PASSWORD)
+        assert again.status_code == status.HTTP_200_OK
+        assert again.data["must_change_password"] is False
 
 
 # =============================================================================
