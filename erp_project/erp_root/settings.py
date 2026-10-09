@@ -105,6 +105,9 @@ INSTALLED_APPS = [
     # Third-party apps
     "rest_framework",
     "rest_framework_simplejwt",
+    # B3: lets portal logout revoke the refresh token; a blacklisted refresh
+    # token is then refused by /api/v2/auth/token/refresh/.
+    "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     "django_browser_reload",
 ]

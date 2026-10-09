@@ -7,6 +7,13 @@ import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
  * __API_URL__ default.
  */
 export const API_BASE_URL = (typeof __API_URL__ !== "undefined" ? __API_URL__ : "") + "/api/v2/";
+
+/**
+ * B3: the portal has no refresh route of its own; portal-issued refresh
+ * tokens refresh at the identity module's SimpleJWT endpoint.
+ * Relative to API_BASE_URL (no leading slash).
+ */
+export const TOKEN_REFRESH_PATH = 'auth/token/refresh/';
 // Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -109,7 +116,7 @@ api.interceptors.response.use(
       }
 
       try {
-        const response = await axios.post(`${API_BASE_URL}/portal/auth/refresh/`, {
+        const response = await axios.post(`${API_BASE_URL}${TOKEN_REFRESH_PATH}`, {
           refresh: refreshToken,
         });
 

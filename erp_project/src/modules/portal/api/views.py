@@ -8,6 +8,8 @@ from rest_framework.decorators import api_view, permission_classes, throttle_cla
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.settings import api_settings as jwt_settings
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.utils import timezone
 from modules.procurement.infrastructure.persistence.models import FuelRequisition, StoresRequisition, ComparativeSchedule
@@ -145,18 +147,21 @@ def login(request: Request) -> Response:
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def logout(request: Request) -> Response:
-    """Logout and blacklist refresh token."""
-    try:
-        refresh_token = request.data.get("refresh")
-        if refresh_token:
+    """Logout: blacklist the caller's refresh token (B3).
+
+    Always 200, so the client can always finish logging out. A missing,
+    malformed, expired or already-blacklisted token has nothing left to
+    revoke; a token that belongs to another user is left alone.
+    """
+    refresh_token = request.data.get("refresh")
+    if refresh_token:
+        try:
             token = RefreshToken(refresh_token)
+        except TokenError:
+            token = None
+        if token is not None and str(token.get(jwt_settings.USER_ID_CLAIM)) == str(request.user.pk):
             token.blacklist()
-        return Response({"message": "Logged out successfully"})
-    except Exception:
-        return Response(
-            {"error": "Invalid token"},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    return Response({"message": "Logged out successfully"})
 
 
 @api_view(["GET"])

@@ -1,4 +1,4 @@
-import api, { setTokens, clearTokens, getRefreshToken } from './api';
+import api, { setTokens, clearTokens, getRefreshToken, TOKEN_REFRESH_PATH } from './api';
 import type {
   ChangePasswordRequest,
   ChangePasswordResponse,
@@ -46,7 +46,7 @@ export const authService = {
     }
 
     try {
-      const response = await api.post<TokenRefreshResponse>('/portal/auth/refresh/', {
+      const response = await api.post<TokenRefreshResponse>(TOKEN_REFRESH_PATH, {
         refresh: refreshToken,
       });
       return response.data.access;
