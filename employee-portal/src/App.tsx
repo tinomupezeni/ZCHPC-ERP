@@ -12,6 +12,7 @@ import { PurchaseRequestGMReviewPage } from '@/pages/PurchaseRequestGMReviewPage
 import { PurchaseRequestDirectorReviewPage } from '@/pages/PurchaseRequestDirectorReviewPage';
 import { PurchaseRequestProcurementReviewPage } from '@/pages/PurchaseRequestProcurementReviewPage';
 import { PurchaseRequestPrintPage } from '@/pages/PurchaseRequestPrintPage';
+import { PayslipPrintPage } from '@/pages/PayslipPrintPage';
 import { FuelRequisitionsPage } from '@/pages/FuelRequisitionsPage';
 import { StoresRequisitionsPage } from '@/pages/StoresRequisitionsPage';
 import { ComparativeSchedulesPage } from '@/pages/ComparativeSchedulesPage';
@@ -44,6 +45,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <PurchaseRequestPrintPage />
+              </ProtectedRoute>
+            }
+          />
+          {/* PY-3: printable payslip, outside MainLayout for the same reason */}
+          <Route
+            path="/portal/payslips/:id/print"
+            element={
+              <ProtectedRoute>
+                <PayslipPrintPage />
               </ProtectedRoute>
             }
           />

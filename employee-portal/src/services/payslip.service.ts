@@ -33,36 +33,6 @@ export const payslipService = {
     });
     return response.data;
   },
-
-  /**
-   * Download payslip as file
-   */
-  async downloadPayslip(id: number): Promise<void> {
-    const response = await api.get(`/portal/payslips/${id}/download/`, {
-      responseType: 'blob',
-    });
-
-    // Create download link
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement('a');
-    link.href = url;
-
-    // Extract filename from Content-Disposition header or use default
-    const contentDisposition = response.headers['content-disposition'];
-    let filename = 'payslip.txt';
-    if (contentDisposition) {
-      const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
-      if (filenameMatch) {
-        filename = filenameMatch[1];
-      }
-    }
-
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
-  },
 };
 
 export default payslipService;
