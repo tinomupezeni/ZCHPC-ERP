@@ -20,6 +20,15 @@ export interface Employee {
   must_change_password?: boolean;
 }
 
+/** GET /auth/users/me/access/: the caller's role and what it may do. */
+export interface MeAccess {
+  role: string | null;
+  permissions: string[];
+  is_department_head: boolean;
+  headed_department_ids: number[];
+  active_modules: string[];
+}
+
 export interface LoginCredentials {
   ec_number: string;
   password: string;
@@ -50,6 +59,8 @@ export interface TokenRefreshResponse {
 
 export interface AuthState {
   employee: Employee | null;
+  /** null until loaded, while a temporary password is held, or on failure. */
+  access: MeAccess | null;
   accessToken: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;

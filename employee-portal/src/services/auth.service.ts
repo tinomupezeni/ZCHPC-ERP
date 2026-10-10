@@ -5,6 +5,7 @@ import type {
   LoginCredentials,
   LoginResponse,
   Employee,
+  MeAccess,
   TokenRefreshResponse,
 } from '@/types/auth.types';
 
@@ -61,6 +62,15 @@ export const authService = {
    */
   async getCurrentEmployee(): Promise<Employee> {
     const response = await api.get<Employee>('/portal/auth/me/');
+    return response.data;
+  },
+
+  /**
+   * The caller's role and permissions. A login still holding a temporary
+   * password gets 403 PASSWORD_CHANGE_REQUIRED here (REM-07).
+   */
+  async getMyAccess(): Promise<MeAccess> {
+    const response = await api.get<MeAccess>('/auth/users/me/access/');
     return response.data;
   },
 

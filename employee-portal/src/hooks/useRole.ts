@@ -36,8 +36,9 @@ export function getRoleGroup(roleName: RoleName): RoleGroup {
 }
 
 export function useRole() {
-  const { employee } = useAuth();
-  const roleName = toRoleName(employee?.role_name);
+  const { employee, access } = useAuth();
+  // The role from /me/access/; the portal's own profile carries none.
+  const roleName = toRoleName(access?.role ?? employee?.role_name);
   const roleGroup = getRoleGroup(roleName);
 
   return {
