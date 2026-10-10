@@ -224,25 +224,6 @@ class CreateComparativeScheduleSerializer(serializers.Serializer):
 
 
 # ============================
-# Payslip Serializers
-# ============================
-
-class PayslipSerializer(serializers.Serializer):
-    """Serializer for payslip."""
-
-    id = serializers.IntegerField()
-    period_year = serializers.IntegerField()
-    period_month = serializers.IntegerField()
-    gross_usd = serializers.DecimalField(max_digits=12, decimal_places=2)
-    gross_zig = serializers.DecimalField(max_digits=12, decimal_places=2)
-    total_deductions_usd = serializers.DecimalField(max_digits=12, decimal_places=2)
-    total_deductions_zig = serializers.DecimalField(max_digits=12, decimal_places=2)
-    net_salary_usd = serializers.DecimalField(max_digits=12, decimal_places=2)
-    net_salary_zig = serializers.DecimalField(max_digits=12, decimal_places=2)
-    status = serializers.CharField()
-
-
-# ============================
 # Public Careers Serializers
 # ============================
 

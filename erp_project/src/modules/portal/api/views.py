@@ -46,7 +46,6 @@ from modules.portal.api.serializers import (
     LeaveBalanceSerializer,
     LeaveRequestSerializer,
     CreateLeaveRequestSerializer,
-    PayslipSerializer,
     JobListingSerializer,
     JobDetailSerializer,
     JobApplicationSerializer,
@@ -460,22 +459,24 @@ def payslips(request: Request) -> Response:
     employee_id = _get_employee_id(request)
     year = request.query_params.get("year")
 
-    payslip_list = _payslip_service.get_payslips(
-        employee_id=employee_id,
-        year=int(year) if year else None,
+    return Response(
+        _payslip_service.get_payslip_list(
+            employee_id=employee_id,
+            year=int(year) if year else None,
+        )
     )
-
-    return Response(PayslipSerializer(payslip_list, many=True).data)
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def payslip_detail(request: Request, payslip_id: int) -> Response:
     """Get payslip detail."""
-    employee_id = _get_employee_id(request)
+    employee = _employee_provider.get_by_user_id(request.user.id)
+    if employee is None:
+        return Response({"error": "Employee not found"}, status=status.HTTP_404_NOT_FOUND)
 
     breakdown = _payslip_service.get_payslip_breakdown(
-        employee_id=employee_id,
+        employee=employee,
         payslip_id=payslip_id,
     )
 
