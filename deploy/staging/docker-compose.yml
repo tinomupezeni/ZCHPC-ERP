@@ -60,6 +60,9 @@ services:
       CORS_ALLOWED_ORIGINS: ${STAGING_ORIGINS:?STAGING_ORIGINS must be set}
       CSRF_TRUSTED_ORIGINS: ${STAGING_ORIGINS:?STAGING_ORIGINS must be set}
       DRF_NUM_PROXIES: ${DRF_NUM_PROXIES:-0}
+      # JWT lifetimes; empty = the defaults (access 1 day, refresh 30 days)
+      JWT_ACCESS_TOKEN_LIFETIME_MINUTES: ${JWT_ACCESS_TOKEN_LIFETIME_MINUTES:-}
+      JWT_REFRESH_TOKEN_LIFETIME_DAYS: ${JWT_REFRESH_TOKEN_LIFETIME_DAYS:-}
       ZCHPC_ENV: staging
     volumes:
       - api_static:/app/staticfiles
