@@ -28,6 +28,9 @@ COPY . .
 # Set environment variables for build
 ARG VITE_API_URL=https://zchpcerp.zchpc.ac.zw
 ENV VITE_API_URL=${VITE_API_URL}
+# Employee Portal origin, linked from the "no modules" page; no link when empty
+ARG VITE_PORTAL_URL=
+ENV VITE_PORTAL_URL=${VITE_PORTAL_URL}
 
 # Build the application
 RUN npm run build

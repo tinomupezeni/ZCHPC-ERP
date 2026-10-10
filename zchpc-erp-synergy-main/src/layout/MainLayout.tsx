@@ -8,6 +8,7 @@ import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import NotAvailable from "@/components/NotAvailable";
+import WorkIsInPortal from "@/components/WorkIsInPortal";
 
 export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -46,6 +47,10 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
     };
     return filterItems(navItems);
   }, [user, access, isLoading, checkPermission]);
+
+  // Loaded, but no module to show: point the user at the portal instead of
+  // an empty sidebar and a page they cannot use.
+  const hasNoModules = !isLoading && !!user && filteredNavItems.length === 0;
 
   const userName = `${user?.first_name || ""} ${user?.last_name || ""}`;
   // Get role display name - check multiple sources
@@ -131,7 +136,13 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
         )}
       >
         <div className="p-8">
-          {availabilityFor(location.pathname) ? <NotAvailable /> : children}
+          {hasNoModules ? (
+            <WorkIsInPortal />
+          ) : availabilityFor(location.pathname) ? (
+            <NotAvailable />
+          ) : (
+            children
+          )}
         </div>
       </main>
     </div>
