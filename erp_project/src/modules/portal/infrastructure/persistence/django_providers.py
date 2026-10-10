@@ -355,12 +355,12 @@ class DjangoPayrollProvider(IPayrollProvider):
         return PayslipDTO(
             id=payslip.id,
             employee_id=payslip.employee_id,
-            period_year=payslip.payroll.period_year,
-            period_month=payslip.payroll.period_month,
+            period_year=payslip.period.year,
+            period_month=payslip.period.month,
             base_salary_usd=Decimal(str(payslip.base_salary_usd or 0)),
             base_salary_zig=Decimal(str(payslip.base_salary_zig or 0)),
-            allowances_usd=Decimal(str(payslip.allowances_usd or 0)),
-            allowances_zig=Decimal(str(payslip.allowances_zig or 0)),
+            allowances_usd=Decimal(str(payslip.total_allowances_usd or 0)),
+            allowances_zig=Decimal(str(payslip.total_allowances_zig or 0)),
             gross_usd=Decimal(str(payslip.gross_usd or 0)),
             gross_zig=Decimal(str(payslip.gross_zig or 0)),
             paye_usd=Decimal(str(payslip.paye_usd or 0)),
@@ -384,12 +384,11 @@ class DjangoPayrollProvider(IPayrollProvider):
     ) -> List[PayslipDTO]:
         from modules.payroll.infrastructure.persistence.models import Payroll as Payslip
 
-        queryset = Payslip.objects.filter(
-            employee_id=employee_id,
-        ).select_related("payroll").order_by("-payroll__period_year", "-payroll__period_month")
+        # One payslip row per employee and period (a date); PY-1.
+        queryset = Payslip.objects.filter(employee_id=employee_id).order_by("-period")
 
         if year:
-            queryset = queryset.filter(payroll__period_year=year)
+            queryset = queryset.filter(period__year=year)
 
         return [self._to_dto(p) for p in queryset]
 
@@ -399,7 +398,7 @@ class DjangoPayrollProvider(IPayrollProvider):
     ) -> Optional[PayslipDTO]:
         from modules.payroll.infrastructure.persistence.models import Payroll as Payslip
         try:
-            payslip = Payslip.objects.select_related("payroll").get(pk=payslip_id)
+            payslip = Payslip.objects.get(pk=payslip_id)
             return self._to_dto(payslip)
         except Payslip.DoesNotExist:
             return None
