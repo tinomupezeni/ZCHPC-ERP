@@ -39,7 +39,8 @@ class PayrollConfigurationService:
         self._view(actor)
         queryset = TaxBracket.objects.all().order_by("currency", "min_income", "-active_from")
         if currency:
-            queryset = queryset.filter(currency=currency.upper())
+            # Stored as the model's choice ("ZiG"); match any spelling. PY-12.
+            queryset = queryset.filter(currency__iexact=currency)
         return list(queryset)
 
     def get_tax_bracket(self, actor: PayrollActor, bracket_id: int) -> TaxBracket:
