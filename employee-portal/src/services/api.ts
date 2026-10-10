@@ -1,12 +1,13 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
+import { resolveApiOrigin } from './apiOrigin';
 
 /**
  * VITE_API_URL is the backend origin only (no path) - see .env.example and
  * vite.config.ts's dev-server proxy target, which use it the same way.
- * Falls back to production when unset, matching vite.config.ts's own
- * __API_URL__ default.
+ * When unset: localhost on the dev server, production in a build
+ * (see apiOrigin.ts).
  */
-export const API_BASE_URL = (typeof __API_URL__ !== "undefined" ? __API_URL__ : "") + "/api/v2/";
+export const API_BASE_URL = resolveApiOrigin() + "/api/v2/";
 
 /**
  * B3: the portal has no refresh route of its own; portal-issued refresh
