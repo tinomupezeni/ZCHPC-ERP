@@ -298,9 +298,31 @@ ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_USERNAME_REQUIRED = False
 
 # --- JWT ---
+def token_lifetime_from_env(kind, default_days):
+    """
+    Lifetime of the ``kind`` ("ACCESS" or "REFRESH") token from
+    JWT_<kind>_TOKEN_LIFETIME_MINUTES, else JWT_<kind>_TOKEN_LIFETIME_DAYS,
+    else ``default_days``. Minutes let staging use a short access token for
+    the AUTH-1 expiry test. An empty value counts as unset.
+    """
+    for unit in ("MINUTES", "DAYS"):
+        name = f"JWT_{kind}_TOKEN_LIFETIME_{unit}"
+        raw = os.environ.get(name, "").strip()
+        if not raw:
+            continue
+        try:
+            value = int(raw)
+        except ValueError:
+            raise ImproperlyConfigured(f"{name} must be a whole number, got {raw!r}")
+        if value <= 0:
+            raise ImproperlyConfigured(f"{name} must be positive, got {value}")
+        return timedelta(**{unit.lower(): value})
+    return timedelta(days=default_days)
+
+
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(days=1),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
+    "ACCESS_TOKEN_LIFETIME": token_lifetime_from_env("ACCESS", default_days=1),
+    "REFRESH_TOKEN_LIFETIME": token_lifetime_from_env("REFRESH", default_days=30),
     "AUTH_HEADER_TYPES": ("Bearer",),
     "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
     "TOKEN_TYPE_CLAIM": "token_type",
