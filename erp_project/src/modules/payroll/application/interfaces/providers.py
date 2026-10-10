@@ -119,6 +119,14 @@ class IEmployeePayrollInfoProvider(Protocol):
         """Get IDs of all active employees."""
         ...
 
+    def get_employee_name(self, employee_id: int) -> str:
+        """Get the employee's display name."""
+        ...
+
+    def has_payroll_profile(self, employee_id: int) -> bool:
+        """Whether the employee has a PayrollProfile (a salary to pay)."""
+        ...
+
     def get_employee_salary_info(self, employee_id: int) -> dict:
         """
         Get salary information for an employee.

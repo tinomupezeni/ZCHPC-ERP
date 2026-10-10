@@ -18,16 +18,27 @@ class DjangoEmployeePayrollInfoProvider:
 
         return list(Employees.objects.filter(is_active=True).values_list("id", flat=True))
 
+    def get_employee_name(self, employee_id: int) -> str:
+        from modules.hr.infrastructure.persistence.models import Employees
+
+        employee = Employees.objects.get(id=employee_id)
+        return f"{employee.first_name} {employee.surname}".strip()
+
+    def has_payroll_profile(self, employee_id: int) -> bool:
+        from modules.payroll.infrastructure.persistence.models import PayrollProfile
+
+        return PayrollProfile.objects.filter(employee_id=employee_id).exists()
+
     def get_employee_salary_info(self, employee_id: int) -> dict:
         """
         Get salary information for an employee.
 
         Returns dict with usd_salary, zig_salary, pays_aids_levy, employee_name.
-        An employee with no PayrollProfile/StatutoryProfile yet gets zero
-        salary and the statutory default (pays_aids_levy=True) rather than
-        erroring - process_payroll() will just generate a zero-value payslip
-        for them, which is visible and correctable, instead of the whole
-        run failing on one incomplete employee record.
+        process_payroll() skips an employee with no PayrollProfile and
+        reports them (PY-4), so a missing profile here still means zero
+        salary only for callers that do not check has_payroll_profile().
+        A missing StatutoryProfile gives the statutory default
+        (pays_aids_levy=True).
         """
         from modules.hr.infrastructure.persistence.models import Employees
         from modules.payroll.infrastructure.persistence.models import PayrollProfile, StatutoryProfile

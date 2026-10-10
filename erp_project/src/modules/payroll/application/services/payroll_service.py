@@ -2,7 +2,7 @@
 Payroll application service for payroll processing.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 from typing import List, Optional
@@ -57,6 +57,8 @@ class ProcessPayrollResult:
     processed: List[int]  # Employee IDs
     skipped: List[int]  # Employee IDs (already have payslip)
     errors: List[dict]  # {employee_id, error}
+    # PY-4: no PayrollProfile, so no payslip: {employee_id, employee_name}
+    skipped_no_profile: List[dict] = field(default_factory=list)
 
 
 class PayrollService:
@@ -150,10 +152,19 @@ class PayrollService:
 
         processed = []
         skipped = []
+        skipped_no_profile = []
         errors = []
         payslips = []
 
         for emp_id in employee_ids:
+            # PY-4: no salary on record - report, never a $0 payslip
+            if not self.employee_provider.has_payroll_profile(emp_id):
+                skipped_no_profile.append({
+                    "employee_id": emp_id,
+                    "employee_name": self.employee_provider.get_employee_name(emp_id),
+                })
+                continue
+
             # Check if payslip already exists
             existing = self.payslip_repo.get_by_employee_and_period(
                 emp_id, command.period
@@ -195,7 +206,8 @@ class PayrollService:
             payroll_id=payroll.id,
             processed=processed,
             skipped=skipped,
-            errors=errors
+            errors=errors,
+            skipped_no_profile=skipped_no_profile,
         )
 
     def _generate_employee_payslip(
