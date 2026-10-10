@@ -1,21 +1,17 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Download, Eye, CheckCircle, Clock } from 'lucide-react';
+import { FileText, Printer, Eye, CheckCircle, Clock } from 'lucide-react';
 import type { PayslipListItem, PayslipStatus } from '@/types/payslip.types';
 
 interface PayslipCardProps {
   payslip: PayslipListItem;
   onView: (id: number) => void;
-  onDownload: (id: number) => void;
-  isDownloading?: boolean;
 }
 
 export function PayslipCard({
   payslip,
   onView,
-  onDownload,
-  isDownloading,
 }: PayslipCardProps) {
   const getStatusBadge = (status: PayslipStatus) => {
     switch (status) {
@@ -95,14 +91,11 @@ export function PayslipCard({
               <Eye className="h-4 w-4 mr-1" />
               View
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onDownload(payslip.id)}
-              disabled={isDownloading}
-            >
-              <Download className="h-4 w-4 mr-1" />
-              Download
+            <Button variant="outline" size="sm" asChild>
+              <a href={`/portal/payslips/${payslip.id}/print`} target="_blank" rel="noopener noreferrer">
+                <Printer className="h-4 w-4 mr-1" />
+                Print
+              </a>
             </Button>
           </div>
         </div>

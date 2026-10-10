@@ -16,8 +16,6 @@ interface PayslipsListProps {
   selectedYear: number;
   onYearChange: (year: number) => void;
   onView: (id: number) => void;
-  onDownload: (id: number) => void;
-  downloadingId?: number | null;
   isLoading: boolean;
 }
 
@@ -27,8 +25,6 @@ export function PayslipsList({
   selectedYear,
   onYearChange,
   onView,
-  onDownload,
-  downloadingId,
   isLoading,
 }: PayslipsListProps) {
   if (isLoading) {
@@ -88,8 +84,6 @@ export function PayslipsList({
                 key={payslip.id}
                 payslip={payslip}
                 onView={onView}
-                onDownload={onDownload}
-                isDownloading={downloadingId === payslip.id}
               />
             ))}
           </div>

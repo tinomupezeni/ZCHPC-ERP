@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   ArrowLeft,
-  Download,
+  Printer,
   User,
   Building,
   Briefcase,
@@ -16,15 +16,11 @@ import type { PayslipDetail as PayslipDetailType, PayslipStatus } from '@/types/
 interface PayslipDetailProps {
   payslip: PayslipDetailType;
   onBack: () => void;
-  onDownload: () => void;
-  isDownloading?: boolean;
 }
 
 export function PayslipDetail({
   payslip,
   onBack,
-  onDownload,
-  isDownloading,
 }: PayslipDetailProps) {
   const getStatusBadge = (status: PayslipStatus) => {
     switch (status) {
@@ -62,9 +58,11 @@ export function PayslipDetail({
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Payslips
         </Button>
-        <Button onClick={onDownload} disabled={isDownloading}>
-          <Download className="h-4 w-4 mr-2" />
-          Download
+        <Button asChild>
+          <a href={`/portal/payslips/${payslip.id}/print`} target="_blank" rel="noopener noreferrer">
+            <Printer className="h-4 w-4 mr-2" />
+            Print
+          </a>
         </Button>
       </div>
 

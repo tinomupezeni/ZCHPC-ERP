@@ -19,7 +19,6 @@ export function PayslipsPage() {
   const [selectedPayslip, setSelectedPayslip] = useState<PayslipDetailType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
-  const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
   useEffect(() => {
     loadPayslips();
@@ -62,19 +61,6 @@ export function PayslipsPage() {
     }
   };
 
-  const handleDownload = async (id: number) => {
-    setDownloadingId(id);
-    try {
-      await payslipService.downloadPayslip(id);
-      toast.success('Payslip downloaded successfully');
-    } catch (error) {
-      console.error('Failed to download payslip:', error);
-      toast.error('Failed to download payslip');
-    } finally {
-      setDownloadingId(null);
-    }
-  };
-
   const handleBack = () => {
     setSelectedPayslip(null);
   };
@@ -97,8 +83,6 @@ export function PayslipsPage() {
         <PayslipDetail
           payslip={selectedPayslip}
           onBack={handleBack}
-          onDownload={() => handleDownload(selectedPayslip.id)}
-          isDownloading={downloadingId === selectedPayslip.id}
         />
       </div>
     );
@@ -108,7 +92,7 @@ export function PayslipsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Payslips"
-        description="View and download your payslips"
+        description="View and print your payslips"
       />
 
       {/* Year Summary Cards */}
@@ -171,8 +155,6 @@ export function PayslipsPage() {
         selectedYear={selectedYear}
         onYearChange={setSelectedYear}
         onView={handleViewPayslip}
-        onDownload={handleDownload}
-        downloadingId={downloadingId}
         isLoading={isLoading || isLoadingDetail}
       />
     </div>
