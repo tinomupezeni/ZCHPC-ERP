@@ -13,6 +13,17 @@ from modules.payroll.domain.value_objects import Currency, TaxBracket
 from modules.payroll.application.interfaces import ITaxTableRepository
 
 
+
+def _stored_currency(currency: Currency) -> str:
+    """
+    The TaxBracket model's own spelling of a currency ("ZiG", not the
+    domain's "ZIG"). Lookups match either spelling (currency__iexact); PY-12.
+    """
+    for value, _label in TaxBracketModel.CURRENCY_CHOICES:
+        if value.upper() == currency.value:
+            return value
+    return currency.value
+
 class DjangoTaxTableRepository(ITaxTableRepository):
     """Django ORM implementation of ITaxTableRepository."""
 
@@ -31,7 +42,7 @@ class DjangoTaxTableRepository(ITaxTableRepository):
     ) -> Optional[TaxTable]:
         """Get the active tax table for a currency as of a specific date."""
         brackets = TaxBracketModel.objects.filter(
-            currency=currency.value,
+            currency__iexact=currency.value,
             active_from__lte=as_of
         ).order_by("-active_from")
 
@@ -51,7 +62,7 @@ class DjangoTaxTableRepository(ITaxTableRepository):
     ) -> List[Tuple[Decimal, Decimal, Decimal, Decimal]]:
         """Get tax brackets as tuples for a currency."""
         brackets = TaxBracketModel.objects.filter(
-            currency=currency.value,
+            currency__iexact=currency.value,
             active_from__lte=as_of
         ).order_by("-active_from")
 
@@ -75,14 +86,14 @@ class DjangoTaxTableRepository(ITaxTableRepository):
         """Save a tax table by saving its brackets."""
         # Delete existing brackets for this currency and date
         TaxBracketModel.objects.filter(
-            currency=tax_table.currency.value,
+            currency__iexact=tax_table.currency.value,
             active_from=tax_table.effective_from
         ).delete()
 
         # Create new brackets
         for bracket in tax_table.brackets:
             TaxBracketModel.objects.create(
-                currency=tax_table.currency.value,
+                currency=_stored_currency(tax_table.currency),
                 min_income=bracket.min_income,
                 max_income=bracket.max_income,
                 rate=bracket.rate,
@@ -97,7 +108,7 @@ class DjangoTaxTableRepository(ITaxTableRepository):
         """Get all tax tables, optionally filtered by currency."""
         queryset = TaxBracketModel.objects.all()
         if currency:
-            queryset = queryset.filter(currency=currency.value)
+            queryset = queryset.filter(currency__iexact=currency.value)
 
         # Group by currency and effective date
         tables = {}
