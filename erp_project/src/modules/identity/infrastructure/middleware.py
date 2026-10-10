@@ -88,6 +88,7 @@ class RBACMiddleware:
         # the prefix above; listed so it stays personal if that entry changes.
         "/api/v2/auth/users/me/access/",
         "/api/v2/auth/password/change/",  # the caller's own password
+        "/api/v2/auth/logout/",  # revokes only the caller's own refresh token
     ]
 
     # REM-07: all an account holding an issued temporary password
@@ -97,6 +98,7 @@ class RBACMiddleware:
     PASSWORD_CHANGE_PATHS = [
         "/api/v2/auth/users/me/",
         "/api/v2/auth/password/change/",
+        "/api/v2/auth/logout/",  # leaving is always allowed
     ]
 
     def __init__(self, get_response):

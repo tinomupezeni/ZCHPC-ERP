@@ -15,7 +15,7 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<User>;
-  logout: () => void;
+  logout: () => Promise<void>;
   checkPermission: (requiredModules: string[]) => boolean;
 }
 
@@ -50,7 +50,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [access, setAccess] = useState<MeAccess | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const logout = () => {
+  // Local only: used when the session is already gone (failed refresh or
+  // profile load), so it never calls the server and cannot loop.
+  const endSession = () => {
     authService.clearTokens();
     setUser(null);
     setAccess(null);
@@ -59,8 +61,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // The user's logout: revoke the refresh token on the server, then end the
+  // session locally even if that call fails.
+  const logout = async () => {
+    try {
+      await authService.revokeRefreshToken();
+    } catch {
+      // still log out locally
+    } finally {
+      endSession();
+    }
+  };
+
   useEffect(() => {
-    const handleGlobalLogout = () => logout();
+    const handleGlobalLogout = () => endSession();
     window.addEventListener("auth:logout", handleGlobalLogout);
 
     const checkAuthStatus = async () => {
@@ -73,10 +87,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setUser(loaded.user);
             setAccess(loaded.access);
           } else {
-            logout();
+            endSession();
           }
         } catch (err) {
-          logout();
+          endSession();
         }
       }
       setIsLoading(false); // Critical: Loading ends after fetch

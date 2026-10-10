@@ -31,6 +31,15 @@ export const getMyAccess = async (): Promise<MeAccess> => {
   return response.data;
 };
 
+// Logout: the server blacklists the refresh token if it is the caller's and
+// always answers 200. Goes through apiClient so an expired access token is
+// refreshed first.
+export const revokeRefreshToken = async (): Promise<void> => {
+  const refresh = localStorage.getItem('refreshToken');
+  if (!refresh) return;
+  await apiClient.post('/auth/logout/', { refresh });
+};
+
 export const clearTokens = () => {
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');
