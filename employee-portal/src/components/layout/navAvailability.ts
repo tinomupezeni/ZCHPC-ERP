@@ -23,6 +23,9 @@ export const EVALUATION_AVAILABILITY: Record<string, Availability> = {
   // Real pages that are not ready (PY-1, A-6, B12)
   '/portal/payslips': 'not-available',
   '/portal/leave': 'not-available',
+  // Dashboard tiles. The leave balance is not real yet (the API returns none);
+  // remove together with /portal/leave once it is.
+  'tile:dashboard/leave-balance': 'not-available',
 };
 
 export function availabilityFor(path: string): Availability | undefined {
