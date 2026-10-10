@@ -105,6 +105,7 @@ const PayrollDashboard = () => {
       const details = result.details || result;
       const processed = details.total_processed || 0;
       const skipped = details.total_skipped || 0;
+      const noProfile: { employee_name: string }[] = details.skipped_no_profile || [];
       const errors = details.total_errors || 0;
 
       if (processed > 0) {
@@ -112,6 +113,14 @@ const PayrollDashboard = () => {
       }
       if (skipped > 0) {
         toast.info(`${skipped} employees skipped (already processed for this period)`);
+      }
+      if (noProfile.length > 0) {
+        // PY-4: no salary on record, so no payslip was made for them
+        const names = noProfile.map((e) => e.employee_name).join(", ");
+        toast.warning(
+          `${noProfile.length} employees skipped (no payroll profile): ${names}`,
+          { duration: 15000 }
+        );
       }
       if (errors > 0) {
         // Log full error details
@@ -123,7 +132,7 @@ const PayrollDashboard = () => {
         const firstError = details.errors?.[0];
         toast.error(`${errors} errors: ${firstError?.error || 'Check console'}`);
       }
-      if (processed === 0 && skipped === 0 && errors === 0) {
+      if (processed === 0 && skipped === 0 && noProfile.length === 0 && errors === 0) {
         toast.warning("No active employees found to process");
       }
 

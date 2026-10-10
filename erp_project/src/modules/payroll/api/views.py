@@ -263,6 +263,8 @@ class PayslipListView(APIView):
                 "payroll_id": result.payroll_id,
                 "total_processed": len(result.processed),
                 "total_skipped": len(result.skipped),
+                "total_skipped_no_profile": len(result.skipped_no_profile),
+                "skipped_no_profile": result.skipped_no_profile,
                 "total_errors": len(result.errors),
                 "errors": result.errors,
             },
