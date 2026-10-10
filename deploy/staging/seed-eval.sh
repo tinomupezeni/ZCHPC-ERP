@@ -15,10 +15,14 @@
 #   - the database is either empty (no employees) or already carries the
 #     evaluation-seed marker (COMMENT ON DATABASE ... 'zchpc-eval-seed')
 #
-# Seeding: uses `manage.py seed_evaluation` when it exists (AUDIT.md blocker #2);
-# until then the interim seed below. Every seeded login then gets a freshly
-# generated password, written ONLY to ./credentials.txt (chmod 600) - nothing
-# is printed. Hard-coded seed passwords ('admin', 'testpass123') never survive.
+#   - the api image has `manage.py seed_evaluation` (checked before the marker
+#     is written; there is no interim seed any more)
+#
+# Seeding: `manage.py seed_evaluation` only (PLAN Day 4). It gives new logins
+# no usable password; this script then sets a freshly generated password on
+# each of the eight evaluation logins, written ONLY to ./credentials.txt
+# (chmod 600) - nothing is printed. If any login is missing, no password is
+# changed and no credentials file is written.
 # =============================================================================
 set -euo pipefail
 
@@ -39,15 +43,17 @@ case "${1:-}" in
   *) echo "usage: seed-eval.sh [--local]" >&2; exit 2 ;;
 esac
 
-# Logins created by the interim seed (seed_admin + seed_pr_test_data).
+# The eight evaluation logins seed_evaluation creates, one per role (its LOGINS).
+# Synergy signs in by email; the portal by EC number (printed by seed_evaluation).
 ACCOUNTS=(
-  "admin@zchpc.ac.zw|System administrator (superuser)"
-  "riley.requester@example.com|PR requester (EC EMP via portal)"
-  "hana.head@example.com|PR department head (IT)"
-  "adam.accounts@example.com|PR accounts"
-  "gina.manager@example.com|PR general manager"
-  "dana.director@example.com|PR director"
-  "pat.procure@example.com|PR procurement officer"
+  "admin@zchpc.ac.zw|Admin (System Administrator, superuser)"
+  "rutendo.mlambo@eval.zchpc.test|HR (Human Resources; runs payroll)"
+  "farai.chikwanha@eval.zchpc.test|HoD (Head of IT)"
+  "tatenda.mukarati@eval.zchpc.test|Accountant"
+  "kudakwashe.nyathi@eval.zchpc.test|General Manager"
+  "tendai.moyo@eval.zchpc.test|Director"
+  "nyasha.chiweshe@eval.zchpc.test|Procurement Officer"
+  "tinashe.dube@eval.zchpc.test|Staff (IT)"
 )
 
 die() { echo "SEED ABORT: $*" >&2; exit 1; }
@@ -62,14 +68,14 @@ set -a
 set +a
 [ "${COMPOSE_PROJECT_NAME:-}" = "$PROJECT" ] || die "COMPOSE_PROJECT_NAME must be $PROJECT"
 [ "${ZCHPC_ENV:-}" = "staging" ] || die "ZCHPC_ENV must be staging"
-[ -n "${POSTGRES_DB:-}" ] && [ -n "${POSTGRES_USER:-}" ] || die "POSTGRES_DB/POSTGRES_USER must be set"
+if [ -z "${POSTGRES_DB:-}" ] || [ -z "${POSTGRES_USER:-}" ]; then die "POSTGRES_DB/POSTGRES_USER must be set"; fi
 
 COMPOSE=(docker compose -p "$PROJECT" -f "$DIR/docker-compose.yml" --env-file "$ENV_FILE")
 
 # --- 2. resolve and verify containers -------------------------------------------
 API="$("${COMPOSE[@]}" ps -q api)"
 DB="$("${COMPOSE[@]}" ps -q db)"
-[ -n "$API" ] && [ -n "$DB" ] || die "api/db not running; run ./deploy.sh up (or ./local-up.sh up) first"
+if [ -z "$API" ] || [ -z "$DB" ]; then die "api/db not running; run ./deploy.sh up (or ./local-up.sh up) first"; fi
 for c in "$API" "$DB"; do
   label="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$c")"
   [ "$label" = "$PROJECT" ] || die "container $c belongs to project '$label', not $PROJECT"
@@ -79,6 +85,9 @@ in_api_env() { docker exec "$API" printenv "$1" 2>/dev/null || true; }
 [ "$(in_api_env ZCHPC_ENV)" = "staging" ] || die "api container is not ZCHPC_ENV=staging"
 [ "$(in_api_env DB_HOST)" = "db" ] || die "api container DB_HOST is not 'db'"
 [ "$(in_api_env DB_NAME)" = "$POSTGRES_DB" ] || die "api container DB_NAME does not match staging POSTGRES_DB"
+
+manage() { docker exec "$API" python manage.py "$@"; }
+manage help seed_evaluation >/dev/null 2>&1 || die "this api image has no seed_evaluation command; deploy an image built from master with it"
 
 psql_db() { docker exec -i "$DB" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAq "$@"; }
 
@@ -93,7 +102,6 @@ psql_db -c "COMMENT ON DATABASE \"$POSTGRES_DB\" IS '$MARKER';"
 echo "  ok  database empty or seed-marked; marker set"
 
 # --- 4. seed ---------------------------------------------------------------------
-manage() { docker exec "$API" python manage.py "$@"; }
 quiet() {  # run a seed command, hiding any line that mentions a password
   local out rc=0
   out="$(manage "$@" 2>&1)" || rc=$?
@@ -101,17 +109,8 @@ quiet() {  # run a seed command, hiding any line that mentions a password
   [ "$rc" -eq 0 ] || die "manage.py $* failed (exit $rc)"
 }
 
-if manage help seed_evaluation >/dev/null 2>&1; then
-  echo "== seed_evaluation"
-  quiet seed_evaluation
-else
-  echo "== interim seed (seed_evaluation not available yet)"
-  quiet seed_admin
-  quiet seed_purchase_request_categories
-  quiet import_chart_of_accounts
-  quiet seed_pr_test_data
-  quiet seed_test_jobs
-fi
+echo "== seed_evaluation"
+quiet seed_evaluation
 
 # --- 5. replace every known seed password with a generated one ------------------
 umask 077
