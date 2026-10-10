@@ -1,195 +1,139 @@
-import React, { useState, useEffect } from "react";
-import axios from "axios";
-// import { div, Button,  Label, Select } from 'tailwind-react-ui';
+import React, { useEffect, useState } from "react";
 import { Input } from "./ui/input";
 import { toast } from "sonner";
 import { Label } from "./ui/label";
 import { Button } from "./ui/button";
-import Server from "@/services/Server";
+import { getUser, updateUser } from "@/services/auth.services";
+import { NO_PERMISSION, readApiError } from "@/lib/apiErrors";
 
-const EditUserModal = ({ closeModal, userId }) => {
-  const [userData, setUserData] = useState({});
-  const [loading, setLoading] = useState(false);
+/**
+ * Edit a login's name (B8). PATCH /auth/users/{id}/ accepts first_name and
+ * last_name (and is_active, which the Users list handles); role, department
+ * and pay live on the employee record in HR, not here.
+ */
+const EditUserModal = ({ closeModal, userId, onSaved }) => {
+  const [email, setEmail] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  // Fetch the user data when modal opens
   useEffect(() => {
-    Server.fetchUserDetails(userId)
-      .then((response) => {
-        setUserData(response.data);
+    let cancelled = false;
+    getUser(userId)
+      .then(({ data }) => {
+        if (cancelled) return;
+        setEmail(data.email ?? "");
+        setFirstName(data.first_name ?? "");
+        setLastName(data.last_name ?? "");
+        setLoaded(true);
       })
       .catch((error) => {
-        console.log(error);
+        if (cancelled) return;
+        const { status } = readApiError(error);
+        toast.error(status === 403 ? NO_PERMISSION : "We couldn't load this user.");
+        closeModal();
       });
-  }, [ userId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setUserData({ ...userData, [name]: value });
-  };
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-
-    axios
-      .put(`/user/${userId}/`, userData) // API call to update the user
-      .then((response) => {
-        toast.success("User updated successfully!");
-   
-        closeModal(); // Close modal after success
-      })
-      .catch((error) => {
-        toast.error("Error updating user");
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    if (saving) return;
+    setSaving(true);
+    setFieldErrors({});
+    try {
+      await updateUser(userId, { first_name: firstName.trim(), last_name: lastName.trim() });
+      toast.success("User updated.");
+      onSaved?.();
+      closeModal();
+    } catch (error) {
+      const { status, fieldErrors: errors } = readApiError(error);
+      if (status === 400 && Object.keys(errors).length > 0) {
+        setFieldErrors(errors);
+      } else if (status === 403) {
+        toast.error(NO_PERMISSION);
+      } else if (status === 404) {
+        toast.error("This user no longer exists.");
+        onSaved?.();
+        closeModal();
+      } else {
+        toast.error("We couldn't save the changes. Please try again.");
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50  flex items-center justify-center w-full">
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center w-full">
       <form
         onSubmit={handleSubmit}
-        className="p-6 bg-white rounded-lg shadow-md space-y-4 bg-white rounded-lg w-full max-w-lg shadow-lg"
+        className="p-6 bg-white rounded-lg space-y-4 w-full max-w-lg shadow-lg"
       >
-        <div className="p-4 border-b flex justify-between items-center">
-          <h2 className="text-xl font-semibold">Edit User details</h2>
+        <div className="pb-4 border-b flex justify-between items-center">
+          <h2 className="text-xl font-semibold">Edit user</h2>
           <button
+            type="button"
             onClick={closeModal}
+            aria-label="Close"
             className="text-gray-500 hover:text-gray-700"
           >
             ✕
           </button>
         </div>
-        {/* First Name */}
-        <div>
-          <Label htmlFor="firstname">First Name</Label>
-          <Input
-            id="firstname"
-            name="firstname"
-            value={userData.firstname}
-            onChange={handleChange}
-            className="mt-1"
-          />
-        </div>
 
-        {/* Surname */}
-        <div>
-          <Label htmlFor="surname">Surname</Label>
-          <Input
-            id="surname"
-            name="surname"
-            value={userData.surname}
-            onChange={handleChange}
-            className="mt-1"
-          />
-        </div>
+        {!loaded ? (
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        ) : (
+          <>
+            <div>
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" value={email} disabled className="mt-1" />
+            </div>
+            <div>
+              <Label htmlFor="first_name">First name</Label>
+              <Input
+                id="first_name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                required
+                maxLength={150}
+                className="mt-1"
+              />
+              {fieldErrors.first_name && (
+                <p className="mt-1 text-sm text-red-600">{fieldErrors.first_name}</p>
+              )}
+            </div>
+            <div>
+              <Label htmlFor="last_name">Last name</Label>
+              <Input
+                id="last_name"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                required
+                maxLength={150}
+                className="mt-1"
+              />
+              {fieldErrors.last_name && (
+                <p className="mt-1 text-sm text-red-600">{fieldErrors.last_name}</p>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Role, department and pay are changed on the employee record in HR.
+            </p>
+          </>
+        )}
 
-        {/* Email */}
-        <div>
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            value={userData.email}
-            onChange={handleChange}
-            className="mt-1"
-          />
-        </div>
-
-        {/* Role */}
-        <div>
-          <Label htmlFor="role">Role</Label>
-          <select
-            id="role"
-            name="role"
-            value={userData.role}
-            onChange={handleChange}
-            className="w-full p-2 border rounded"
-          >
-            <option value="admin">Admin</option>
-            <option value="user">User</option>
-            <option value="guest">Guest</option>
-            {/* Add more roles if necessary */}
-          </select>
-        </div>
-
-        {/* Department */}
-        <div>
-          <Label htmlFor="department">Department</Label>
-          <select
-            name="department" // Ensure it matches your state structure
-            value={userData.department} // This should correspond to how role is stored in state
-            onChange={handleChange}
-            className="w-full p-2 border rounded"
-          >
-            <option value="" disabled>
-              Select Department
-            </option>
-            <option value="management">Management</option>
-            <option value="guest">Sales</option>
-            <option value="operations">Operations</option>
-            <option value="operations">Finance</option>
-            <option value="operations">Purchasing</option>
-          </select>
-        </div>
-
-        {/* Salary */}
-        <div>
-          <Label htmlFor="salary">Salary</Label>
-          <Input
-            id="salary"
-            name="salary"
-            type="number"
-            value={userData.salary}
-            onChange={handleChange}
-            className="mt-1"
-          />
-        </div>
-
-        {/* Contract From */}
-        <div>
-          <Label htmlFor="contractFrom">Contract From</Label>
-          <Input
-            id="contractFrom"
-            name="contractFrom"
-            type="date"
-            value={userData.contractFrom}
-            onChange={handleChange}
-            className="mt-1"
-          />
-        </div>
-
-        {/* Contract To */}
-        <div>
-          <Label htmlFor="contractTo">Contract To</Label>
-          <Input
-            id="contractTo"
-            name="contractTo"
-            type="date"
-            value={userData.contractTo}
-            onChange={handleChange}
-            className="mt-1"
-          />
-        </div>
-
-        {/* Modal Actions */}
-        <div className="flex justify-end space-x-4 mt-4">
-          <Button
-            onClick={closeModal}
-            variant="outline"
-            className="px-4 py-2 border rounded text-gray-600 hover:bg-gray-100"
-          >
+        <div className="flex justify-end space-x-4 pt-2">
+          <Button type="button" onClick={closeModal} variant="outline">
             Cancel
           </Button>
-          <Button
-            type="submit"
-            disabled={loading}
-            variant="solid"
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            {loading ? "Saving..." : "Save Changes"}
+          <Button type="submit" disabled={!loaded || saving}>
+            {saving ? "Saving..." : "Save changes"}
           </Button>
         </div>
       </form>

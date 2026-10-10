@@ -17,10 +17,11 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { UserPlus, Search, Edit, UserX, User as UserIcon } from "lucide-react";
+import { UserPlus, Search, Edit, UserX, Unlock, User as UserIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { deactivateUser } from '@/services/hr.services'
+import { unlockUser } from '@/services/auth.services'
 import { NO_PERMISSION, readApiError } from '@/lib/apiErrors'
 
 // What the user is told when deactivation is refused, by the backend's code.
@@ -31,11 +32,16 @@ const DEACTIVATE_REFUSALS: Record<string, string> = {
   EMPLOYEE_ARCHIVED: "This employee has been archived, so their account can't be changed.",
 };
 
-export default function Users({ setAddUser, users, onUsersChanged }) {
+// Locked by failed logins until lockout_until (cleared by unlock).
+const isLocked = (user) =>
+  !!user.lockout_until && new Date(user.lockout_until) > new Date();
+
+export default function Users({ setAddUser, users, onUsersChanged, onEditUser }) {
   const [searchTerm, setSearchTerm] = useState("");
   // The user whose deactivation is in flight; one request per action.
   const [deactivatingId, setDeactivatingId] = useState(null);
   const deactivating = useRef(false);
+  const [unlockingId, setUnlockingId] = useState(null);
 
   // 1. Fixed Status Logic (Handle 'is_active')
   const getStatusBadge = (isActive) => {
@@ -50,11 +56,27 @@ export default function Users({ setAddUser, users, onUsersChanged }) {
     setAddUser(true);
   };
 
-  const Modal = (id) => {
-    // Use UUID for editing
-    console.log("Edit UUID:", id);
-    // setEditEmployeeId(id); 
-    // setEditUserModal(true);
+  const handleUnlock = async (user) => {
+    if (unlockingId !== null) return;
+    const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.email;
+    setUnlockingId(user.id);
+    try {
+      await unlockUser(user.id);
+      toast.success(`${name} can sign in again.`);
+      onUsersChanged?.();
+    } catch (error) {
+      const { status } = readApiError(error);
+      if (status === 403) {
+        toast.error("You don't have permission to unlock this account.");
+      } else if (status === 404) {
+        toast.error(`${name}'s account no longer exists. The list has been refreshed.`);
+        onUsersChanged?.();
+      } else {
+        toast.error(`We couldn't unlock ${name}. Please try again.`);
+      }
+    } finally {
+      setUnlockingId(null);
+    }
   };
 
   // Users are never deleted (AUD-02); deactivating ends their access and can
@@ -181,7 +203,12 @@ export default function Users({ setAddUser, users, onUsersChanged }) {
                       </TableCell>
                       
                       {/* 7. Status Fix */}
-                      <TableCell>{getStatusBadge(user.is_active)}</TableCell>
+                      <TableCell>
+                        {getStatusBadge(user.is_active)}
+                        {isLocked(user) && (
+                          <Badge className="ml-1 bg-amber-100 text-amber-800 hover:bg-amber-200">Locked</Badge>
+                        )}
+                      </TableCell>
                       
                       <TableCell className="text-right">
                         <div className="flex justify-end space-x-1">
@@ -189,10 +216,23 @@ export default function Users({ setAddUser, users, onUsersChanged }) {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => Modal(user.id)}
+                            title="Edit"
+                            onClick={() => onEditUser?.(user.id)}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
+                          {isLocked(user) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Unlock"
+                              disabled={unlockingId !== null}
+                              onClick={() => handleUnlock(user)}
+                            >
+                              <Unlock className="mr-1 h-4 w-4" />
+                              {unlockingId === user.id ? "Unlocking..." : "Unlock"}
+                            </Button>
+                          )}
                           {user.is_active && (
                             <Button
                               variant="ghost"
