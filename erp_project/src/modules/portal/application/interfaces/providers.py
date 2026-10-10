@@ -111,6 +111,8 @@ class PayslipDTO:
     net_salary_zig: Decimal
     exchange_rate: Decimal
     status: str
+    notes: str = ""
+    created_at: Optional[datetime] = None
 
 
 @dataclass

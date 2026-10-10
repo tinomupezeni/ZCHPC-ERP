@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import List, Optional
 
 from modules.portal.application.interfaces import (
+    EmployeeDTO,
     IPayrollProvider,
     PayslipDTO,
 )
@@ -81,61 +82,77 @@ class PortalPayslipService:
 
         return payslip
 
-    def get_payslip_breakdown(
+    # Responses below have the shapes the portal reads
+    # (employee-portal/src/types/payslip.types.ts), amounts as numbers. PY-2.
+
+    def get_payslip_list(
         self,
         employee_id: int,
+        year: Optional[int] = None,
+    ) -> dict:
+        """PayslipsResponse: the year's payslips (all when no year), newest
+        first, plus every year that has one."""
+        visible = self.get_payslips(employee_id)
+        shown = [p for p in visible if year is None or p.period_year == year]
+        return {
+            "payslips": [_list_item(p) for p in shown],
+            "available_years": sorted({p.period_year for p in visible}, reverse=True),
+            "current_year": year if year is not None else date.today().year,
+        }
+
+    def get_payslip_breakdown(
+        self,
+        employee: EmployeeDTO,
         payslip_id: int,
     ) -> Optional[dict]:
-        """
-        Get detailed payslip breakdown.
-
-        Returns:
-            Dict with categorized earnings and deductions
-        """
-        payslip = self.get_payslip(employee_id, payslip_id)
+        """PayslipDetail for one of the employee's own visible payslips."""
+        payslip = self.get_payslip(employee.id, payslip_id)
         if payslip is None:
             return None
 
+        other_usd = (
+            payslip.total_deductions_usd
+            - payslip.paye_usd
+            - payslip.aids_levy_usd
+            - payslip.nssa_employee_usd
+        )
+        other_zig = (
+            payslip.total_deductions_zig
+            - payslip.paye_zig
+            - payslip.aids_levy_zig
+            - payslip.nssa_employee_zig
+        )
+        gross = _amount(payslip.gross_usd, payslip.gross_zig)
+        total = _amount(payslip.total_deductions_usd, payslip.total_deductions_zig)
+        net = _amount(payslip.net_salary_usd, payslip.net_salary_zig)
         return {
-            "period": f"{payslip.period_year}-{payslip.period_month:02d}",
-            "exchange_rate": str(payslip.exchange_rate),
+            **_period_fields(payslip),
+            "id": payslip.id,
+            "status": payslip.status,
+            "employee_name": f"{employee.first_name} {employee.surname}".strip(),
+            "employee_id": employee.employee_id,
+            "department": employee.department_name or "",
+            "position": employee.position_name or "",
+            "exchange_rate": _number(payslip.exchange_rate),
             "earnings": {
-                "base_salary": {
-                    "usd": str(payslip.base_salary_usd),
-                    "zig": str(payslip.base_salary_zig),
-                },
-                "allowances": {
-                    "usd": str(payslip.allowances_usd),
-                    "zig": str(payslip.allowances_zig),
-                },
-                "gross": {
-                    "usd": str(payslip.gross_usd),
-                    "zig": str(payslip.gross_zig),
-                },
+                "base_salary": _amount(payslip.base_salary_usd, payslip.base_salary_zig),
+                "allowances": _amount(payslip.allowances_usd, payslip.allowances_zig),
+                "gross": gross,
             },
             "deductions": {
-                "paye": {
-                    "usd": str(payslip.paye_usd),
-                    "zig": str(payslip.paye_zig),
-                },
-                "aids_levy": {
-                    "usd": str(payslip.aids_levy_usd),
-                    "zig": str(payslip.aids_levy_zig),
-                },
-                "nssa": {
-                    "usd": str(payslip.nssa_employee_usd),
-                    "zig": str(payslip.nssa_employee_zig),
-                },
-                "total": {
-                    "usd": str(payslip.total_deductions_usd),
-                    "zig": str(payslip.total_deductions_zig),
-                },
+                "paye": _amount(payslip.paye_usd, payslip.paye_zig),
+                "aids_levy": _amount(payslip.aids_levy_usd, payslip.aids_levy_zig),
+                "nssa_employee": _amount(payslip.nssa_employee_usd, payslip.nssa_employee_zig),
+                "other_deductions": _amount(other_usd, other_zig),
+                "total": total,
             },
-            "net_salary": {
-                "usd": str(payslip.net_salary_usd),
-                "zig": str(payslip.net_salary_zig),
+            "summary": {
+                "gross_salary": gross,
+                "total_deductions": total,
+                "net_salary": net,
             },
-            "status": payslip.status,
+            "notes": payslip.notes,
+            "created_at": payslip.created_at.isoformat() if payslip.created_at else None,
         }
 
     def get_yearly_summary(
@@ -143,64 +160,52 @@ class PortalPayslipService:
         employee_id: int,
         year: Optional[int] = None,
     ) -> dict:
-        """
-        Get yearly payslip summary.
-
-        Returns:
-            Dict with yearly totals and averages
-        """
+        """PayslipYearSummary: the year's totals over the visible payslips."""
         if year is None:
             year = date.today().year
-
         payslips = self.get_payslips(employee_id, year)
 
-        if not payslips:
-            return {
-                "year": year,
-                "payslip_count": 0,
-                "totals": None,
-            }
-
-        # Calculate totals
-        total_gross_usd = sum(p.gross_usd for p in payslips)
-        total_gross_zig = sum(p.gross_zig for p in payslips)
-        total_deductions_usd = sum(p.total_deductions_usd for p in payslips)
-        total_deductions_zig = sum(p.total_deductions_zig for p in payslips)
-        total_net_usd = sum(p.net_salary_usd for p in payslips)
-        total_net_zig = sum(p.net_salary_zig for p in payslips)
-        total_paye_usd = sum(p.paye_usd for p in payslips)
-        total_nssa_usd = sum(p.nssa_employee_usd for p in payslips)
-
-        count = len(payslips)
+        def total(field: str) -> float:
+            return _number(sum((getattr(p, field) for p in payslips), Decimal("0")))
 
         return {
             "year": year,
-            "payslip_count": count,
-            "totals": {
-                "gross": {
-                    "usd": str(total_gross_usd),
-                    "zig": str(total_gross_zig),
-                },
-                "deductions": {
-                    "usd": str(total_deductions_usd),
-                    "zig": str(total_deductions_zig),
-                },
-                "net": {
-                    "usd": str(total_net_usd),
-                    "zig": str(total_net_zig),
-                },
-                "paye": str(total_paye_usd),
-                "nssa": str(total_nssa_usd),
-            },
-            "averages": {
-                "gross_usd": str(total_gross_usd / count),
-                "net_usd": str(total_net_usd / count),
-            },
-            "months": [
-                {
-                    "month": p.period_month,
-                    "net_usd": str(p.net_salary_usd),
-                }
-                for p in sorted(payslips, key=lambda x: x.period_month)
-            ],
+            "total_gross_usd": total("gross_usd"),
+            "total_gross_zig": total("gross_zig"),
+            "total_deductions_usd": total("total_deductions_usd"),
+            "total_deductions_zig": total("total_deductions_zig"),
+            "total_net_usd": total("net_salary_usd"),
+            "total_net_zig": total("net_salary_zig"),
+            "payslip_count": len(payslips),
         }
+
+
+def _number(value) -> float:
+    return float(Decimal(value).quantize(Decimal("0.01")))
+
+
+def _amount(usd, zig) -> dict:
+    return {"usd": _number(usd), "zig": _number(zig)}
+
+
+def _period_fields(payslip: PayslipDTO) -> dict:
+    period = date(payslip.period_year, payslip.period_month, 1)
+    return {
+        "period": period.strftime("%Y-%m"),
+        "period_display": period.strftime("%B %Y"),
+        "month": payslip.period_month,
+        "year": payslip.period_year,
+    }
+
+
+def _list_item(payslip: PayslipDTO) -> dict:
+    return {
+        **_period_fields(payslip),
+        "id": payslip.id,
+        "status": payslip.status,
+        "base_salary_usd": _number(payslip.base_salary_usd),
+        "net_salary_usd": _number(payslip.net_salary_usd),
+        "base_salary_zig": _number(payslip.base_salary_zig),
+        "net_salary_zig": _number(payslip.net_salary_zig),
+        "exchange_rate": _number(payslip.exchange_rate),
+    }

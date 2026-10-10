@@ -375,6 +375,8 @@ class DjangoPayrollProvider(IPayrollProvider):
             net_salary_zig=Decimal(str(payslip.net_salary_zig or 0)),
             exchange_rate=Decimal(str(payslip.exchange_rate or 1)),
             status=payslip.status,
+            notes=payslip.notes or "",
+            created_at=payslip.created_at,
         )
 
     def get_payslips(
