@@ -12,6 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
 import type { DashboardSummary } from '@/types/dashboard.types';
+import { leaveBalanceTile } from '@/components/dashboard/leaveBalanceTile';
 
 interface StaffDashboardProps {
   data: DashboardSummary | null;
@@ -23,8 +24,7 @@ export function StaffDashboard({ data }: StaffDashboardProps) {
   const stats = [
     {
       label: 'Leave Balance',
-      value: data?.leave_balances?.[0]?.available_days ?? employee?.leave_days_entitled ?? 0,
-      unit: 'days',
+      ...leaveBalanceTile(data, employee, 'days'),
       icon: CalendarDays,
       color: 'text-blue-600',
       bg: 'bg-blue-50',

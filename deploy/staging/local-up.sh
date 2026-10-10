@@ -143,7 +143,7 @@ EOF
     else
       docker build --target production -t "erp-staging/api:$sha" "$src/erp_project"
     fi
-    docker build --build-arg VITE_API_URL="$LOCAL_API_ORIGIN" -t "erp-staging/frontend:$sha-local" "$src/zchpc-erp-synergy-main"
+    docker build --build-arg VITE_API_URL="$LOCAL_API_ORIGIN" --build-arg VITE_PORTAL_URL="http://localhost:13001" -t "erp-staging/frontend:$sha-local" "$src/zchpc-erp-synergy-main"
     docker build --build-arg VITE_API_URL="$LOCAL_API_ORIGIN" -t "erp-staging/portal:$sha-local" "$src/employee-portal"
     set_image_tag "$sha"
     # `up` never pulls; fetch the public db image (postgres) here, once.

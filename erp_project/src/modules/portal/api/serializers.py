@@ -73,7 +73,7 @@ class DashboardSerializer(serializers.Serializer):
     employee_name = serializers.CharField()
     department_name = serializers.CharField(allow_null=True)
     position_name = serializers.CharField(allow_null=True)
-    leave_balances = LeaveBalanceSerializer(many=True)
+    leave_balances = LeaveBalanceSerializer(many=True, allow_null=True)
     today_clock_status = AttendanceRecordSerializer(allow_null=True)
     monthly_attendance_count = serializers.IntegerField()
     recent_attendance = AttendanceRecordSerializer(many=True)

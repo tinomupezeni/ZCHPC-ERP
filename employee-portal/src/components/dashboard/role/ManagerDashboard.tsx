@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import type { DashboardSummary } from '@/types/dashboard.types';
+import { leaveBalanceTile } from '@/components/dashboard/leaveBalanceTile';
 
 interface ManagerDashboardProps {
   data: DashboardSummary | null;
@@ -34,8 +35,7 @@ export function ManagerDashboard({ data }: ManagerDashboardProps) {
     },
     {
       label: 'My Leave Balance',
-      value: data?.leave_balances?.[0]?.available_days ?? employee?.leave_days_entitled ?? 0,
-      unit: 'days remaining',
+      ...leaveBalanceTile(data, employee, 'days remaining'),
       icon: Clock,
       color: 'text-blue-600',
       bg: 'bg-blue-50',

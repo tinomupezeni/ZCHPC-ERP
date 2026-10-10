@@ -24,6 +24,7 @@
 #   SHA=$(git rev-parse --short HEAD)
 #   docker build --target production -t erp-staging/api:$SHA erp_project
 #   docker build --build-arg VITE_API_URL=<STAGING_FRONTEND_API_ORIGIN> \
+#       --build-arg VITE_PORTAL_URL=<staging portal origin, e.g. http://10.50.14.12:13001> \
 #       -t erp-staging/frontend:$SHA zchpc-erp-synergy-main
 #   docker build --build-arg VITE_API_URL=<STAGING_PORTAL_API_ORIGIN> \
 #       -t erp-staging/portal:$SHA employee-portal
