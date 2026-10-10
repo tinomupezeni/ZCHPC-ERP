@@ -1,8 +1,10 @@
 // src/api.js
 import axios from 'axios';
+import { resolveApiOrigin } from './apiOrigin';
 
-// const API_URL = ''
-export const API_BASE_URL = (typeof __API_URL__ !== "undefined" ? __API_URL__ : "") + "/api/v2/";
+// When VITE_API_URL is unset: localhost on the dev server, production in a
+// build (see apiOrigin.ts).
+export const API_BASE_URL = resolveApiOrigin() + "/api/v2/";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
