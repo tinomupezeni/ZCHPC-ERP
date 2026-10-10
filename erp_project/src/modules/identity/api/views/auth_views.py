@@ -3,7 +3,7 @@ Authentication API views.
 """
 
 from rest_framework import status
-from rest_framework.permissions import AllowAny, IsAdminUser
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -18,6 +18,7 @@ from modules.identity.api.serializers import (
 from modules.identity.application.services import AuthService, LoginCommand
 from modules.identity.infrastructure.persistence.audit_repository import DjangoAuditLogRepository
 from modules.identity.infrastructure.persistence.user_repository import DjangoUserRepository
+from modules.identity.infrastructure.token_revocation import revoke_own_refresh_token
 
 
 class LoginView(APIView):
@@ -136,6 +137,23 @@ def get_client_ip(request) -> str:
     if x_forwarded_for:
         return x_forwarded_for.split(",")[0].strip()
     return request.META.get("REMOTE_ADDR", "0.0.0.0")
+
+
+class LogoutView(APIView):
+    """
+    Logout: blacklist the caller's refresh token.
+
+    POST /api/v2/auth/logout/  {"refresh": "<token>"}
+
+    Always 200, so the client can always finish logging out; another user's
+    token is left alone.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        revoke_own_refresh_token(request.user, request.data.get("refresh"))
+        return Response({"message": "Logged out successfully"})
 
 
 class AuditLogListView(APIView):

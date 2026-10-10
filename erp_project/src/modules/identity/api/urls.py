@@ -14,6 +14,7 @@ from modules.identity.api.views import (
     CurrentUserAccessView,
     CurrentUserView,
     LoginView,
+    LogoutView,
     SystemModuleViewSet,
     UnlockUserView,
     UserDetailView,
@@ -29,6 +30,7 @@ urlpatterns = [
     # Authentication
     path("token/", LoginView.as_view(), name="token_obtain"),
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("logout/", LogoutView.as_view(), name="logout"),
 
     # Users
     path("users/", UserListCreateView.as_view(), name="user_list"),
