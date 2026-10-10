@@ -30,8 +30,8 @@ class DashboardData:
     department_name: Optional[str]
     position_name: Optional[str]
 
-    # Leave summary
-    leave_balances: List[LeaveBalanceDTO]
+    # Leave summary; None = not available
+    leave_balances: Optional[List[LeaveBalanceDTO]]
 
     # Attendance
     today_clock_status: Optional[AttendanceRecordDTO]
@@ -87,12 +87,10 @@ class DashboardService:
         if employee is None:
             raise ValueError(f"Employee {employee_internal_id} not found")
 
-        # Get leave balances
-        current_year = date.today().year
-        leave_balances = self._leave_provider.get_balances(
-            employee_id=employee_internal_id,
-            year=current_year,
-        )
+        # Leave balances are not available: LeaveBalance holds only
+        # days_remaining, so the entitled/used/pending figures the provider
+        # reports cannot be right (AUDIT §11). The page shows them as missing.
+        leave_balances = None
 
         # Get today's attendance status
         today_status = self._attendance_provider.get_today_status(

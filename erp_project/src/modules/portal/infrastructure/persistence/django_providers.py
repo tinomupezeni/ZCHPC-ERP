@@ -278,7 +278,7 @@ class DjangoLeaveProvider(ILeaveProvider):
 
         queryset = LeaveRequest.objects.filter(
             employee_id=employee_id,
-        ).select_related("leave_type").order_by("-created_at")
+        ).select_related("leave_type").order_by("-requested_on")
 
         if status:
             queryset = queryset.filter(status=status)
@@ -291,10 +291,10 @@ class DjangoLeaveProvider(ILeaveProvider):
                 leave_type_name=r.leave_type.name,
                 start_date=r.start_date,
                 end_date=r.end_date,
-                days_count=r.days_count,
+                days_count=r.number_of_days,
                 reason=r.reason,
                 status=r.status,
-                created_at=r.created_at,
+                created_at=r.requested_on,
             )
             for r in queryset
         ]
@@ -523,17 +523,17 @@ class DjangoEventProvider(IEventProvider):
         end_date = today + timedelta(days=days)
 
         events = CompanyEvent.objects.filter(
-            event_date__gte=today,
-            event_date__lte=end_date,
-        ).order_by("event_date")
+            start_date__gte=today,
+            start_date__lte=end_date,
+        ).order_by("start_date")
 
         return [
             CompanyEventDTO(
                 id=e.id,
                 title=e.title,
                 description=e.description,
-                event_date=e.event_date,
-                event_type=e.event_type if hasattr(e, "event_type") else "General",
+                event_date=e.start_date,
+                event_type=e.event_type,
             )
             for e in events
         ]
