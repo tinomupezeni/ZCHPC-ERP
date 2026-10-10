@@ -493,6 +493,29 @@ class TestUnlock:
         response = client_for(actor.user).post(unlock_url(target.user.id))
         assert response.status_code == status.HTTP_200_OK, response.data
 
+    def test_lock_state_is_visible_and_unlock_clears_it(self):
+        """B8: synergy shows Unlock only for a locked account, so the user
+        responses carry lockout_until."""
+        from datetime import timedelta
+        from django.utils import timezone
+
+        actor = make_employee("Unlocker", EMP.REACTIVATE, "hr.employee.view")
+        target = make_employee("Locked", "hr.employee.view")
+        User.objects.filter(pk=target.user.pk).update(
+            failed_attempts=5, lockout_until=timezone.now() + timedelta(minutes=15)
+        )
+        client = client_for(actor.user)
+
+        detail = client.get(user_url(target.user.id))
+        listed = {u["id"]: u for u in client.get(USERS_URL).data}
+        assert detail.data["lockout_until"] is not None
+        assert listed[str(target.user.id)]["lockout_until"] is not None
+
+        unlocked = client.post(unlock_url(target.user.id))
+        assert unlocked.status_code == status.HTTP_200_OK, unlocked.data
+        assert unlocked.data["lockout_until"] is None
+        assert client.get(user_url(target.user.id)).data["lockout_until"] is None
+
 
 # =============================================================================
 # Service layer fails closed without an actor

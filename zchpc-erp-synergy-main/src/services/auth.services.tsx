@@ -40,6 +40,15 @@ export const addUser = (payload) => {
   return apiClient.post("/auth/users/", payload);
 };
 
+export const getUser = (id) => apiClient.get(`/auth/users/${id}/`);
+
+// B8: the login's name only (role, department and pay live in HR).
+export const updateUser = (id, payload: { first_name: string; last_name: string }) =>
+  apiClient.patch(`/auth/users/${id}/`, payload);
+
+// Lifts a lockout from failed logins (needs hr.employee.reactivate).
+export const unlockUser = (id) => apiClient.post(`/auth/users/${id}/unlock/`);
+
 export const getUsers = () => {
     return apiClient.get("/auth/users/")
 }

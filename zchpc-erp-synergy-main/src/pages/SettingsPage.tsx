@@ -130,7 +130,15 @@ const SettingsPage = () => {
         </TabsList>
 
         <TabsContent value="users">
-          <Users setAddUser={setAddUser} users={users} onUsersChanged={fetchUsers} />
+          <Users
+            setAddUser={setAddUser}
+            users={users}
+            onUsersChanged={fetchUsers}
+            onEditUser={(id) => {
+              setEditEmployeeId(id);
+              setEditUserModal(true);
+            }}
+          />
         </TabsContent>
         <TabsContent value="logs">
           <Logs fetchLogs={Server.fetchLogs()} />
@@ -489,6 +497,7 @@ const SettingsPage = () => {
         <EditUserModal
           closeModal={() => setEditUserModal(false)}
           userId={editEmployeeId}
+          onSaved={fetchUsers}
         />
       )}
       {addDepartment && (

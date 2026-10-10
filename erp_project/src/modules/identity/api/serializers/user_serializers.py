@@ -33,6 +33,8 @@ class UserResponseSerializer(serializers.Serializer):
     is_staff = serializers.BooleanField(read_only=True)
     is_superuser = serializers.BooleanField(read_only=True)
     must_change_password = serializers.BooleanField(read_only=True)
+    # Set while failed logins keep the account locked (cleared by unlock).
+    lockout_until = serializers.DateTimeField(read_only=True, allow_null=True)
 
 
 class CreateUserRequestSerializer(serializers.Serializer):

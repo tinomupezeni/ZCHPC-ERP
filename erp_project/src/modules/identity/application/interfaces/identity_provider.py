@@ -6,6 +6,7 @@ interact with the Identity module.
 """
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -23,6 +24,7 @@ class UserDTO:
     is_staff: bool
     is_superuser: bool
     must_change_password: bool = False
+    lockout_until: datetime | None = None
 
 
 @dataclass

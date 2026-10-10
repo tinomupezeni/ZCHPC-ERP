@@ -695,5 +695,6 @@ class UserService:
             is_staff=user.is_staff,
             is_superuser=user.is_superuser,
             must_change_password=user.must_change_password,
+            lockout_until=user.lockout_until,
         )
 
