@@ -35,7 +35,7 @@ HR_URL = "/api/v2/hr/employees/"
 PAYROLL_URL = "/api/v2/payroll/payslips/"
 NOTIFICATIONS_URL = "/api/v2/portal/notifications/"
 NOTIFICATIONS_UNREAD_COUNT_URL = "/api/v2/portal/notifications/unread-count/"
-PORTAL_DASHBOARD_URL = "/api/v2/portal/dashboard/"
+PORTAL_PAYSLIPS_URL = "/api/v2/portal/payslips/"
 
 User = get_user_model()
 
@@ -357,13 +357,14 @@ class TestNotificationsAreAPersonalResourceNotAModuleCapability:
 
     def test_the_exemption_does_not_widen_to_other_portal_routes(self, make_user):
         """
-        Only the notifications path family is exempt - a genuinely
-        module-gated portal route (dashboard) must still require some
-        portal.*-prefixed permission, exactly as before.
+        Only the personal path families are exempt - a genuinely
+        module-gated portal route (payslips) must still require some
+        portal.*-prefixed permission, exactly as before. (The dashboard was
+        the example here until it became a personal resource itself.)
         """
         client, _ = make_user("INTERN", [])
 
-        assert client.get(PORTAL_DASHBOARD_URL).status_code == status.HTTP_403_FORBIDDEN
+        assert client.get(PORTAL_PAYSLIPS_URL).status_code == status.HTTP_403_FORBIDDEN
 
     def test_the_exemption_does_not_widen_to_other_modules(self, make_user):
         """Reaching notifications must not imply reaching procurement or anywhere else."""
