@@ -88,6 +88,9 @@ class RBACMiddleware:
         # the prefix above; listed so it stays personal if that entry changes.
         "/api/v2/auth/users/me/access/",
         "/api/v2/auth/password/change/",  # the caller's own password
+        # The caller's own portal landing page; the view resolves the
+        # employee from request.user only.
+        "/api/v2/portal/dashboard/",
     ]
 
     # REM-07: all an account holding an issued temporary password
