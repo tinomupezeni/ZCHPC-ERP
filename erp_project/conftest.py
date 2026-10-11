@@ -37,18 +37,33 @@ def api_client():
     return APIClient()
 
 
+def _bearer(client, user):
+    """
+    Authenticate with a real JWT, not force_authenticate: RBACMiddleware runs
+    before DRF and reads the bearer token itself, so a force-authenticated
+    request is anonymous to it and gets 401 (PY-8).
+    """
+    from rest_framework_simplejwt.tokens import AccessToken
+
+    client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(user)}")
+    return client
+
+
 @pytest.fixture
 def authenticated_client(api_client, create_user):
     """API client with authenticated user."""
     user = create_user()
-    api_client.force_authenticate(user=user)
-    return api_client
+    return _bearer(api_client, user)
 
 
 @pytest.fixture
 def create_user(db):
     """Factory fixture to create test users."""
-    from authentication.models import CustomUser
+    # PY-8: the user model lives in the identity module; the old
+    # authentication app (authentication.models) no longer exists.
+    from django.contrib.auth import get_user_model
+
+    CustomUser = get_user_model()
 
     def _create_user(
         email='test@example.com',
@@ -86,8 +101,7 @@ def admin_user(create_user):
 @pytest.fixture
 def admin_client(api_client, admin_user):
     """API client authenticated as admin."""
-    api_client.force_authenticate(user=admin_user)
-    return api_client
+    return _bearer(api_client, admin_user)
 
 
 @pytest.fixture
