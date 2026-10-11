@@ -19,6 +19,12 @@ from modules.identity.domain.entities import AuditLogEntry, User
 from modules.identity.domain.events import LoginFailedEvent, LoginSucceededEvent
 from modules.identity.domain.services import default_lockout_policy
 
+# B10: every failed login - unknown login, locked, deactivated (account or
+# employment) or wrong password - gets this one message, so the response
+# never tells a caller whether an account exists or what state it is in.
+# Each refusal is still audited as a failed login.
+GENERIC_LOGIN_ERROR = "Invalid email or password"
+
 
 @dataclass
 class LoginCommand:
@@ -73,9 +79,10 @@ class AuthService:
                 user_agent=command.user_agent,
                 reason="User not found",
             )
+            self._spend_password_check_time(command.password)
             return AuthResult(
                 success=False,
-                error="Invalid email or password",
+                error=GENERIC_LOGIN_ERROR,
             )
 
         # Check if account is active - the login itself, and the employment
@@ -91,9 +98,10 @@ class AuthService:
                 user_id=user.id,
                 reason=error or "Account issue",
             )
+            self._spend_password_check_time(command.password)
             return AuthResult(
                 success=False,
-                error=error,
+                error=GENERIC_LOGIN_ERROR,
             )
 
         # Verify password
@@ -118,7 +126,7 @@ class AuthService:
 
             return AuthResult(
                 success=False,
-                error="Invalid email or password",
+                error=GENERIC_LOGIN_ERROR,
             )
 
         # Successful login
@@ -140,6 +148,17 @@ class AuthService:
             access_token=tokens.get("access"),
             refresh_token=tokens.get("refresh"),
         )
+
+    @staticmethod
+    def _spend_password_check_time(password: str) -> None:
+        """
+        Hash the submitted password once, as a real password check would, so
+        a refusal that never reaches the check (unknown, locked, deactivated)
+        takes about as long as a wrong password and timing gives nothing away.
+        """
+        from django.contrib.auth.hashers import make_password
+
+        make_password(password)
 
     @staticmethod
     def _employment_allows_login(user_id: UUID) -> bool:

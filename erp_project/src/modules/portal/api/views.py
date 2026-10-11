@@ -22,6 +22,7 @@ from modules.portal.application.services import (
     PortalPayslipService,
     CareersService,
 )
+from modules.identity.api.throttles import LoginRateThrottle
 from modules.recruitment.api.throttles import RecruitmentApplyThrottle, RecruitmentStatusThrottle
 from modules.portal.infrastructure.persistence.django_providers import (
     DjangoEmployeeProvider,
@@ -105,6 +106,7 @@ def _get_employee_id(request: Request) -> int:
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@throttle_classes([LoginRateThrottle])
 def login(request: Request) -> Response:
     """Login with EC number and password."""
     serializer = LoginSerializer(data=request.data)

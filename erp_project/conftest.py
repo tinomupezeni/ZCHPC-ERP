@@ -30,6 +30,19 @@ if not settings.configured:
 # Shared Fixtures
 # =============================================================================
 
+@pytest.fixture(autouse=True)
+def _fresh_throttle_budget():
+    """
+    Throttle counters live in the default cache, which outlives a test; clear
+    it so every test starts with a full login budget (B10) whatever ran before.
+    """
+    from django.core.cache import cache
+
+    cache.clear()
+    yield
+    cache.clear()
+
+
 @pytest.fixture
 def api_client():
     """DRF API client for testing endpoints."""

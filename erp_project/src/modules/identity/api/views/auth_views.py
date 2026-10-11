@@ -15,6 +15,7 @@ from modules.identity.api.serializers import (
     LoginRequestSerializer,
     LoginResponseSerializer,
 )
+from modules.identity.api.throttles import LoginRateThrottle
 from modules.identity.application.services import AuthService, LoginCommand
 from modules.identity.infrastructure.persistence.audit_repository import DjangoAuditLogRepository
 from modules.identity.infrastructure.persistence.user_repository import DjangoUserRepository
@@ -29,6 +30,7 @@ class LoginView(APIView):
     """
 
     permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
         """
