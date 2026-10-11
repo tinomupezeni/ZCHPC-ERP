@@ -324,6 +324,15 @@ def _department_stage_refusal(user, employee, department_id) -> Response | None:
     return None
 
 
+def _holds_stage_role(role: str, allowed_roles: set[str]) -> bool:
+    """
+    E1 follow-up: the later fuel/stores stages match the approver's role name
+    exactly. A name that merely contains an allowed one no longer counts, so
+    DEPARTMENT_MANAGER does not pass the stores General Manager stage (MANAGER).
+    """
+    return role in allowed_roles
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def fuel_requisition_approve(request: Request, requisition_id: int) -> Response:
@@ -361,7 +370,7 @@ def fuel_requisition_approve(request: Request, requisition_id: int) -> Response:
             refusal = _department_stage_refusal(request.user, employee, record.department_id)
             if refusal is not None:
                 return refusal
-    elif not is_admin and not (role in roles or any(item in role for item in roles) or recipient_match):
+    elif not is_admin and not (_holds_stage_role(role, roles) or recipient_match):
         return Response({"error": "You are not authorized for this approval stage"}, status=status.HTTP_403_FORBIDDEN)
     if record.requester_id == request.user.id:
         return Response({"error": "The requester cannot approve their own requisition"}, status=status.HTTP_403_FORBIDDEN)
@@ -409,7 +418,7 @@ def stores_requisition_approve(request: Request, requisition_id: int) -> Respons
             refusal = _department_stage_refusal(request.user, employee, record.department_id)
             if refusal is not None:
                 return refusal
-    elif not is_admin and not (role in allowed_roles or any(item in role for item in allowed_roles)):
+    elif not is_admin and not _holds_stage_role(role, allowed_roles):
         return Response({"error": "You are not authorized for this approval stage"}, status=status.HTTP_403_FORBIDDEN)
     if record.requester_id == request.user.id:
         return Response({"error": "The requester cannot approve their own requisition"}, status=status.HTTP_403_FORBIDDEN)
