@@ -4,6 +4,7 @@ Leave request application service.
 
 from dataclasses import dataclass
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Sequence
 
 from shared.domain.exceptions import AuthorizationError, NotFoundError, ValidationError
@@ -114,8 +115,8 @@ class LeaveRequestService:
         )
         if not balance:
             raise ValidationError(
-                f"No leave balance found for employee {command.employee_id} "
-                f"for leave type '{leave_type.name}' in year {year}"
+                f"You have no {leave_type.name} balance for {year}, so this request cannot be made. "
+                "Ask HR to set up your balance."
             )
 
         # Get pending requests for available days calculation
@@ -131,8 +132,8 @@ class LeaveRequestService:
 
         if period.days > available_days:
             raise ValidationError(
-                f"Insufficient leave balance. Requested {period.days} days, "
-                f"but only {available_days} days available"
+                f"Not enough {leave_type.name} left: this request is for {_days(period.days)} days, "
+                f"but only {_days(available_days)} are available (after your other pending requests)."
             )
 
         # Check for conflicts
@@ -195,19 +196,31 @@ class LeaveRequestService:
         if not can_approve:
             raise ValidationError(f"Cannot approve request: {reason}")
 
-        # Approve the request
-        request.approve(command.reviewer_id)
-
-        # Deduct from balance
+        # The balance must still cover the request when it is approved, not
+        # only when it was submitted: other approvals or an adjustment may
+        # have used it since, and a request created outside the API was never
+        # checked. Refuse before anything changes, with the reason.
         year = request.start_date.year
         balance = self._balance_repository.get_by_employee_and_type_and_year(
             employee_id=request.employee_id,
             leave_type_id=request.leave_type_id,
             year=year,
         )
-        if balance:
-            balance.deduct(request.days)
-            self._balance_repository.save(balance)
+        if balance is None:
+            raise ValidationError(
+                f"Cannot approve: the employee has no {leave_type.name} balance for {year}.",
+                code="NO_LEAVE_BALANCE",
+            )
+        if not balance.can_take(request.days):
+            raise ValidationError(
+                f"Cannot approve: this request is for {_days(request.days)} days of {leave_type.name}, "
+                f"but the employee has only {_days(balance.remaining_days)} left.",
+                code="INSUFFICIENT_BALANCE",
+            )
+
+        request.approve(command.reviewer_id)
+        balance.deduct(request.days)
+        self._balance_repository.save(balance)
 
         # Add domain event
         request.add_domain_event(
@@ -431,3 +444,8 @@ class LeaveRequestService:
             reviewed_by_id=request.reviewed_by_id,
             reviewed_at=request.reviewed_at.isoformat() if request.reviewed_at else None,
         )
+
+
+def _days(value) -> str:
+    """A day count for a message: 5, not 5.00; 2.5 stays 2.5."""
+    return format(Decimal(str(value)).normalize(), "f")
