@@ -146,7 +146,7 @@ REST_FRAMEWORK = {
     # via modules.identity.api.throttles (B10). Counts live in the default
     # cache, which is per process unless CACHES says otherwise.
     "DEFAULT_THROTTLE_RATES": {
-        "login": os.environ.get("LOGIN_RATE", "10/minute"),
+        "login": os.environ.get("LOGIN_RATE", "20/minute"),
         "recruitment_apply": os.environ.get("RECRUITMENT_APPLY_RATE", "30/hour"),
         "recruitment_check": os.environ.get("RECRUITMENT_CHECK_RATE", "60/hour"),
         "recruitment_status": os.environ.get("RECRUITMENT_STATUS_RATE", "60/hour"),
