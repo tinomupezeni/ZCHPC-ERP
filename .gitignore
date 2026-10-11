@@ -79,6 +79,11 @@ env/
 staticfiles/
 static/
 media/
+# Uploaded CVs (personal data): never committed
+**/mediafiles/recruitment/resumes/
+
+# === Local databases (may hold users and password hashes) ===
+db.sqlite3
 
 # === Migrations (optional if you want clean repos) ===
 **/migrations/__pycache__/
