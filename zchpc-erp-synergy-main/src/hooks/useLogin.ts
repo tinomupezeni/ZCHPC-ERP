@@ -60,7 +60,14 @@ export const useLogin = () => {
         setIsSubmitting(false);
       }
     } catch (error) {
-      toast.error("Authentication failed. Please check your credentials.");
+      // B10: too many attempts from this address; the credentials may be fine.
+      const throttled =
+        (error as { response?: { status?: number } })?.response?.status === 429;
+      toast.error(
+        throttled
+          ? "Too many sign-in attempts. Please wait a minute and try again."
+          : "Authentication failed. Please check your credentials."
+      );
       setIsSubmitting(false);
     }
   };

@@ -76,10 +76,11 @@ class PortalAuthService:
                 message="Invalid EC number or password"
             )
 
+        # B10: the same message as any other failure (no account state).
         if not employee.is_active:
             return AuthResult(
                 success=False,
-                message="Account is deactivated"
+                message="Invalid EC number or password"
             )
 
         # Token generation would be handled by infrastructure layer

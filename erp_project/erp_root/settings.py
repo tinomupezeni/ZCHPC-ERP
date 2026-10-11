@@ -142,8 +142,11 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     # Rates for the views that opt into throttling (no global default). The
     # anonymous careers endpoints (REM-04) use these via
-    # modules.recruitment.api.throttles. Counts live in the default cache.
+    # modules.recruitment.api.throttles; both login endpoints share "login"
+    # via modules.identity.api.throttles (B10). Counts live in the default
+    # cache, which is per process unless CACHES says otherwise.
     "DEFAULT_THROTTLE_RATES": {
+        "login": os.environ.get("LOGIN_RATE", "20/minute"),
         "recruitment_apply": os.environ.get("RECRUITMENT_APPLY_RATE", "30/hour"),
         "recruitment_check": os.environ.get("RECRUITMENT_CHECK_RATE", "60/hour"),
         "recruitment_status": os.environ.get("RECRUITMENT_STATUS_RATE", "60/hour"),
