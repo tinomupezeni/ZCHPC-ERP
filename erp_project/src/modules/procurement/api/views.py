@@ -8,6 +8,8 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import permission_classes
+from functools import wraps
+
 from django.utils import timezone
 
 from shared.domain.exceptions import ValidationError, NotFoundError
@@ -65,11 +67,59 @@ def _handle_error(e: Exception) -> Response:
         )
 
 
+class LegacyProcurementPermissions:
+    """
+    A3: capabilities for the legacy supplier, inventory and purchase order
+    routes. Reading needs ``view``; any change needs ``manage``. A role granted
+    ``procurement.*`` (the legacy PROCUREMENT roles, migration hr.0017) or
+    ``*`` holds them all; plain staff hold none.
+    """
+
+    SUPPLIER_VIEW = "procurement.supplier.view"
+    SUPPLIER_MANAGE = "procurement.supplier.manage"
+    INVENTORY_VIEW = "procurement.inventory.view"
+    INVENTORY_MANAGE = "procurement.inventory.manage"
+    ORDER_VIEW = "procurement.purchase_order.view"
+    ORDER_MANAGE = "procurement.purchase_order.manage"
+
+
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+def _requires(view_permission: str, manage_permission: str):
+    """Refuse the call with 403 unless the user's role grants the matching capability."""
+
+    def decorator(view):
+        @wraps(view)
+        def wrapper(request, *args, **kwargs):
+            from modules.identity.infrastructure.route_access import permission_set_for_user
+
+            needed = view_permission if request.method in _SAFE_METHODS else manage_permission
+            if not request.user.is_superuser:
+                permissions = permission_set_for_user(request.user)
+                if permissions is None or not permissions.has_permission(needed):
+                    return Response(
+                        {"error": f"Missing required permission '{needed}'"},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+            return view(request, *args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
+_SUPPLIERS = _requires(LegacyProcurementPermissions.SUPPLIER_VIEW, LegacyProcurementPermissions.SUPPLIER_MANAGE)
+_INVENTORY = _requires(LegacyProcurementPermissions.INVENTORY_VIEW, LegacyProcurementPermissions.INVENTORY_MANAGE)
+_ORDERS = _requires(LegacyProcurementPermissions.ORDER_VIEW, LegacyProcurementPermissions.ORDER_MANAGE)
+
+
 # ============================
 # Supplier Views
 # ============================
 
 @api_view(["GET", "POST"])
+@_SUPPLIERS
 def supplier_list(request: Request) -> Response:
     """List suppliers or create a new supplier."""
     if request.method == "GET":
@@ -102,6 +152,7 @@ def supplier_list(request: Request) -> Response:
 
 
 @api_view(["GET", "PUT", "DELETE"])
+@_SUPPLIERS
 def supplier_detail(request: Request, supplier_id: int) -> Response:
     """Get, update, or delete a supplier."""
     supplier = _supplier_repo.get_by_id(supplier_id)
@@ -143,6 +194,7 @@ def supplier_detail(request: Request, supplier_id: int) -> Response:
 
 
 @api_view(["POST"])
+@_SUPPLIERS
 def supplier_activate(request: Request, supplier_id: int) -> Response:
     """Activate a deactivated supplier."""
     supplier = _supplier_repo.get_by_id(supplier_id)
@@ -162,6 +214,7 @@ def supplier_activate(request: Request, supplier_id: int) -> Response:
 # ============================
 
 @api_view(["GET", "POST"])
+@_INVENTORY
 def inventory_item_list(request: Request) -> Response:
     """List inventory items or create a new item."""
     if request.method == "GET":
@@ -191,6 +244,7 @@ def inventory_item_list(request: Request) -> Response:
 
 
 @api_view(["GET", "PUT", "DELETE"])
+@_INVENTORY
 def inventory_item_detail(request: Request, item_id: int) -> Response:
     """Get, update, or delete an inventory item."""
     item = _item_repo.get_by_id(item_id)
@@ -473,6 +527,7 @@ def comparative_schedule_approve(request: Request, schedule_id: int) -> Response
 # ============================
 
 @api_view(["GET"])
+@_ORDERS
 def purchase_order_list(request: Request) -> Response:
     """List purchase orders."""
     supplier_id = request.query_params.get("supplier_id")
@@ -491,6 +546,7 @@ def purchase_order_list(request: Request) -> Response:
 
 
 @api_view(["GET"])
+@_ORDERS
 def purchase_order_detail(request: Request, order_id: int) -> Response:
     """Get a purchase order."""
     try:
@@ -501,6 +557,7 @@ def purchase_order_detail(request: Request, order_id: int) -> Response:
 
 
 @api_view(["POST"])
+@_ORDERS
 def purchase_order_send(request: Request, order_id: int) -> Response:
     """Send a purchase order to supplier."""
     try:
@@ -511,6 +568,7 @@ def purchase_order_send(request: Request, order_id: int) -> Response:
 
 
 @api_view(["POST"])
+@_ORDERS
 def purchase_order_receive(request: Request, order_id: int) -> Response:
     """Mark goods as received for an order."""
     serializer = MarkDeliveredSerializer(data=request.data)
@@ -528,6 +586,7 @@ def purchase_order_receive(request: Request, order_id: int) -> Response:
 
 
 @api_view(["POST"])
+@_ORDERS
 def purchase_order_cancel(request: Request, order_id: int) -> Response:
     """Cancel a purchase order."""
     serializer = CancelOrderSerializer(data=request.data)
