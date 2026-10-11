@@ -504,9 +504,11 @@ class TestBudgetCodeDisclosure:
             assert key not in item
         assert item["category_id"] is not None  # category still served
 
-    def test_ordinary_viewer_receives_neither_key(
+    def test_ordinary_viewer_cannot_read_the_request_at_all(
         self, client_for, api_url, requester, make_employee, make_request_record
     ):
+        # A2: holding view alone no longer discloses someone else's request,
+        # so the budget code keys are never reached.
         from modules.procurement.application.authorization import (
             PurchaseRequestPermissions as P,
         )
@@ -514,10 +516,9 @@ class TestBudgetCodeDisclosure:
         viewer = make_employee("Vera Viewer", [P.VIEW])
         record = make_request_record(requester, status="PROCESSED")
 
-        item = self._item(client_for, api_url, viewer, record)
+        response = client_for(viewer).get(f"{api_url}{record.id}/")
 
-        for key in self.KEYS:
-            assert key not in item
+        assert response.status_code == status.HTTP_403_FORBIDDEN
 
     def test_gm_and_director_do_not_receive_them(
         self, client_for, api_url, requester, general_manager, director,
@@ -551,12 +552,17 @@ class TestBudgetCodeDisclosure:
         assert item["budget_code_id"] == budget_code.id
         assert item["budget_code"]["code"] == budget_code.code
 
-    @pytest.mark.parametrize("actor_fixture", ["accountant", "procurement_officer"])
+    # Each at a status the request has reached their stage in (A2).
+    @pytest.mark.parametrize(
+        "actor_fixture,request_status",
+        [("accountant", "PENDING_ACCOUNTS"), ("procurement_officer", "PENDING_PROCUREMENT")],
+    )
     def test_unassigned_is_null_for_finance_and_procurement(
-        self, request, client_for, api_url, requester, make_request_record, actor_fixture
+        self, request, client_for, api_url, requester, make_request_record, actor_fixture,
+        request_status,
     ):
         actor = request.getfixturevalue(actor_fixture)
-        record = make_request_record(requester, status="PENDING_ACCOUNTS")
+        record = make_request_record(requester, status=request_status)
         record.items.update(budget_code=None)
 
         item = self._item(client_for, api_url, actor, record)

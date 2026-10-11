@@ -16,7 +16,7 @@ from modules.procurement.application.authorization.permissions import (
 )
 from modules.procurement.application.interfaces import IOrganizationalDirectory
 from modules.procurement.domain.entities import PurchaseRequest
-from modules.procurement.domain.value_objects import RequestStatus
+from modules.procurement.domain.value_objects import DecisionStage, DecisionType, RequestStatus
 from shared.domain.exceptions import AuthorizationError
 
 
@@ -90,19 +90,45 @@ class PurchaseRequestAuthorizationPolicy:
     def authorize_view(
         self,
         actor: Actor | None,
-        request: PurchaseRequest | None = None,  # noqa: ARG002 - see docstring
+        request: PurchaseRequest | None = None,
     ) -> None:
         """
-        Viewing requires the view capability.
+        Viewing requires the view capability, and read-by-id is scoped (A2,
+        PLAN assumption A-2):
 
-        Per-record read scoping is not narrowed here: the existing requirements
-        do not define who may read which request, and inventing a rule would
-        silently change behaviour. ``request`` is accepted so that callers pass
-        the record they are about to disclose and scoping can be added here
-        without changing any call site. See the Slice 4 gap notes.
+        - the requester and admins may read the request;
+        - a DRAFT is the requester's only;
+        - otherwise a reviewer may read it once it has reached their stage:
+          they hold the capability of a stage at or before the furthest stage
+          the request has reached. The department head stage also needs
+          authority over the request's department (Department.head).
+
+        A REJECTED request has reached the stage that rejected it; a
+        PROCESSED one has passed every stage.
         """
         self.require_authenticated(actor)
         self._require_permission(actor, PurchaseRequestPermissions.VIEW)
+        if request is None or actor.is_admin:
+            return
+        if actor.employee_id is not None and actor.employee_id == request.requester_id:
+            return
+        if request.status == RequestStatus.DRAFT:
+            raise AuthorizationError(
+                "Only the requester may read a draft purchase request",
+                code="NOT_REQUESTER",
+                details={"purchase_request_id": request.id},
+            )
+        reached = _furthest_stage_reached(request)
+        for stage, permission in _REVIEW_STAGES[: reached + 1]:
+            if not actor.has_permission(permission):
+                continue
+            if stage is not RequestStatus.PENDING_DEPARTMENT_HEAD or self._heads_department(actor, request):
+                return
+        raise AuthorizationError(
+            "The actor is not a reviewer this purchase request has reached",
+            code="NOT_A_REVIEWER",
+            details={"purchase_request_id": request.id},
+        )
 
     def authorize_list(
         self, actor: Actor | None, scope: PurchaseRequestListScope
@@ -365,6 +391,14 @@ class PurchaseRequestAuthorizationPolicy:
                 details={"request_department_id": request.department_id},
             )
 
+    def _heads_department(self, actor: Actor, request: PurchaseRequest) -> bool:
+        """Non-raising form of _require_department_authority."""
+        try:
+            self._require_department_authority(actor, request)
+        except AuthorizationError:
+            return False
+        return True
+
     def _require_stage_authority(self, actor: Actor, request: PurchaseRequest) -> None:
         """
         The actor must hold the capability (and context) of the stage the
@@ -394,3 +428,37 @@ class PurchaseRequestAuthorizationPolicy:
         # DRAFT / PROCESSED / REJECTED have no pending approver. Authorization
         # does not decide that - the domain rejects the transition - so the
         # actor is let through to the aggregate, which raises ValidationError.
+
+
+# The review stages in workflow order, each with the capability that acts there.
+_REVIEW_STAGES: list[tuple[RequestStatus, str]] = [
+    (RequestStatus.PENDING_DEPARTMENT_HEAD, PurchaseRequestPermissions.DEPARTMENT_HEAD_APPROVE),
+    (RequestStatus.PENDING_ACCOUNTS, PurchaseRequestPermissions.ACCOUNTS_VERIFY),
+    (RequestStatus.PENDING_GM, PurchaseRequestPermissions.GM_RECOMMEND),
+    (RequestStatus.PENDING_DIRECTOR, PurchaseRequestPermissions.DIRECTOR_APPROVE),
+    (RequestStatus.PENDING_PROCUREMENT, PurchaseRequestPermissions.PROCESS),
+]
+_STAGE_INDEX = {status: index for index, (status, _) in enumerate(_REVIEW_STAGES)}
+_DECISION_STAGE_INDEX = {
+    DecisionStage.DEPARTMENT_HEAD: _STAGE_INDEX[RequestStatus.PENDING_DEPARTMENT_HEAD],
+    DecisionStage.ACCOUNTS: _STAGE_INDEX[RequestStatus.PENDING_ACCOUNTS],
+    DecisionStage.GM: _STAGE_INDEX[RequestStatus.PENDING_GM],
+    DecisionStage.DIRECTOR: _STAGE_INDEX[RequestStatus.PENDING_DIRECTOR],
+}
+
+
+def _furthest_stage_reached(request: PurchaseRequest) -> int:
+    """
+    Index into _REVIEW_STAGES of the furthest stage the request has reached,
+    or -1 when it has reached none (a DRAFT, or a REJECTED one with no
+    recorded rejection).
+    """
+    if request.status in _STAGE_INDEX:
+        return _STAGE_INDEX[request.status]
+    if request.status == RequestStatus.PROCESSED:
+        return len(_REVIEW_STAGES) - 1
+    if request.status == RequestStatus.REJECTED:
+        for decision in reversed(request.decisions):
+            if decision.decision == DecisionType.REJECTED:
+                return _DECISION_STAGE_INDEX[decision.stage]
+    return -1
