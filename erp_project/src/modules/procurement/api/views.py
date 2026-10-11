@@ -326,9 +326,10 @@ def _department_stage_refusal(user, employee, department_id) -> Response | None:
 
 def _holds_stage_role(role: str, allowed_roles: set[str]) -> bool:
     """
-    E1 follow-up: the later fuel/stores stages match the approver's role name
-    exactly. A name that merely contains an allowed one no longer counts, so
-    DEPARTMENT_MANAGER does not pass the stores General Manager stage (MANAGER).
+    E1 follow-up: the later fuel/stores stages, and every comparative schedule
+    stage, match the approver's role name exactly. A name that merely contains
+    an allowed one no longer counts, so DEPARTMENT_MANAGER does not pass the
+    stores General Manager stage (MANAGER).
     """
     return role in allowed_roles
 
@@ -459,8 +460,10 @@ def comparative_schedule_approve(request: Request, schedule_id: int) -> Response
     if stage is None:
         return Response({"error": "This schedule is no longer awaiting approval"}, status=status.HTTP_400_BAD_REQUEST)
     stage_name, allowed_roles = stage
-    if not is_admin and not (role in allowed_roles or any(item in role for item in allowed_roles)):
+    if not is_admin and not _holds_stage_role(role, allowed_roles):
         return Response({"error": "You are not authorized for this approval stage"}, status=status.HTTP_403_FORBIDDEN)
+    if record.requester_id == request.user.id:
+        return Response({"error": "The requester cannot approve their own schedule"}, status=status.HTTP_403_FORBIDDEN)
     setattr(record, f"{stage_name}_by_id", request.user.id)
     setattr(record, f"{stage_name}_at", timezone.now())
     record.status = {"director": "PENDING_PROCUREMENT", "procurement_finalised": "PENDING_ACCOUNTS", "accounts": "APPROVED"}[stage_name]
