@@ -1,11 +1,11 @@
 """
-A3: the legacy supplier, inventory and purchase order routes require the
-matching permission.
+A3: the legacy supplier, inventory, budget center and purchase order routes
+require the matching permission.
 
 Before A3 any authenticated user who reached the procurement routes - every
 staff member does, since raising a purchase request is a procurement
-permission - could list, create, edit and delete suppliers, inventory items
-and purchase orders.
+permission - could list, create, edit and delete suppliers, inventory items,
+budget centers and purchase orders.
 
 Now reading needs ``procurement.<resource>.view`` and any change needs
 ``procurement.<resource>.manage``. ``procurement.*`` and ``*`` hold them all.
@@ -49,6 +49,11 @@ ROUTES = [
     ("get", f"inventory/{MISSING}/", None, L.INVENTORY_VIEW, 404),
     ("put", f"inventory/{MISSING}/", {}, L.INVENTORY_MANAGE, 404),
     ("delete", f"inventory/{MISSING}/", None, L.INVENTORY_MANAGE, 404),
+    ("get", "budget-centers/", None, L.BUDGET_CENTER_VIEW, 200),
+    ("post", "budget-centers/", {}, L.BUDGET_CENTER_MANAGE, 400),
+    ("get", f"budget-centers/{MISSING}/", None, L.BUDGET_CENTER_VIEW, 404),
+    ("put", f"budget-centers/{MISSING}/", {}, L.BUDGET_CENTER_MANAGE, 404),
+    ("delete", f"budget-centers/{MISSING}/", None, L.BUDGET_CENTER_MANAGE, 404),
     ("get", "orders/", None, L.ORDER_VIEW, 200),
     ("get", f"orders/{MISSING}/", None, L.ORDER_VIEW, 404),
     ("post", f"orders/{MISSING}/send/", None, L.ORDER_MANAGE, 404),
@@ -113,6 +118,7 @@ def test_legacy_procurement_wildcard_and_admin_keep_access(method, path, body, p
     [
         (L.SUPPLIER_VIEW, L.SUPPLIER_MANAGE, "post", "suppliers/", {}),
         (L.INVENTORY_VIEW, L.INVENTORY_MANAGE, "post", "inventory/", {}),
+        (L.BUDGET_CENTER_VIEW, L.BUDGET_CENTER_MANAGE, "post", "budget-centers/", {}),
         (L.ORDER_VIEW, L.ORDER_MANAGE, "post", f"orders/{MISSING}/send/", None),
     ],
 )

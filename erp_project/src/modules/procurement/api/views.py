@@ -69,8 +69,8 @@ def _handle_error(e: Exception) -> Response:
 
 class LegacyProcurementPermissions:
     """
-    A3: capabilities for the legacy supplier, inventory and purchase order
-    routes. Reading needs ``view``; any change needs ``manage``. A role granted
+    A3: capabilities for the legacy supplier, inventory, budget center and
+    purchase order routes. Reading needs ``view``; any change needs ``manage``. A role granted
     ``procurement.*`` (the legacy PROCUREMENT roles, migration hr.0017) or
     ``*`` holds them all; plain staff hold none.
     """
@@ -79,6 +79,8 @@ class LegacyProcurementPermissions:
     SUPPLIER_MANAGE = "procurement.supplier.manage"
     INVENTORY_VIEW = "procurement.inventory.view"
     INVENTORY_MANAGE = "procurement.inventory.manage"
+    BUDGET_CENTER_VIEW = "procurement.budget_center.view"
+    BUDGET_CENTER_MANAGE = "procurement.budget_center.manage"
     ORDER_VIEW = "procurement.purchase_order.view"
     ORDER_MANAGE = "procurement.purchase_order.manage"
 
@@ -111,6 +113,9 @@ def _requires(view_permission: str, manage_permission: str):
 
 _SUPPLIERS = _requires(LegacyProcurementPermissions.SUPPLIER_VIEW, LegacyProcurementPermissions.SUPPLIER_MANAGE)
 _INVENTORY = _requires(LegacyProcurementPermissions.INVENTORY_VIEW, LegacyProcurementPermissions.INVENTORY_MANAGE)
+_BUDGET_CENTERS = _requires(
+    LegacyProcurementPermissions.BUDGET_CENTER_VIEW, LegacyProcurementPermissions.BUDGET_CENTER_MANAGE
+)
 _ORDERS = _requires(LegacyProcurementPermissions.ORDER_VIEW, LegacyProcurementPermissions.ORDER_MANAGE)
 
 
@@ -288,6 +293,7 @@ def inventory_item_detail(request: Request, item_id: int) -> Response:
 # ============================
 
 @api_view(["GET", "POST"])
+@_BUDGET_CENTERS
 def budget_center_list(request: Request) -> Response:
     """List budget centers or create a new budget center."""
     if request.method == "GET":
@@ -317,6 +323,7 @@ def budget_center_list(request: Request) -> Response:
 
 
 @api_view(["GET", "PUT", "DELETE"])
+@_BUDGET_CENTERS
 def budget_center_detail(request: Request, center_id: int) -> Response:
     """Get, update, or delete a budget center."""
     center = _budget_repo.get_by_id(center_id)
