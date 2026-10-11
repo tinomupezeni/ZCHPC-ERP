@@ -297,6 +297,33 @@ def budget_center_detail(request: Request, center_id: int) -> Response:
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+def _department_stage_refusal(user, employee, department_id) -> Response | None:
+    """
+    E1: who may approve the department stage of a fuel or stores requisition.
+
+    The approver must hold the department-head approval capability (the one
+    purchase requests use) and be the recorded head of the requisition's own
+    department (Department.head, INT-01 Q2). A role name - MANAGER, or one that
+    merely contains it, such as GENERAL_MANAGER - no longer counts on its own.
+    Returns the refusal, or None when the approver qualifies.
+    """
+    from modules.hr.infrastructure.persistence.models import Department
+    from modules.identity.infrastructure.route_access import permission_set_for_user
+    from modules.procurement.application.authorization import PurchaseRequestPermissions
+
+    permissions = permission_set_for_user(user)
+    if permissions is None or not permissions.has_permission(
+        PurchaseRequestPermissions.DEPARTMENT_HEAD_APPROVE
+    ):
+        return Response({"error": "You are not authorized for this approval stage"}, status=status.HTTP_403_FORBIDDEN)
+    if not Department.objects.filter(pk=department_id, head=employee).exists():
+        return Response(
+            {"error": "Only the head of the requisition's department can approve this stage"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    return None
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def fuel_requisition_approve(request: Request, requisition_id: int) -> Response:
@@ -310,7 +337,7 @@ def fuel_requisition_approve(request: Request, requisition_id: int) -> Response:
     role = (employee.role.name if employee and employee.role else "").upper()
     is_admin = request.user.is_superuser or role in {"ADMIN", "SYSTEM_ADMINISTRATOR"}
     stages = {
-        "PENDING_DEPARTMENT": ("department", {"MANAGER", "DEPARTMENT_MANAGER", "HR_MANAGER"}),
+        "PENDING_DEPARTMENT": ("department", set()),  # by permission + Department.head (E1)
         "PENDING_RECIPIENT": ("recipient", set()),
         "PENDING_FINANCE": ("finance", {"FINANCE", "ACCOUNTANT", "GENERAL_MANAGER"}),
         "PENDING_DIRECTOR": ("director", {"DIRECTOR", "ZCHPC_DIRECTOR"}),
@@ -329,7 +356,12 @@ def fuel_requisition_approve(request: Request, requisition_id: int) -> Response:
             f"{employee.first_name} {employee.surname}".strip().lower(),
             employee.employee_id.lower(),
         }
-    if not is_admin and not (role in roles or any(item in role for item in roles) or recipient_match):
+    if stage_name == "department":
+        if not is_admin:
+            refusal = _department_stage_refusal(request.user, employee, record.department_id)
+            if refusal is not None:
+                return refusal
+    elif not is_admin and not (role in roles or any(item in role for item in roles) or recipient_match):
         return Response({"error": "You are not authorized for this approval stage"}, status=status.HTTP_403_FORBIDDEN)
     if record.requester_id == request.user.id:
         return Response({"error": "The requester cannot approve their own requisition"}, status=status.HTTP_403_FORBIDDEN)
@@ -361,7 +393,7 @@ def stores_requisition_approve(request: Request, requisition_id: int) -> Respons
     role = (employee.role.name if employee and employee.role else "").upper()
     is_admin = request.user.is_superuser or role in {"ADMIN", "SYSTEM_ADMINISTRATOR"}
     stages = {
-        "PENDING_DEPARTMENT": ("department", {"MANAGER", "DEPARTMENT_MANAGER", "HR_MANAGER"}),
+        "PENDING_DEPARTMENT": ("department", set()),  # by permission + Department.head (E1)
         "PENDING_PROCUREMENT": ("procurement", {"PROCUREMENT", "PROCUREMENT_OFFICER", "STORES", "STORES_OFFICER"}),
         "PENDING_ACCOUNTS": ("accounts", {"ACCOUNTS", "ACCOUNTANT", "FINANCE"}),
         "PENDING_GENERAL_MANAGER": ("general_manager", {"GENERAL_MANAGER", "MANAGER"}),
@@ -372,10 +404,13 @@ def stores_requisition_approve(request: Request, requisition_id: int) -> Respons
     if stage is None:
         return Response({"error": "This requisition is no longer awaiting approval"}, status=status.HTTP_400_BAD_REQUEST)
     stage_name, allowed_roles = stage
-    if not is_admin and not (role in allowed_roles or any(item in role for item in allowed_roles)):
+    if stage_name == "department":
+        if not is_admin:
+            refusal = _department_stage_refusal(request.user, employee, record.department_id)
+            if refusal is not None:
+                return refusal
+    elif not is_admin and not (role in allowed_roles or any(item in role for item in allowed_roles)):
         return Response({"error": "You are not authorized for this approval stage"}, status=status.HTTP_403_FORBIDDEN)
-    if stage_name == "department" and not is_admin and employee.department_id != record.department_id:
-        return Response({"error": "Only the requester's department can approve this stage"}, status=status.HTTP_403_FORBIDDEN)
     if record.requester_id == request.user.id:
         return Response({"error": "The requester cannot approve their own requisition"}, status=status.HTTP_403_FORBIDDEN)
 
