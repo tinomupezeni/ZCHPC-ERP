@@ -100,6 +100,10 @@ const LeaveApplications = () => {
     }
   };
 
+  // The server's reason (e.g. own request, not enough balance), when it gave one.
+  const serverError = (error: unknown): string | undefined =>
+    (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
+
   const handleApprove = async (id: number) => {
     try {
       // Get current user ID from localStorage or auth context
@@ -115,7 +119,7 @@ const LeaveApplications = () => {
       setIsDetailModalOpen(false);
     } catch (error) {
       console.error("Failed to approve leave request:", error);
-      toast.error("Failed to approve leave request");
+      toast.error(serverError(error) ?? "Failed to approve leave request");
     }
   };
 
@@ -134,7 +138,7 @@ const LeaveApplications = () => {
       setIsDetailModalOpen(false);
     } catch (error) {
       console.error("Failed to reject leave request:", error);
-      toast.error("Failed to reject leave request");
+      toast.error(serverError(error) ?? "Failed to reject leave request");
     }
   };
 
