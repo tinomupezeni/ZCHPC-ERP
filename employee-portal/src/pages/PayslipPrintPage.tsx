@@ -165,8 +165,8 @@ export function PayslipPrintPage() {
         </table>
 
         <p className="pr-print-note">
-          Indicative figures: tax and deductions follow the rules configured for this
-          evaluation and are not an official statement of pay.
+          Indicative figures: tax and deductions follow the rules configured in this
+          version and are not an official statement of pay.
         </p>
         {payslip.notes && <p className="pr-print-note">Notes: {payslip.notes}</p>}
       </div>
