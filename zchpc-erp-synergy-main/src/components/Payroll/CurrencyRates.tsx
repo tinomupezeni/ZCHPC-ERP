@@ -89,8 +89,9 @@ const CurrencyRates = () => {
     }
   };
 
+  // GET /payroll/rates/ returns rate_date and zig_to_usd_rate (ZiG per USD).
   const filteredRates = rates.filter(rate =>
-    rate.date.toLowerCase().includes(searchTerm.toLowerCase())
+    String(rate.rate_date ?? "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -175,13 +176,13 @@ const CurrencyRates = () => {
               filteredRates.map((rate) => (
                 <tr key={rate.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {rate.date}
+                    {rate.rate_date}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatUSD(1)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatZIG(rate.average)}
+                    {formatZIG(Number(rate.zig_to_usd_rate))}
                   </td>
                 </tr>
               ))

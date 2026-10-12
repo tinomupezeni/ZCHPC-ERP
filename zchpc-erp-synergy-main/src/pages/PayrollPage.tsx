@@ -4,7 +4,6 @@ import CurrencyRates from "@/components/Payroll/CurrencyRates";
 import Deductions from "@/components/Payroll/Deductions";
 import PayrollDashboard from "@/components/Payroll/PayrollDashboard";
 import PayslipGeneration from "@/components/Payroll/PayslipGeneration";
-import ProcessPayroll from "@/components/Payroll/ProcessPayroll";
 import SalarySetup from "@/components/Payroll/SalarySetup";
 import TaxConfig from "@/components/TaxConfig";
 import PayrollReports from "@/components/Payroll/PayrollReports";
@@ -30,7 +29,9 @@ const PayrollPage = ({openTab} :PayrollProps) => {
       case '/payroll/deductions':
         return <Deductions />
       case '/payroll/process-payroll':
-        return <ProcessPayroll />
+        // The working screen: process a month, list, approve. ProcessPayroll
+        // called Server methods that don't exist and crashed on open.
+        return <PayrollDashboard />
       case '/payroll/tax-tables':
         return <TaxConfig />
       case '/payroll/payroll-period':
