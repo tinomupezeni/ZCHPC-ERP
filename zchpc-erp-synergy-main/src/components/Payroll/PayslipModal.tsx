@@ -58,7 +58,7 @@ export default function PayslipModal({ PayrollRecord, setShowPayslip }) {
               <div className="space-y-2 text-sm">
                 <p>
                   <span className="text-gray-500">Name:</span>{" "}
-                  {PayrollRecord.employee_name} {PayrollRecord.employee_surname}
+                  {PayrollRecord.employee_name}
                 </p>
                 <p>
                   <span className="text-gray-500">Employee ID:</span>{" "}
@@ -66,7 +66,7 @@ export default function PayslipModal({ PayrollRecord, setShowPayslip }) {
                 </p>
                 <p>
                   <span className="text-gray-500">Department:</span>{" "}
-                  {PayrollRecord.employee_department}
+                  {PayrollRecord.department}
                 </p>
               </div>
             </div>

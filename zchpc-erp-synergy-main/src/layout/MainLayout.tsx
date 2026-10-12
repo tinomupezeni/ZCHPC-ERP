@@ -131,7 +131,9 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
 
       <main
         className={cn(
-          "flex-1 transition-all",
+          // min-w-0: a wide table scrolls inside its own container instead
+          // of stretching the page sideways.
+          "flex-1 min-w-0 transition-all",
           !collapsed ? "ml-[260px]" : "ml-[70px]"
         )}
       >
