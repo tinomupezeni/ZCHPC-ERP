@@ -25,15 +25,21 @@ import {
   deletePayslip, 
   approvePayslip, 
   processPayroll,
-  PayrollRecord 
+  getPayslipDetail,
+  payrollErrorMessage,
+  PayrollRecord,
+  PayslipDetail,
 } from "@/services/payroll.services";
 import { getDepartment } from "@/services/hr.services";
+
+const initials = (name?: string) =>
+  (name ?? "").split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("");
 
 const PayrollDashboard = () => {
   // State
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [showPayslip, setShowPayslip] = useState(false);
-  const [selectedRecord, setSelectedRecord] = useState<PayrollRecord | null>(null);
+  const [selectedRecord, setSelectedRecord] = useState<PayslipDetail | null>(null);
   
   // Data State
   const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>([]);
@@ -153,7 +159,17 @@ const PayrollDashboard = () => {
       // Optimistic update
       setPayrollRecords(prev => prev.filter(r => r.id !== id));
     } catch (error) {
-      toast.error("Failed to delete payslip");
+      toast.error(payrollErrorMessage(error, "Failed to delete payslip"));
+    }
+  };
+
+  // The list row has no deduction breakdown; the modal needs the detail.
+  const handleViewPayslip = async (record: PayrollRecord) => {
+    try {
+      setSelectedRecord(await getPayslipDetail(record.id));
+      setShowPayslip(true);
+    } catch (error) {
+      toast.error(payrollErrorMessage(error, "Failed to load payslip"));
     }
   };
 
@@ -166,7 +182,7 @@ const PayrollDashboard = () => {
         prev.map(r => r.id === record.id ? { ...r, status: "Processed" } : r)
       );
     } catch (error) {
-      toast.error("Failed to approve");
+      toast.error(payrollErrorMessage(error, "Failed to approve"));
     }
   };
 
@@ -177,12 +193,12 @@ const PayrollDashboard = () => {
     }
     
     const headers = [
-      "Employee ID", "Name", "Department", "Base USD", "Base ZiG", "Net USD", "Net ZiG", "Status"
+      "Employee ID", "Name", "Department", "Gross USD", "Gross ZiG", "Net USD", "Net ZiG", "Status"
     ];
     
     const csvRows = filteredRecords.map(r => 
-      `"${r.employee_id}","${r.employee_name} ${r.employee_surname}","${r.employee_department}",` +
-      `"${r.base_salary_usd}","${r.base_salary_zig}","${r.net_salary_usd}","${r.net_salary_zig}","${r.status}"`
+      `"${r.employee_id}","${r.employee_name}","${r.department}",` +
+      `"${r.gross_usd}","${r.gross_zig}","${r.net_salary_usd}","${r.net_salary_zig}","${r.status}"`
     );
 
     const csvContent = [headers.join(","), ...csvRows].join("\n");
@@ -200,11 +216,10 @@ const PayrollDashboard = () => {
 
   const filteredRecords = payrollRecords.filter((record) => {
     const matchesSearch = 
-        record.employee_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        record.employee_surname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        record.employee_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         record.employee_id?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesDepartment = selectedDepartment === "All Departments" || record.employee_department === selectedDepartment;
+    const matchesDepartment = selectedDepartment === "All Departments" || record.department === selectedDepartment;
     const matchesStatus = selectedStatus === "All Statuses" || record.status === selectedStatus;
 
     return matchesSearch && matchesDepartment && matchesStatus;
@@ -301,6 +316,7 @@ const PayrollDashboard = () => {
               onChange={(e) => { setSelectedStatus(e.target.value); setCurrentPage(1); }}
             >
               <option>All Statuses</option>
+              <option>Draft</option>
               <option>Processed</option>
               <option>Pending</option>
               <option>Failed</option>
@@ -315,7 +331,7 @@ const PayrollDashboard = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                {["Employee", "Department", "Base (USD)", "Base (ZiG)", "Net (USD)", "Net (ZiG)", "Status", ""].map((h, i) => (
+                {["Employee", "Department", "Gross (USD)", "Gross (ZiG)", "Net (USD)", "Net (ZiG)", "Status", ""].map((h, i) => (
                     <th key={i} className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider ${i > 1 && i < 6 ? 'text-right' : 'text-left'}`}>
                         {h}
                     </th>
@@ -331,7 +347,7 @@ const PayrollDashboard = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold">
-                          {record.employee_name?.[0]}{record.employee_surname?.[0]}
+                          {initials(record.employee_name)}
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900">{record.employee_name} </div>
@@ -339,9 +355,9 @@ const PayrollDashboard = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-500">{record.employee_department}</td>
-                    <td className="px-6 py-4 text-sm text-right font-medium">{formatUSD(record.base_salary_usd)}</td>
-                    <td className="px-6 py-4 text-sm text-right font-medium">{formatZIG(record.base_salary_zig)}</td>
+                    <td className="px-6 py-4 text-sm text-gray-500">{record.department}</td>
+                    <td className="px-6 py-4 text-sm text-right font-medium">{formatUSD(record.gross_usd)}</td>
+                    <td className="px-6 py-4 text-sm text-right font-medium">{formatZIG(record.gross_zig)}</td>
                     <td className="px-6 py-4 text-sm text-right text-green-600 font-bold">{formatUSD(record.net_salary_usd)}</td>
                     <td className="px-6 py-4 text-sm text-right text-green-600 font-bold">{formatZIG(record.net_salary_zig)}</td>
                     <td className="px-6 py-4">{getStatusBadge(record.status)}</td>
@@ -363,7 +379,7 @@ const PayrollDashboard = () => {
                              )}
                              <MenuItem>
                                {({ active }) => (
-                                 <button onClick={() => { setSelectedRecord(record); setShowPayslip(true); }} className={`${active ? "bg-blue-50 text-blue-700" : "text-gray-700"} flex w-full items-center px-4 py-2 text-sm`}>
+                                 <button onClick={() => handleViewPayslip(record)} className={`${active ? "bg-blue-50 text-blue-700" : "text-gray-700"} flex w-full items-center px-4 py-2 text-sm`}>
                                    <Eye className="mr-2 h-4 w-4" /> View Payslip
                                  </button>
                                )}
@@ -425,13 +441,13 @@ const PayrollDashboard = () => {
          <div className="bg-white p-6 rounded-xl shadow-sm border border-blue-100">
             <p className="text-sm text-blue-600 font-medium">Total Gross (USD)</p>
             <p className="text-2xl font-bold text-gray-900 mt-2">
-                {formatUSD(payrollRecords.reduce((sum, r) => sum + (Number(r.base_salary_usd) || 0), 0))}
+                {formatUSD(payrollRecords.reduce((sum, r) => sum + (Number(r.gross_usd) || 0), 0))}
             </p>
          </div>
          <div className="bg-white p-6 rounded-xl shadow-sm border border-green-100">
             <p className="text-sm text-green-600 font-medium">Total Gross (ZiG)</p>
             <p className="text-2xl font-bold text-gray-900 mt-2">
-                {formatZIG(payrollRecords.reduce((sum, r) => sum + (Number(r.base_salary_zig) || 0), 0))}
+                {formatZIG(payrollRecords.reduce((sum, r) => sum + (Number(r.gross_zig) || 0), 0))}
             </p>
          </div>
          <div className="bg-white p-6 rounded-xl shadow-sm border border-yellow-100">

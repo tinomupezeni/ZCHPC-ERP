@@ -1,4 +1,3 @@
-import { Download } from "lucide-react";
 import { format } from "date-fns";
 import { formatUSD, formatZIG } from "../ui/utils";
 
@@ -31,7 +30,7 @@ export default function PayslipModal({ PayrollRecord, setShowPayslip }) {
   const totalDeductionsZIG = deductions.reduce((sum, d) => sum + d.zig, 0);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="p-6 border-b flex justify-between items-center">
@@ -42,10 +41,6 @@ export default function PayslipModal({ PayrollRecord, setShowPayslip }) {
               className="text-gray-500 hover:text-gray-700"
             >
               Close
-            </button>
-            <button className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg">
-              <Download className="h-4 w-4" />
-              Download PDF
             </button>
           </div>
         </div>
@@ -58,7 +53,7 @@ export default function PayslipModal({ PayrollRecord, setShowPayslip }) {
               <div className="space-y-2 text-sm">
                 <p>
                   <span className="text-gray-500">Name:</span>{" "}
-                  {PayrollRecord.employee_name} {PayrollRecord.employee_surname}
+                  {PayrollRecord.employee_name}
                 </p>
                 <p>
                   <span className="text-gray-500">Employee ID:</span>{" "}
@@ -66,7 +61,7 @@ export default function PayslipModal({ PayrollRecord, setShowPayslip }) {
                 </p>
                 <p>
                   <span className="text-gray-500">Department:</span>{" "}
-                  {PayrollRecord.employee_department}
+                  {PayrollRecord.department}
                 </p>
               </div>
             </div>
