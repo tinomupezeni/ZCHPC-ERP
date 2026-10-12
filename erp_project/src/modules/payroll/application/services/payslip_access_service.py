@@ -73,6 +73,28 @@ class PayslipAccessService:
         payslip.save()
         return payslip
 
+    def delete_payslip(self, actor: PayrollActor, payslip_id: int) -> None:
+        """
+        Delete a Draft payslip so a wrong run can be regenerated (PY-5).
+
+        Raises:
+            AuthorizationError: Whether or not the payslip exists.
+            NotFoundError: Only once the actor is authorized.
+            ValidationError: The payslip is past Draft; nothing is deleted.
+        """
+        target = self._target(payslip_id)
+        self._policy.authorize_delete_payslip(actor, target)
+        if target is None:
+            raise NotFoundError("Payslip not found")
+
+        payslip = Payroll.objects.get(id=payslip_id)
+        if payslip.status != "Draft":
+            raise ValidationError(
+                f"Only a Draft payslip can be deleted; this one is {payslip.status}.",
+                code="PAYSLIP_NOT_DRAFT",
+            )
+        payslip.delete()
+
     def get_period_summary(self, actor: PayrollActor, year: int, month: int) -> dict:
         """
         Aggregated totals for a period.

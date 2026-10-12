@@ -384,13 +384,16 @@ const PayrollDashboard = () => {
                                  </button>
                                )}
                              </MenuItem>
-                             <MenuItem>
-                               {({ active }) => (
-                                 <button onClick={() => handleDelete(record.id)} className={`${active ? "bg-red-50 text-red-700" : "text-gray-700"} flex w-full items-center px-4 py-2 text-sm`}>
-                                   <Trash2 className="mr-2 h-4 w-4" /> Delete
-                                 </button>
-                               )}
-                             </MenuItem>
+                             {/* PY-5: only a Draft payslip can be deleted */}
+                             {record.status === "Draft" && (
+                               <MenuItem>
+                                 {({ active }) => (
+                                   <button onClick={() => handleDelete(record.id)} className={`${active ? "bg-red-50 text-red-700" : "text-gray-700"} flex w-full items-center px-4 py-2 text-sm`}>
+                                     <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                   </button>
+                                 )}
+                               </MenuItem>
+                             )}
                            </div>
                         </MenuItems>
                       </Menu>

@@ -94,9 +94,10 @@ const Recruitment = () => {
   // Fetch real departments for the filter
   const fetchDepartmentFilter = async () => {
     try {
-      const data = await getDepartment();
-      // Map to strings for the filter dropdown
-      const deptNames = data.map((d: any) => d.name);
+      // getDepartment() returns the axios response; the list is its data
+      // (it called .map on the response and always fell into the catch).
+      const { data } = await getDepartment();
+      const deptNames = (Array.isArray(data) ? data : []).map((d: any) => d.name);
       setDepartments(["All Departments", ...deptNames]);
     } catch (e) {
       console.error("Failed to load departments for filter");

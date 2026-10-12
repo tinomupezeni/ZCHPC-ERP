@@ -317,6 +317,15 @@ class PayslipDetailView(APIView):
         return Response(data)
 
 
+    def delete(self, request, payslip_id):
+        """Delete a Draft payslip (PY-5); anything past Draft is refused."""
+        try:
+            _payslips.delete_payslip(payroll_actor_from_request(request), payslip_id)
+        except DomainException as e:
+            return error_response(e)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class PayslipApproveView(APIView):
     """Approve a payslip."""
 
