@@ -18,6 +18,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { DashboardSummary } from '@/types/dashboard.types';
+import { ComingSoonTag } from '@/components/dashboard/ComingSoonTag';
 
 interface AdminDashboardProps {
   data: DashboardSummary | null;
@@ -181,6 +182,7 @@ export function AdminDashboard({ data }: AdminDashboardProps) {
                   </div>
                   <h3 className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">
                     {mod.label}
+                    <ComingSoonTag href={mod.href} />
                   </h3>
                   <p className="text-sm text-slate-500 mt-1">{mod.description}</p>
                   <div className="flex items-center gap-1 text-blue-600 text-sm font-medium mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -213,6 +215,7 @@ export function AdminDashboard({ data }: AdminDashboardProps) {
                     </div>
                     <span className="text-sm font-medium text-slate-700 group-hover:text-blue-700 transition-colors">
                       {action.label}
+                      <ComingSoonTag href={action.href} />
                     </span>
                   </div>
                   <ArrowRight className="h-4 w-4 text-slate-400 group-hover:text-blue-600 transition-colors" />

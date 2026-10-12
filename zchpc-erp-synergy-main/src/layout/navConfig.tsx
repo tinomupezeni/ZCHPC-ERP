@@ -25,8 +25,8 @@ export interface SidebarItemConfig {
  * What the evaluation leaves out (PLAN §4a). This list is the policy; edit
  * only here.
  * - "hidden": dropped from the sidebar.
- * - "not-available": kept in the sidebar, marked "Not available".
- * Either way MainLayout renders "Not available in this evaluation" for the
+ * - "not-available": kept in the sidebar, marked "Coming soon".
+ * Either way MainLayout renders the "Coming soon" page for the
  * route instead of the page, so a direct URL never reaches mock data.
  * A path also covers its sub-paths. "action:" keys mark a single control.
  */

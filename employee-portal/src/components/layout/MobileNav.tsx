@@ -67,7 +67,7 @@ export function MobileNav() {
                 >
                   {item.label}
                   {availabilityFor(item.path) === 'not-available' && (
-                    <span className="sr-only"> (not available)</span>
+                    <span className="sr-only"> (coming soon)</span>
                   )}
                 </span>
               </>

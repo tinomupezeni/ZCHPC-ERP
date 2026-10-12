@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
 import type { DashboardSummary } from '@/types/dashboard.types';
 import { leaveBalanceTile } from '@/components/dashboard/leaveBalanceTile';
+import { ComingSoonTag } from '@/components/dashboard/ComingSoonTag';
 
 interface StaffDashboardProps {
   data: DashboardSummary | null;
@@ -113,6 +114,7 @@ export function StaffDashboard({ data }: StaffDashboardProps) {
                   </div>
                   <h3 className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">
                     {action.label}
+                    <ComingSoonTag href={action.href} />
                   </h3>
                   <p className="text-sm text-slate-500 mt-1">{action.description}</p>
                   <div className="flex items-center gap-1 text-blue-600 text-sm font-medium mt-3 opacity-0 group-hover:opacity-100 transition-opacity">

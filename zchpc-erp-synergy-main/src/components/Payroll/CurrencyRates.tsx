@@ -129,11 +129,11 @@ const CurrencyRates = () => {
           ) : (
             <button
               disabled
-              title="Not available in this evaluation"
+              title="Coming soon"
               className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-400 rounded-lg cursor-not-allowed"
             >
               <Download className="h-4 w-4" />
-              Fetch Today's Rate (not available in this evaluation)
+              Fetch Today's Rate (coming soon)
             </button>
           )}
           <button

@@ -43,7 +43,7 @@ describe('leave-balance tile while not available', () => {
   it('gives no figure', () => {
     expect(leaveBalanceTile(null, employee, 'days')).toEqual({
       value: '—',
-      unit: 'Not available',
+      unit: 'Coming soon',
     });
   });
 
@@ -53,19 +53,19 @@ describe('leave-balance tile while not available', () => {
     ['manager', ManagerDashboard, 'My Leave Balance'],
     ['accountant', AccountantDashboard, 'My Leave Balance'],
     ['procurement', ProcurementDashboard, 'My Leave Balance'],
-  ])('%s dashboard marks the tile "Not available"', (_role, Dashboard, label) => {
+  ])('%s dashboard marks the tile "Coming soon"', (_role, Dashboard, label) => {
     render(
       <MemoryRouter>
         <Dashboard data={null} />
       </MemoryRouter>
     );
 
-    // The smallest element holding both the label and "Not available": the tile.
+    // The smallest element holding both the label and "Coming soon": the tile.
     let tile: HTMLElement = screen.getByText(label);
-    while (!tile.textContent?.includes('Not available') && tile.parentElement) {
+    while (!tile.textContent?.includes('Coming soon') && tile.parentElement) {
       tile = tile.parentElement;
     }
-    expect(tile.textContent).toContain('Not available');
+    expect(tile.textContent).toContain('Coming soon');
     expect(tile.textContent).not.toContain('21');
     expect(tile.textContent).toContain('—');
   });

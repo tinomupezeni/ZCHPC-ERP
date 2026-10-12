@@ -325,7 +325,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                             isActive ? 'text-blue-100' : 'text-slate-400'
                           )}
                         >
-                          Not available
+                          Coming soon
                         </span>
                       )}
                       {item.path === PURCHASE_REQUESTS_PATH && purchaseRequestActionCount > 0 && (
