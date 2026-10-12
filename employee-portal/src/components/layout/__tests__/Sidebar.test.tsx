@@ -484,15 +484,15 @@ describe('Sidebar - evaluation availability (navAvailability)', () => {
     }
   );
 
-  it('keeps Leave and Payslips in the menu, marked "Not available"', () => {
+  it('keeps Leave and Payslips in the menu, marked "Coming soon"', () => {
     mockRoleGroup = 'staff';
     mockUseActionCount.mockReturnValue(0);
     renderSidebar();
 
-    expect(screen.getByRole('link', { name: /^leave/i })).toHaveTextContent(/not available/i);
-    expect(screen.getByRole('link', { name: /^payslips/i })).toHaveTextContent(/not available/i);
+    expect(screen.getByRole('link', { name: /^leave/i })).toHaveTextContent(/coming soon/i);
+    expect(screen.getByRole('link', { name: /^payslips/i })).toHaveTextContent(/coming soon/i);
     expect(screen.getByRole('link', { name: /^attendance/i })).not.toHaveTextContent(
-      /not available/i
+      /coming soon/i
     );
   });
 });

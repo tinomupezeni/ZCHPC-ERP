@@ -2,12 +2,12 @@ import { availabilityFor } from '@/components/layout/navAvailability';
 import type { Employee } from '@/types/auth.types';
 import type { DashboardSummary } from '@/types/dashboard.types';
 
-export const NOT_AVAILABLE_UNIT = 'Not available';
+export const NOT_AVAILABLE_UNIT = 'Coming soon';
 
 /**
  * Value and unit of a role dashboard's leave-balance tile. While the
- * evaluation marks the tile not available, it shows a dash and "Not
- * available" instead of a figure the API cannot back.
+ * evaluation marks the tile not available, it shows a dash and "Coming
+ * soon" instead of a figure the API cannot back.
  */
 export function leaveBalanceTile(
   data: DashboardSummary | null,

@@ -78,7 +78,7 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
             {item.title}
             {notAvailable && (
               <span className="ml-2 text-[10px] font-normal text-slate-400">
-                Not available
+                Coming soon
               </span>
             )}
           </span>

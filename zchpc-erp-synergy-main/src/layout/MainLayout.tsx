@@ -139,7 +139,7 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
           {hasNoModules ? (
             <WorkIsInPortal />
           ) : availabilityFor(location.pathname) ? (
-            <NotAvailable />
+            <NotAvailable homePath={filteredNavItems[0]?.path} />
           ) : (
             children
           )}

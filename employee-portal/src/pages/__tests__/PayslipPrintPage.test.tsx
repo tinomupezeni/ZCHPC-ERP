@@ -70,11 +70,11 @@ describe('PayslipPrintPage', () => {
     getPayslip.mockReset();
   });
 
-  it('is "Not available" while the evaluation lists payslips, and fetches nothing', () => {
+  it('is "Coming soon" while the evaluation lists payslips, and fetches nothing', () => {
     payslipsAvailable = false;
     renderAt('/portal/payslips/7/print');
 
-    expect(screen.getByText('Not available in this evaluation')).toBeTruthy();
+    expect(screen.getByText('Coming soon')).toBeTruthy();
     expect(getPayslip).not.toHaveBeenCalled();
   });
 

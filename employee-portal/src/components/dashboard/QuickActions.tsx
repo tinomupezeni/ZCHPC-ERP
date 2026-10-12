@@ -5,6 +5,7 @@ import {
   CalendarDays,
   FileText,
 } from 'lucide-react';
+import { ComingSoonTag } from '@/components/dashboard/ComingSoonTag';
 
 interface QuickAction {
   icon: typeof Clock;
@@ -52,7 +53,7 @@ export function QuickActions() {
                 >
                   <action.icon className="h-5 w-5 text-white" />
                 </div>
-                <h3 className="font-medium text-sm">{action.label}</h3>
+                <h3 className="font-medium text-sm">{action.label}<ComingSoonTag href={action.href} /></h3>
                 <p className="text-xs text-muted-foreground mt-1">
                   {action.description}
                 </p>

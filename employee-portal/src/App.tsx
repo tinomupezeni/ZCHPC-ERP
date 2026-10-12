@@ -119,7 +119,7 @@ function App() {
             <Route path="/portal/stores-requisitions" element={<StoresRequisitionsPage />} />
             <Route path="/portal/comparative-schedules" element={<ComparativeSchedulesPage />} />
             <Route path="/portal/payslips" element={<PayslipsPage />} />
-            {/* Links the evaluation hides: "Not available", never /careers */}
+            {/* Links this version hides: "Coming soon", never /careers */}
             {HIDDEN_PATHS.map((path) => (
               <Route key={path} path={`${path}/*`} element={<NotAvailablePage />} />
             ))}

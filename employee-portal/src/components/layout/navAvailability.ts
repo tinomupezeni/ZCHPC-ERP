@@ -2,8 +2,8 @@
  * What the evaluation leaves out (PLAN §4a). This list is the policy; edit
  * only here.
  * - 'hidden': dropped from the sidebar and the mobile nav.
- * - 'not-available': kept in the navigation, marked "Not available".
- * Either way MainLayout renders "Not available in this evaluation" for the
+ * - 'not-available': kept in the navigation, marked "Coming soon".
+ * Either way MainLayout renders the "Coming soon" page for the
  * route instead of the page, so a direct URL never reaches a broken page or
  * falls through to /careers. A path also covers its sub-paths.
  */
