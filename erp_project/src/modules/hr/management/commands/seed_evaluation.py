@@ -58,6 +58,7 @@ from modules.procurement.application.authorization import PurchaseRequestPermiss
 # - department heads see their own department's queues and no payroll; who
 #   heads a department is Department.head, not the role name (INT-01 Q1, Q2)
 # - HR runs payroll and holds payroll.* (A-10, A-11)
+# - HR runs recruitment and holds recruitment.* (owner, 2026-10-12)
 # - procurement only processes (A-1)
 # - GM and Director are real roles (A-1)
 # - staff get self-service only: the portal and raising their own requests
@@ -68,7 +69,7 @@ _SELF_SERVICE = ["portal.*", P.CREATE, P.VIEW, P.SUBMIT, P.CORRECT, P.RESUBMIT]
 
 ROLE_GRANTS: dict[str, list[str]] = {
     "ADMIN": ["*"],
-    "HUMAN_RESOURCES": [*_SELF_SERVICE, "hr.*", "leave.*", "payroll.*"],
+    "HUMAN_RESOURCES": [*_SELF_SERVICE, "hr.*", "leave.*", "payroll.*", "recruitment.*"],
     "DEPARTMENT_MANAGER": [*_SELF_SERVICE, P.DEPARTMENT_HEAD_APPROVE, P.REJECT],
     "ACCOUNTANT": [*_SELF_SERVICE, P.ACCOUNTS_VERIFY, P.REJECT],
     "GENERAL_MANAGER": [*_SELF_SERVICE, P.GM_RECOMMEND, P.REJECT],
