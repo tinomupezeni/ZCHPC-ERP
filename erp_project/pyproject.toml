@@ -113,7 +113,8 @@ show_missing = true
 # =============================================================================
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "erp_root.settings"
+# Kept in step with pytest.ini, which takes precedence while it exists.
+DJANGO_SETTINGS_MODULE = "erp_root.settings_test"
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
