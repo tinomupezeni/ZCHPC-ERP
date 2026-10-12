@@ -259,6 +259,46 @@ class TestPayslipApproval:
         response = client.post(approve_url(payslip))
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
+    # PY-7 (A-10): nobody approves their own payslip, whatever they hold.
+    # Found on the local stack 2026-10-12: HR approved her own payslip (200).
+    @pytest.mark.parametrize(
+        "grants, suffix",
+        [([P.PAYSLIP_APPROVE], "S1"), (["payroll.*"], "S2"), (["*"], "S3")],
+    )
+    def test_nobody_approves_their_own_payslip(self, grants, suffix):
+        client, me = client_with(*grants, name="SELF_APPROVER", suffix=suffix)
+        own = make_payslip(me)
+
+        response = client.post(approve_url(own))
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN, response.data
+        assert "own payslip" in str(response.data).lower()
+        own.refresh_from_db()
+        assert own.status == "Draft"
+
+    def test_a_payroll_wildcard_holder_still_approves_someone_elses(self, victim_payslip):
+        client, me = client_with("payroll.*", name="SELF_APPROVER", suffix="S4")
+        make_payslip(me)
+
+        response = client.post(approve_url(victim_payslip))
+
+        assert response.status_code == status.HTTP_200_OK, response.data
+        victim_payslip.refresh_from_db()
+        assert victim_payslip.status == "Processed"
+
+    def test_service_refuses_self_approval(self):
+        me = make_employee("Self", "S5")
+        own = make_payslip(me)
+        actor = PayrollActor(
+            employee_id=me.id,
+            permissions=PermissionSet.from_list([P.PAYSLIP_APPROVE]),
+        )
+
+        with pytest.raises(AuthorizationError):
+            PayslipAccessService().approve_payslip(actor, own.id)
+        own.refresh_from_db()
+        assert own.status == "Draft"
+
     def test_service_layer_denial_leaves_status_unchanged(self, victim_payslip):
         actor = PayrollActor.from_permissions(PermissionSet.from_list([P.PAYSLIP_VIEW]))
         with pytest.raises(AuthorizationError):

@@ -17,7 +17,7 @@ from modules.payroll.application.authorization import (
     PayslipTarget,
 )
 from modules.payroll.infrastructure.persistence.models import Payroll
-from shared.domain.exceptions import NotFoundError, ValidationError
+from shared.domain.exceptions import AuthorizationError, NotFoundError, ValidationError
 
 
 class PayslipAccessService:
@@ -54,6 +54,13 @@ class PayslipAccessService:
         self._policy.authorize_approve_payslip(actor, target)
         if target is None:
             raise NotFoundError("Payslip not found")
+        # PY-7 (A-10): separation of duties; no capability covers one's own
+        # payslip. An actor with no employee profile has no payslip to approve.
+        if actor is not None and actor.employee_id is not None and actor.employee_id == target.employee_id:
+            raise AuthorizationError(
+                "You cannot approve your own payslip; another payroll approver must approve it.",
+                code="PAYSLIP_SELF_APPROVAL",
+            )
 
         payslip = Payroll.objects.get(id=payslip_id)
         if payslip.status != "Draft":
