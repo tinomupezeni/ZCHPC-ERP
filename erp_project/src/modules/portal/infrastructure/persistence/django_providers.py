@@ -351,6 +351,14 @@ class DjangoLeaveProvider(ILeaveProvider):
 class DjangoPayrollProvider(IPayrollProvider):
     """Provider for payroll data from Payroll module."""
 
+    @staticmethod
+    def _total_deductions(payslip, currency: str) -> Decimal:
+        fields = ("paye", "aids_levy", "nssa_employee", "total_deductions")
+        return sum(
+            (Decimal(str(getattr(payslip, f"{f}_{currency}") or 0)) for f in fields),
+            Decimal("0"),
+        )
+
     def _to_dto(self, payslip) -> PayslipDTO:
         return PayslipDTO(
             id=payslip.id,
@@ -369,8 +377,10 @@ class DjangoPayrollProvider(IPayrollProvider):
             aids_levy_zig=Decimal(str(payslip.aids_levy_zig or 0)),
             nssa_employee_usd=Decimal(str(payslip.nssa_employee_usd or 0)),
             nssa_employee_zig=Decimal(str(payslip.nssa_employee_zig or 0)),
-            total_deductions_usd=Decimal(str(payslip.total_deductions_usd or 0)),
-            total_deductions_zig=Decimal(str(payslip.total_deductions_zig or 0)),
+            # The payroll module stores *other* deductions in total_deductions_*
+            # (DjangoPayslipRepository); the total adds the statutory ones.
+            total_deductions_usd=self._total_deductions(payslip, "usd"),
+            total_deductions_zig=self._total_deductions(payslip, "zig"),
             net_salary_usd=Decimal(str(payslip.net_salary_usd or 0)),
             net_salary_zig=Decimal(str(payslip.net_salary_zig or 0)),
             exchange_rate=Decimal(str(payslip.exchange_rate or 1)),

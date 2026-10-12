@@ -20,8 +20,8 @@ export const EVALUATION_AVAILABILITY: Record<string, Availability> = {
   '/portal/inventory': 'hidden',
   '/portal/suppliers': 'hidden',
   '/portal/settings': 'hidden',
-  // Real pages that are not ready (PY-1, A-6, B12)
-  '/portal/payslips': 'not-available',
+  // Real pages that are not ready (A-6, B12). Payslips is back (PY-1-PY-3
+  // verified end to end 2026-10-12).
   '/portal/leave': 'not-available',
   // Dashboard tiles. The leave balance is not real yet (the API returns none);
   // remove together with /portal/leave once it is.

@@ -5,9 +5,11 @@ describe('availabilityFor', () => {
   it('covers a listed path and its sub-paths only', () => {
     expect(availabilityFor('/portal/employees')).toBe('hidden');
     expect(availabilityFor('/portal/employees/12')).toBe('hidden');
-    expect(availabilityFor('/portal/payslips')).toBe('not-available');
+    expect(availabilityFor('/portal/leave')).toBe('not-available');
+    expect(availabilityFor('/portal/leave/requests')).toBe('not-available');
+    expect(availabilityFor('/portal/payslips')).toBeUndefined();
     expect(availabilityFor('/portal/attendance')).toBeUndefined();
-    expect(availabilityFor('/portal/payslips-archive')).toBeUndefined();
+    expect(availabilityFor('/portal/leave-archive')).toBeUndefined();
     expect(availabilityFor('/portal')).toBeUndefined();
   });
 
