@@ -57,6 +57,7 @@ PORTAL_LOGIN_URL = "/api/v2/portal/auth/login/"
 ME_ACCESS_URL = "/api/v2/auth/users/me/access/"
 PR_URL = "/api/v2/procurement/requests/"
 PAYSLIPS_URL = "/api/v2/payroll/payslips/?period=2026-10"
+RECRUITMENT_JOBS_URL = "/api/v2/recruitment/jobs/"
 EMPLOYEES_URL = "/api/v2/hr/employees/"
 LEAVE_PENDING_URL = "/api/v2/leave/requests/pending/"
 PORTAL_DASHBOARD_URL = "/api/v2/portal/dashboard/"
@@ -212,6 +213,16 @@ class TestRoleGrants:
         assert client.get(EMPLOYEES_URL).status_code == status.HTTP_200_OK
         assert client.get(LEAVE_PENDING_URL).status_code == status.HTTP_200_OK
         assert "payroll.*" in client.get(ME_ACCESS_URL).data["permissions"]
+
+    def test_hr_runs_recruitment(self):
+        # Hand checks 2026-10-12: HR got 403 "Failed to load jobs" in synergy.
+        assert client_for("hr").get(RECRUITMENT_JOBS_URL).status_code == status.HTTP_200_OK
+
+    @pytest.mark.parametrize("role_key", ["staff", "hod", "accountant", "gm", "director", "procurement"])
+    def test_only_hr_and_admin_reach_recruitment(self, role_key):
+        response = client_for(role_key).get(RECRUITMENT_JOBS_URL)
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
 
     def test_hod_sees_no_payroll(self):
         client = client_for("hod")
@@ -491,6 +502,18 @@ class TestIdempotencyAndGuards:
         call_command("seed_evaluation", stdout=_Sink())
 
         assert snapshot() == before
+
+    def test_rerun_brings_an_existing_roles_grants_up_to_date(self, seeded):
+        # A grant change reaches an already seeded staging DB by rerunning
+        # seed-eval.sh (which also rotates the eight passwords).
+        hr_role = Role.objects.get(name="HUMAN_RESOURCES")
+        hr_role.permissions = ["portal.*", "hr.*"]
+        hr_role.save(update_fields=["permissions"])
+
+        call_command("seed_evaluation", stdout=_Sink())
+
+        hr_role.refresh_from_db()
+        assert sorted(hr_role.permissions) == sorted(seed.ROLE_GRANTS["HUMAN_RESOURCES"])
 
     def test_refuses_a_non_empty_unmarked_database(self):
         Employees.objects.create(first_name="Real", surname="Person", email="real@zchpc.test")
