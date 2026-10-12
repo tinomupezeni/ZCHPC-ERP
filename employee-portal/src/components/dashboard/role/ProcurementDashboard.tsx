@@ -94,10 +94,10 @@ export function ProcurementDashboard({ data }: ProcurementDashboardProps) {
     {
       icon: ClipboardList,
       label: 'Requisitions',
-      description: 'View pending purchase requisitions',
+      description: 'Process fully approved purchase requests',
       gradient: 'from-orange-500 to-orange-600',
       shadow: 'shadow-orange-500/25',
-      href: '/portal/requisitions',
+      href: '/portal/purchase-requests/procurement',
       badge: null,
     },
     {
