@@ -12,6 +12,11 @@ and an employee still sees only their own Processed/Paid payslips.
 PY-2: each response has the shape the portal reads
 (employee-portal/src/types/payslip.types.ts): PayslipsResponse,
 PayslipDetail and PayslipYearSummary, with amounts as numbers.
+
+Deductions: the payroll module stores *other* deductions in the column named
+total_deductions_* (DjangoPayslipRepository) and derives the total on read.
+The portal showed that column as the total, so a real run gave a $0 total and
+a negative "other deductions" (found on the local stack 2026-10-12).
 """
 
 from datetime import date
@@ -53,13 +58,15 @@ def make_employee(label, **extra):
 
 
 def make_payslip(employee, period, status_="Processed", **amounts):
+    # total_deductions_usd is the payroll module's "other deductions" column
+    # (DjangoPayslipRepository); the total is PAYE + AIDS levy + NSSA + it.
     values = dict(
         base_salary_usd=Decimal("1000.00"),
         base_salary_zig=Decimal("26000.00"),
         total_allowances_usd=Decimal("200.00"),
         total_allowances_zig=Decimal("5200.00"),
         paye_usd=Decimal("120.00"),
-        total_deductions_usd=Decimal("150.00"),
+        total_deductions_usd=Decimal("30.00"),
         net_salary_usd=Decimal("1050.00"),
         net_salary_zig=Decimal("27300.00"),
         exchange_rate=Decimal("26.0000"),
@@ -123,7 +130,7 @@ def test_detail_has_the_portal_shape():
     me = make_employee("Dina", department=department, position=position)
     payslip = make_payslip(
         me, date(2026, 9, 1), aids_levy_usd=Decimal("3.60"), nssa_employee_usd=Decimal("20.00"),
-        notes="September run",
+        total_deductions_usd=Decimal("6.40"), notes="September run",
     )
 
     response = client_for(me).get(detail_url(payslip.id))
@@ -143,12 +150,44 @@ def test_detail_has_the_portal_shape():
         for amount in data[group].values():
             assert set(amount) == AMOUNT_KEYS
     assert data["earnings"]["allowances"]["usd"] == 200.0
-    # 150 total - 120 PAYE - 3.60 AIDS levy - 20 NSSA
+    # 120 PAYE + 3.60 AIDS levy + 20 NSSA + 6.40 other = 150
     assert data["deductions"]["other_deductions"]["usd"] == 6.4
+    assert data["deductions"]["total"]["usd"] == 150.0
+    assert data["summary"]["total_deductions"]["usd"] == 150.0
     assert data["summary"]["net_salary"]["usd"] == 1050.0
     assert data["exchange_rate"] == 26.0
     assert data["notes"] == "September run"
     assert data["created_at"]
+
+
+def test_detail_of_a_payslip_saved_by_the_payroll_module_adds_up():
+    """Saved through the payroll repository, as a payroll run does."""
+    from modules.payroll.domain.entities.payslip import Payslip
+    from modules.payroll.domain.value_objects.payroll_types import PayrollPeriod, PayslipStatus
+    from modules.payroll.infrastructure.persistence.django_payslip_repository import (
+        DjangoPayslipRepository,
+    )
+
+    me = make_employee("Tino")
+    entity = Payslip(
+        id=None, payroll_id=None, employee_id=me.id, period=PayrollPeriod(year=2026, month=9),
+        base_salary_usd=Decimal("950.00"),
+        paye_usd=Decimal("202.50"), aids_levy_usd=Decimal("6.08"),
+        nssa_employee_usd=Decimal("42.75"), other_deductions_usd=Decimal("10.00"),
+        exchange_rate=Decimal("26.75"), status=PayslipStatus.PROCESSED,
+    )
+    entity.calculate_totals()
+    saved = DjangoPayslipRepository().save(entity)
+
+    response = client_for(me).get(detail_url(saved.id))
+
+    assert response.status_code == status.HTTP_200_OK, response.data
+    deductions = response.data["deductions"]
+    assert deductions["other_deductions"]["usd"] == 10.0
+    assert deductions["total"]["usd"] == 261.33
+    assert response.data["summary"]["total_deductions"]["usd"] == 261.33
+    assert response.data["summary"]["net_salary"]["usd"] == 688.67
+    assert round(response.data["summary"]["gross_salary"]["usd"] - deductions["total"]["usd"], 2) == 688.67
 
 
 def test_detail_of_someone_elses_or_a_draft_payslip_is_not_found():
