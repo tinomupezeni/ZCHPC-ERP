@@ -86,6 +86,14 @@ class PayrollAuthorizationPolicy:
         self.require_authenticated(actor)
         self._require_capability(actor, PayrollPermissions.PAYSLIP_PROCESS)
 
+    def authorize_delete_payslip(
+        self, actor: PayrollActor | None, payslip: _HasEmployeeId | None
+    ) -> None:
+        """Deleting a (Draft) payslip is part of running payroll (PY-5)."""
+        self._authorize(
+            actor, PayrollPermissions.PAYSLIP_PROCESS, self._employee_of(payslip)
+        )
+
     def authorize_approve_payslip(
         self, actor: PayrollActor | None, payslip: _HasEmployeeId | None
     ) -> None:

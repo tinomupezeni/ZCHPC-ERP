@@ -307,6 +307,58 @@ class TestPayslipApproval:
         assert victim_payslip.status == "Draft"
 
 
+class TestPayslipDeletion:
+    """PY-5: a wrong run can be regenerated - delete a payslip while it is Draft."""
+
+    def test_process_capability_holder_deletes_a_draft(self, victim_payslip):
+        client, _ = client_with(P.PAYSLIP_PROCESS, suffix="D1")
+
+        response = client.delete(payslip_url(victim_payslip))
+
+        assert response.status_code == status.HTTP_204_NO_CONTENT, getattr(response, "data", None)
+        assert not Payroll.objects.filter(id=victim_payslip.id).exists()
+
+    def test_payroll_wildcard_holder_deletes_a_draft(self, victim_payslip):
+        client, _ = client_with("payroll.*", suffix="D2")
+
+        assert client.delete(payslip_url(victim_payslip)).status_code == status.HTTP_204_NO_CONTENT
+
+    @pytest.mark.parametrize("status_", ["Processed", "Paid"])
+    def test_a_payslip_past_draft_is_refused_with_a_reason(self, victim, status_):
+        payslip = make_payslip(victim, status_=status_)
+        client, _ = client_with("payroll.*", suffix=f"D3{status_[0]}")
+
+        response = client.delete(payslip_url(payslip))
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["code"] == "PAYSLIP_NOT_DRAFT"
+        assert "draft" in response.data["error"].lower()
+        assert status_.lower() in response.data["error"].lower()
+        assert Payroll.objects.filter(id=payslip.id).exists()
+
+    @pytest.mark.parametrize(
+        "grants, suffix",
+        [([P.PAYSLIP_VIEW, P.PAYSLIP_APPROVE], "D4"), (["portal.*"], "D5")],
+    )
+    def test_without_the_process_capability_it_is_refused(self, victim_payslip, grants, suffix):
+        client, _ = client_with(*grants, suffix=suffix)
+
+        assert_denied(client.delete(payslip_url(victim_payslip)))
+        assert Payroll.objects.filter(id=victim_payslip.id).exists()
+
+    def test_an_unknown_payslip_is_not_found_once_authorized(self):
+        client, _ = client_with("payroll.*", suffix="D6")
+
+        response = client.delete("/api/v2/payroll/payslips/999999/")
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_an_unauthorized_actor_cannot_probe_for_existence(self):
+        client, _ = client_with(P.PAYSLIP_VIEW, suffix="D7")
+
+        assert_denied(client.delete("/api/v2/payroll/payslips/999999/"))
+
+
 class TestProcessPayrollBoundary:
     def test_actor_without_capability_cannot_run_payroll_via_api(self):
         client, _ = client_with(P.PAYSLIP_VIEW)
