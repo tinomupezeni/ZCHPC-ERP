@@ -27,12 +27,12 @@ export function ManagerDashboard({ data }: ManagerDashboardProps) {
   const managerStats = [
     {
       label: 'Leave Requests',
-      value: data?.pending_leave_requests ?? 0,
+      value: data?.leave_requests_to_review ?? 0,
       unit: 'pending approval',
       icon: CalendarDays,
       color: 'text-orange-600',
       bg: 'bg-orange-50',
-      urgent: (data?.pending_leave_requests ?? 0) > 0,
+      urgent: (data?.leave_requests_to_review ?? 0) > 0,
     },
     {
       label: 'My Leave Balance',
@@ -70,7 +70,7 @@ export function ManagerDashboard({ data }: ManagerDashboardProps) {
       gradient: 'from-orange-500 to-orange-600',
       shadow: 'shadow-orange-500/25',
       href: '/portal/leave',
-      badge: data?.pending_leave_requests ? `${data.pending_leave_requests} pending` : null,
+      badge: data?.leave_requests_to_review ? `${data.leave_requests_to_review} pending` : null,
     },
     {
       icon: Clock,

@@ -23,6 +23,8 @@ from modules.portal.application.services import (
     CareersService,
 )
 from modules.identity.api.throttles import LoginRateThrottle
+from modules.leave.api.actors import leave_actor_from_request
+from modules.leave.api.views import get_leave_request_service
 from modules.recruitment.api.throttles import RecruitmentApplyThrottle, RecruitmentStatusThrottle
 from modules.portal.infrastructure.persistence.django_providers import (
     DjangoEmployeeProvider,
@@ -181,6 +183,10 @@ def dashboard(request: Request) -> Response:
     try:
         employee_id = _get_employee_id(request)
         data = _dashboard_service.get_dashboard(employee_id)
+        # Same queue as the leave module's pending list for a reviewer
+        data.leave_requests_to_review = get_leave_request_service().count_requests_to_review(
+            leave_actor_from_request(request)
+        )
         return Response(DashboardSerializer(data).data)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

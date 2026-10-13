@@ -28,12 +28,12 @@ export function AdminDashboard({ data }: AdminDashboardProps) {
   const systemStats = [
     {
       label: 'Pending Leave Requests',
-      value: data?.pending_leave_requests ?? 0,
+      value: data?.leave_requests_to_review ?? 0,
       unit: 'system-wide',
       icon: CalendarDays,
       color: 'text-orange-600',
       bg: 'bg-orange-50',
-      urgent: (data?.pending_leave_requests ?? 0) > 0,
+      urgent: (data?.leave_requests_to_review ?? 0) > 0,
     },
     {
       label: 'Expense Claims',

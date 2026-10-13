@@ -78,6 +78,7 @@ class DashboardSerializer(serializers.Serializer):
     monthly_attendance_count = serializers.IntegerField()
     recent_attendance = AttendanceRecordSerializer(many=True)
     pending_leave_requests = serializers.IntegerField()
+    leave_requests_to_review = serializers.IntegerField()
     pending_expense_claims = serializers.IntegerField()
     open_tickets = serializers.IntegerField()
     unread_notifications = serializers.IntegerField()

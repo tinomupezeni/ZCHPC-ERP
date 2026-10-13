@@ -26,6 +26,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
 
+from modules.hr.management.commands.seed_evaluation import ROLE_GRANTS
 from modules.hr.infrastructure.persistence.models import Employees, Role
 from modules.leave.infrastructure.persistence.models import (
     CompanyEvent,
@@ -109,3 +110,37 @@ def test_dashboard_reports_pending_leave_and_events_and_marks_balances_unavailab
     assert [e["title"] for e in response.data["upcoming_events"]] == ["Town hall"]
     assert response.data["upcoming_events"][0]["event_date"] == start.isoformat()
     assert response.data["leave_balances"] is None
+
+
+def test_dashboard_counts_the_reviewers_queue_separately_from_own_requests():
+    """
+    Staging hand check (Mon 2026-10-12): HR's dashboard showed "0 pending" while
+    synergy Leave Applications listed 2. The HR, manager and admin tiles read
+    pending_leave_requests, which counts the viewer's *own* pending requests.
+    leave_requests_to_review is the reviewer's queue: everyone else's pending
+    requests, never their own, and 0 without leave.request.review.
+    """
+    employees = seeded_employees()
+    hr, staff = employees["HUMAN_RESOURCES"], employees["PR_TEST_REQUESTER"]
+    # The migration-created role holds only hr.role.manage; staging's comes from seed_evaluation
+    Role.objects.filter(pk=hr.role_id).update(permissions=ROLE_GRANTS["HUMAN_RESOURCES"])
+    annual = LeaveType.objects.create(name="Annual", default_days_allowed=22)
+    start = date.today() + timedelta(days=7)
+
+    def leave(employee, status_):
+        LeaveRequest.objects.create(
+            employee=employee, leave_type=annual, start_date=start, end_date=start, status=status_
+        )
+
+    leave(staff, "Pending")
+    leave(employees["PR_TEST_GENERAL_MANAGER"], "Pending")
+    leave(staff, "Approved")
+    leave(hr, "Pending")  # HR's own: not in HR's queue
+
+    hr_data = get_dashboard(hr).data
+    assert hr_data["leave_requests_to_review"] == 2
+    assert hr_data["pending_leave_requests"] == 1
+
+    staff_data = get_dashboard(staff).data
+    assert staff_data["leave_requests_to_review"] == 0
+    assert staff_data["pending_leave_requests"] == 1

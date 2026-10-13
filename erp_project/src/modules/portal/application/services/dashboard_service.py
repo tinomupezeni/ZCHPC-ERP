@@ -47,6 +47,10 @@ class DashboardData:
     # Events
     upcoming_events: List[CompanyEventDTO]
 
+    # Leave requests waiting for this user's review (0 without leave.request.review);
+    # pending_leave_requests above counts the user's own requests
+    leave_requests_to_review: int = 0
+
 
 class DashboardService:
     """
