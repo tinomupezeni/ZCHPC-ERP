@@ -170,6 +170,7 @@ class PurchaseRequestAuthorizationPolicy:
         self._require_employee_identity(actor)
         self._require_department_authority(actor, request)
         self._require_not_requester(actor, request)
+        self._require_one_person_per_stage(actor, request, acting_at=RequestStatus.PENDING_DEPARTMENT_HEAD)
 
     def authorize_accounts_verification(
         self, actor: Actor | None, request: PurchaseRequest
@@ -179,6 +180,7 @@ class PurchaseRequestAuthorizationPolicy:
         self._require_permission(actor, PurchaseRequestPermissions.ACCOUNTS_VERIFY)
         self._require_employee_identity(actor)
         self._require_not_requester(actor, request)
+        self._require_one_person_per_stage(actor, request, acting_at=RequestStatus.PENDING_ACCOUNTS)
 
     def authorize_list_budget_codes(self, actor: Actor | None) -> None:
         """Only Accounts (the holder of accounts_verify) may see assignable budget codes."""
@@ -203,6 +205,7 @@ class PurchaseRequestAuthorizationPolicy:
         self._require_permission(actor, PurchaseRequestPermissions.GM_RECOMMEND)
         self._require_employee_identity(actor)
         self._require_not_requester(actor, request)
+        self._require_one_person_per_stage(actor, request, acting_at=RequestStatus.PENDING_GM)
 
     def authorize_director_approval(
         self, actor: Actor | None, request: PurchaseRequest
@@ -212,6 +215,7 @@ class PurchaseRequestAuthorizationPolicy:
         self._require_permission(actor, PurchaseRequestPermissions.DIRECTOR_APPROVE)
         self._require_employee_identity(actor)
         self._require_not_requester(actor, request)
+        self._require_one_person_per_stage(actor, request, acting_at=RequestStatus.PENDING_DIRECTOR)
 
     def authorize_processing(
         self, actor: Actor | None, request: PurchaseRequest
@@ -221,6 +225,7 @@ class PurchaseRequestAuthorizationPolicy:
         self._require_permission(actor, PurchaseRequestPermissions.PROCESS)
         self._require_employee_identity(actor)
         self._require_not_requester(actor, request)
+        self._require_one_person_per_stage(actor, request, acting_at=RequestStatus.PENDING_PROCUREMENT)
 
     def authorize_rejection(
         self, actor: Actor | None, request: PurchaseRequest
@@ -235,6 +240,7 @@ class PurchaseRequestAuthorizationPolicy:
         self._require_employee_identity(actor)
         self._require_stage_authority(actor, request)
         self._require_not_requester(actor, request)
+        self._require_one_person_per_stage(actor, request, acting_at=request.status)
 
     def authorize_correction_and_resubmission(
         self, actor: Actor | None, request: PurchaseRequest
@@ -399,6 +405,34 @@ class PurchaseRequestAuthorizationPolicy:
             return False
         return True
 
+    def _require_one_person_per_stage(
+        self, actor: Actor, request: PurchaseRequest, acting_at: RequestStatus
+    ) -> None:
+        """
+        Each step is done by a different person (A-1, confirmed by the
+        supervisor Fri 2026-10-09): an actor who recorded a decision at any
+        other stage of this request cannot act at the stage it is at now.
+        Admins are not exempt. Acting again at the same stage (a corrected
+        resubmission back at the same desk) is allowed. Processing records no
+        decision stage, so any earlier decision bars the processor.
+
+        Applies only while the request is waiting at `acting_at`, the stage the
+        action belongs to. Otherwise the transition is illegal anyway and the
+        domain refuses it, as for every other check here.
+        """
+        if request.status != acting_at or acting_at not in _STAGE_INDEX:
+            return
+        current = _CURRENT_DECISION_STAGE.get(acting_at)
+        if any(
+            decision.actor_id == actor.employee_id and decision.stage is not current
+            for decision in request.decisions
+        ):
+            raise AuthorizationError(
+                "You have already decided another stage of this request; "
+                "each approval step must be done by a different person",
+                code="ONE_PERSON_PER_STAGE",
+            )
+
     def _require_stage_authority(self, actor: Actor, request: PurchaseRequest) -> None:
         """
         The actor must hold the capability (and context) of the stage the
@@ -439,6 +473,13 @@ _REVIEW_STAGES: list[tuple[RequestStatus, str]] = [
     (RequestStatus.PENDING_PROCUREMENT, PurchaseRequestPermissions.PROCESS),
 ]
 _STAGE_INDEX = {status: index for index, (status, _) in enumerate(_REVIEW_STAGES)}
+# The decision stage a request is currently waiting at; PENDING_PROCUREMENT has none.
+_CURRENT_DECISION_STAGE = {
+    RequestStatus.PENDING_DEPARTMENT_HEAD: DecisionStage.DEPARTMENT_HEAD,
+    RequestStatus.PENDING_ACCOUNTS: DecisionStage.ACCOUNTS,
+    RequestStatus.PENDING_GM: DecisionStage.GM,
+    RequestStatus.PENDING_DIRECTOR: DecisionStage.DIRECTOR,
+}
 _DECISION_STAGE_INDEX = {
     DecisionStage.DEPARTMENT_HEAD: _STAGE_INDEX[RequestStatus.PENDING_DEPARTMENT_HEAD],
     DecisionStage.ACCOUNTS: _STAGE_INDEX[RequestStatus.PENDING_ACCOUNTS],
