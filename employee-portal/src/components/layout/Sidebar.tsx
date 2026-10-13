@@ -70,7 +70,7 @@ const NAV_ITEMS: Record<RoleGroup, NavItem[]> = {
     { path: '/portal/fuel-requisitions', label: 'Fuel Requisitions', icon: Fuel, description: 'Approve fuel requests' },
     { path: '/portal/stores-requisitions', label: 'Stores Requisitions', icon: ClipboardCheck, description: 'Approve stores requests' },
     { path: '/portal/comparative-schedules', label: 'Comparative Schedules', icon: Scale, description: 'Approve schedules' },
-    { path: '/portal/attendance', label: 'Team Attendance', icon: Clock, description: 'Department records' },
+    { path: '/portal/attendance', label: 'My Attendance', icon: Clock, description: 'Clock in/out' },
     { path: '/portal/reports', label: 'Reports', icon: BarChart2, description: 'Team performance' },
     { path: '/portal/payslips', label: 'My Payslips', icon: FileText, description: 'Your earnings' },
   ],
