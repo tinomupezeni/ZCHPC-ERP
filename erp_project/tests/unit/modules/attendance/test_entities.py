@@ -159,23 +159,23 @@ class TestAttendanceRecord:
         assert record.status == AttendanceStatus.ABSENT
 
     def test_status_present(self):
-        """Test present status."""
+        """Test present status (times are stored UTC: 06:00 UTC is 08:00 Harare)."""
         record = AttendanceRecord(
             id=1,
             employee_id=100,
             record_date=date.today(),
-            time_in=ClockTime(hour=8, minute=0),
+            time_in=ClockTime(hour=6, minute=0),
         )
 
         assert record.status == AttendanceStatus.PRESENT
 
     def test_status_late(self):
-        """Test late status (more than 15 minutes after 8:00)."""
+        """Test late status (more than 15 minutes after 8:00 Harare)."""
         record = AttendanceRecord(
             id=1,
             employee_id=100,
             record_date=date.today(),
-            time_in=ClockTime(hour=8, minute=30),  # 30 minutes late
+            time_in=ClockTime(hour=6, minute=30),  # 08:30 Harare, 30 minutes late
         )
 
         assert record.status == AttendanceStatus.LATE

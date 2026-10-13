@@ -3,12 +3,17 @@ Attendance value objects.
 """
 
 from dataclasses import dataclass
-from datetime import time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from shared.domain.base import ValueObject
+
+# Clock times are stored as UTC wall time (settings.TIME_ZONE stays UTC). The
+# working day, and so lateness, is in Harare: convert at read time.
+ATTENDANCE_TIME_ZONE = ZoneInfo("Africa/Harare")
 
 
 class AttendanceStatus(str, Enum):
@@ -75,6 +80,16 @@ class ClockTime(ValueObject):
     def to_minutes(self) -> int:
         """Convert to total minutes from midnight."""
         return self.hour * 60 + self.minute
+
+    def in_attendance_zone(self, on: date) -> "ClockTime":
+        """
+        This stored UTC clock time as Harare wall time, for the record dated `on`.
+
+        The record keeps its UTC date: a clock-in between 00:00 and 02:00 Harare
+        is filed under the previous day (known limitation).
+        """
+        utc = datetime.combine(on, self.to_time(), tzinfo=timezone.utc)
+        return ClockTime.from_time(utc.astimezone(ATTENDANCE_TIME_ZONE).time())
 
     def __str__(self) -> str:
         """String representation."""
