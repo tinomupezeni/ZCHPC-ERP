@@ -73,9 +73,9 @@ export function ManagerDashboard({ data }: ManagerDashboardProps) {
       badge: data?.pending_leave_requests ? `${data.pending_leave_requests} pending` : null,
     },
     {
-      icon: Users,
-      label: 'Team Attendance',
-      description: 'View department attendance',
+      icon: Clock,
+      label: 'My Attendance',
+      description: 'Clock in/out and your history',
       gradient: 'from-blue-500 to-blue-600',
       shadow: 'shadow-blue-500/25',
       href: '/portal/attendance',

@@ -12,6 +12,9 @@ interface QRScannerProps {
   disabled?: boolean;
 }
 
+// QR clock-in is not part of this version; set to false to enable the scanner.
+const COMING_SOON = true;
+
 type ScanStatus = 'idle' | 'scanning' | 'processing' | 'success' | 'error';
 
 export function QRScanner({ onSuccess, disabled }: QRScannerProps) {
@@ -123,15 +126,16 @@ export function QRScanner({ onSuccess, disabled }: QRScannerProps) {
           <CardTitle className="text-base flex items-center gap-2 text-blue-700">
             <QrCode className="h-5 w-5" />
             QR Code Clock In
+            <span className="ml-auto text-[10px] font-normal text-slate-400">Coming soon</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-4">
-            Scan the QR code displayed at the office to clock in securely.
+            QR clock-in is not available yet. Use Clock In for now.
           </p>
           <Button
             onClick={handleOpen}
-            disabled={disabled}
+            disabled={COMING_SOON || disabled}
             className="w-full bg-blue-600 hover:bg-blue-700"
           >
             <Camera className="mr-2 h-4 w-4" />
