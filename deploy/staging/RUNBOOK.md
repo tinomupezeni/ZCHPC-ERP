@@ -242,38 +242,7 @@ credentials file was not read):
 - Check-script gotcha: inside a script sent with `ssh ... bash -s < file`, `docker exec -i` reads the rest of the
   script from stdin. Give such calls `</dev/null` (or drop `-i`).
 
-**Left on the VM after this run:** `~/erp-staging-128c60d.tar.gz` (141 MB), the `erp-staging/*:f70f026` images,
-`~/erp-staging-files-2ec500e/`, `.env.bak-f70f026`, `~/prod-snapshot-2026-10-12.txt`. Remove only with the owner's yes.
-
-### Hand checks (Mon 2026-10-12, ~10:20–10:55, Chrome, staging only; owner logged in each role)
-
-Sessions are per app (origin): logging in to the portal does not end a synergy session. Log out of **both** apps
-between roles, and check the name shown before each role's checks.
-
-| Role | App | Result |
-|---|---|---|
-| Admin | synergy | PASS. `/accounting` "Not available"; sidebar same after reload; no errors |
-| HR | portal | PASS (Payslips, Leave "Not available"). **Attendance crashes** (see 1) |
-| HR | synergy | **FAIL.** HR + Payroll present; Employees, Leave Applications, Calendar, Tax Tables OK. **Process Payroll** and **Currencies** crash (2); **Recruitment** 403 "Failed to load jobs"; **Attendance** 403 shown as "0 records"; Reports: payslips 400, summary 404 |
-| Dept head | portal | PASS. Review queue PR-00009 + PR-00002; Approve/Reject shown. Team Attendance crashes (1) |
-| Dept head | synergy | PASS. "Your work is in the Employee Portal", link → `http://10.50.14.12:13001` |
-| Accountant | portal | PASS. Accounts Verification PR-00004; budget code per item, Verify disabled until all set |
-| GM | portal | PASS. GM Recommendation PR-00005; Recommend/Reject |
-| Director | portal | PASS. Director Approval PR-00006; Approve/Reject |
-| Procurement | portal | PASS. Processing queue PR-00007; only "Process", no approve buttons |
-| Staff | portal | PASS. No review links; review URLs show "You don't have access to this queue"; created + submitted **PR-00010** ($10 test item; POST 201, submit 200); logout 200, no errors, `/portal/*` then redirects to `/careers` |
-
-Defects found:
-1. Portal Attendance (every role): blank page, `Cannot read properties of undefined (reading 'length')`.
-   `portal/api/views.py` `attendance_history` returns a list; `AttendancePage.tsx:36` reads `historyData.records`.
-   Params also differ (`start_date`/`end_date` sent, `from_date`/`to_date` read). No error boundary.
-2. Synergy Process Payroll: `getPayrollRun is not a function` + React #31 (department object rendered). Currencies:
-   `undefined.toLowerCase` in a filter after `/payroll/rates/` 200. Both blank pages (fails PAY-0).
-3. HR gets 403 on `/recruitment/jobs/` and `/attendance/all/` (grants?).
-4. Portal fetches all five `pending-*` queues on every page for every role (4–5 × 403 per page).
-5. Dashboard quick actions lead to "Not available" or the Attendance crash (HR, accountant, GM, director,
-   procurement); procurement's "Requisitions" goes to the public `/careers` page.
-6. Minor: Fuel/Stores/Comparative pages are blank printable forms under "Approve …" subtitles; PR step counter
-   ends at director ("Step 4 of 4") though procurement follows; HR dashboard "0 pending" vs 2 in Leave
-   Applications; staff Designation "Not set"; synergy login placeholder `admin@zchpc-erp.zw`; role caption changes
-   on reload (admin); synergy `/hr/hr-employees` lists EMP0015 before EMP0014.
+**Cleanup (owner's yes, after the hand checks):** removed by exact name, no prune, after checking no container used
+them: images `erp-staging/{api,frontend,portal}:f70f026`, `~/erp-staging-128c60d.tar.gz`, `~/erp-staging-5d95274.tar.gz`.
+**Left on the VM:** the `:5d95274` images (in use), the `:128c60d` images (rollback), `.env.bak-128c60d`,
+`.env.bak-f70f026`, `~/erp-staging-files-2ec500e/`, the two prod snapshots.
