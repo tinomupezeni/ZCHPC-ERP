@@ -15,7 +15,7 @@ const employee: Employee = {
   date_of_birth: null,
   date_joined: '2024-01-01',
   department_name: 'IT Department',
-  position_title: 'Systems Administrator',
+  position_name: 'Systems Administrator',
   role_name: 'REGULAR_STAFF',
   role_display_name: 'Regular Staff',
   employee_type: 'FULL_TIME',

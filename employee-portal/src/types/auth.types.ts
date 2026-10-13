@@ -10,7 +10,8 @@ export interface Employee {
   date_of_birth: string | null;
   date_joined: string;
   department_name: string | null;
-  position_title: string | null;
+  /** The API's field name (EmployeeProfileSerializer); was read as position_title, which it never sends. */
+  position_name: string | null;
   role_name: string | null;
   role_display_name: string | null;
   employee_type: string;
