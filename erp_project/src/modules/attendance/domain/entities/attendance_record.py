@@ -23,7 +23,8 @@ class AttendanceRecord(AggregateRoot[int]):
     Tracks clock-in and clock-out times.
     """
 
-    # Standard work hours for late detection
+    # Standard work hours for late detection, in Harare time (times are stored
+    # as UTC and converted before comparing)
     STANDARD_START_TIME = time(8, 0)  # 8:00 AM
     STANDARD_END_TIME = time(17, 0)  # 5:00 PM
     LATE_THRESHOLD_MINUTES = 15  # Grace period
@@ -157,7 +158,8 @@ class AttendanceRecord(AggregateRoot[int]):
             return AttendanceStatus.ABSENT
 
         # Check if late (more than threshold after standard start)
-        late_threshold = self.time_in.to_minutes() - (
+        local_time_in = self.time_in.in_attendance_zone(self.record_date)
+        late_threshold = local_time_in.to_minutes() - (
             self.STANDARD_START_TIME.hour * 60 + self.STANDARD_START_TIME.minute
         )
 

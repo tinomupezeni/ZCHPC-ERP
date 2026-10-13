@@ -121,7 +121,7 @@ class AttendanceService:
                 employee_id=command.employee_id,
                 record_date=today,
                 clock_in_time=clock_time,
-                is_late=self.late_detector.is_late(clock_time),
+                is_late=self.late_detector.is_late(clock_time, today),
             )
             self.event_bus.publish(event)
 

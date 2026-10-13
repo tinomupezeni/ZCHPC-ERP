@@ -20,7 +20,7 @@ class ILateArrivalDetector(ABC):
     """Interface for detecting late arrivals."""
 
     @abstractmethod
-    def is_late(self, clock_in_time: ClockTime) -> bool:
+    def is_late(self, clock_in_time: ClockTime, on: date) -> bool:
         """
         Check if a clock-in time is considered late.
 
@@ -33,7 +33,7 @@ class ILateArrivalDetector(ABC):
         ...
 
     @abstractmethod
-    def minutes_late(self, clock_in_time: ClockTime) -> int:
+    def minutes_late(self, clock_in_time: ClockTime, on: date) -> int:
         """
         Calculate how many minutes late the employee is.
 
@@ -51,6 +51,8 @@ class LateArrivalDetector(ILateArrivalDetector):
     Default late arrival detector.
 
     Detects late arrivals based on standard work start time and grace period.
+    The start time is Harare time; clock times are stored as UTC and converted
+    before comparing.
     """
 
     def __init__(
@@ -69,13 +71,13 @@ class LateArrivalDetector(ILateArrivalDetector):
         self.grace_period_minutes = grace_period_minutes
         self._start_minutes = work_start_time.hour * 60 + work_start_time.minute
 
-    def is_late(self, clock_in_time: ClockTime) -> bool:
-        """Check if clock-in time is late."""
-        return self.minutes_late(clock_in_time) > 0
+    def is_late(self, clock_in_time: ClockTime, on: date) -> bool:
+        """Check if a UTC clock-in time on the record date `on` is late."""
+        return self.minutes_late(clock_in_time, on) > 0
 
-    def minutes_late(self, clock_in_time: ClockTime) -> int:
-        """Calculate minutes late."""
-        clock_in_minutes = clock_in_time.to_minutes()
+    def minutes_late(self, clock_in_time: ClockTime, on: date) -> int:
+        """Calculate minutes late, in Harare time."""
+        clock_in_minutes = clock_in_time.in_attendance_zone(on).to_minutes()
         late_by = clock_in_minutes - self._start_minutes - self.grace_period_minutes
 
         return max(0, late_by)

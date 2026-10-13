@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Search, Calendar, MoreVertical, Filter, Download, ChevronDown, Clock, Check, X, Upload } from "lucide-react";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import Server from "@/services/Server";
+import { attendanceTimeInHarare } from "@/lib/attendanceTime";
 import { toast } from "sonner";
 
 // Helper: resolve a "Time Range" selection to a concrete [start, end] date pair.
@@ -121,8 +122,9 @@ const Attendance = () => {
           name: record.employee_name || '',
           'job no': record.employee_id ?? '',
           date: record.record_date,
-          'time in': record.time_in,
-          'time out': record.time_out,
+          // Stored as UTC; shown (and exported) in Harare time.
+          'time in': attendanceTimeInHarare(record.record_date, record.time_in),
+          'time out': attendanceTimeInHarare(record.record_date, record.time_out),
         }));
         setAttendanceRecords(formattedRecords);
       } else {
