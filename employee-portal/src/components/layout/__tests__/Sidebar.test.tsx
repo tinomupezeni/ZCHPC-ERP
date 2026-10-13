@@ -496,3 +496,28 @@ describe('Sidebar - evaluation availability (navAvailability)', () => {
     );
   });
 });
+
+/**
+ * Staging hand check (Mon 2026-10-12): the Fuel, Stores and Comparative pages
+ * are blank printable forms to submit, with no approve or process screen, but
+ * several roles' sidebars described them as "Approve ..." / "Process ...".
+ */
+describe('Sidebar - requisition form descriptions', () => {
+  it.each(['staff', 'hr', 'manager', 'accountant', 'procurement', 'admin'])(
+    'never promises an approve or process screen for the requisition forms (%s)',
+    (roleGroup) => {
+      mockRoleGroup = roleGroup;
+      mockUseActionCount.mockReturnValue(0);
+      mockCanReviewAsDepartmentHead = false;
+      mockCanVerifyAsAccounts = false;
+      mockCanRecommendAsGM = false;
+      mockCanApproveAsDirector = false;
+      mockCanProcessAsProcurement = false;
+      const { container } = renderSidebar();
+
+      expect(container.textContent).not.toMatch(
+        /(approve|process) (fuel|stores|schedules|quotations)/i
+      );
+    }
+  );
+});
