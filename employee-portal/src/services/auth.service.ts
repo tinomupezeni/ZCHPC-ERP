@@ -9,6 +9,16 @@ import type {
   TokenRefreshResponse,
 } from '@/types/auth.types';
 
+/**
+ * The portal profile (EmployeeProfileSerializer: login and /portal/auth/me/)
+ * sends first_name and surname but no full_name; the header and the purchase
+ * request's "Requested By" showed it blank. Build it once, here.
+ */
+export function withFullName(employee: Employee): Employee {
+  const built = [employee.first_name, employee.surname].filter(Boolean).join(' ');
+  return { ...employee, full_name: employee.full_name || built };
+}
+
 export const authService = {
   /**
    * Login with EC number and password
@@ -20,7 +30,7 @@ export const authService = {
     // Store tokens
     setTokens(access, refresh);
 
-    return response.data;
+    return { ...response.data, employee: withFullName(response.data.employee) };
   },
 
   /**
@@ -62,7 +72,7 @@ export const authService = {
    */
   async getCurrentEmployee(): Promise<Employee> {
     const response = await api.get<Employee>('/portal/auth/me/');
-    return response.data;
+    return withFullName(response.data);
   },
 
   /**
