@@ -277,3 +277,58 @@ Defects found:
    ends at director ("Step 4 of 4") though procurement follows; HR dashboard "0 pending" vs 2 in Leave
    Applications; staff Designation "Not set"; synergy login placeholder `admin@zchpc-erp.zw`; role caption changes
    on reload (admin); synergy `/hr/hr-employees` lists EMP0015 before EMP0014.
+
+## Run log: Tue 2026-10-13, 5d95274 (owner's solo run, Claude checking each command)
+
+`master` @ 5d95274 (#86–#88 since Monday's 128c60d deploy; no new migrations; seed changed by #85).
+
+**1. Tests (laptop).** Main checkout fast-forwarded to exactly 5d95274, Postgres, fast test hasher (#87),
+one group at a time: g1 4F+0E, 1451 passed (the 4 baseline failures), 465 s; g2 51F+11E, 1105 passed, per file
+24/12/8/15/3, identical test by test to the PY-5 branch run, 105 s; portal 39 passed, 21 s. Matches the baseline.
+
+**2. Build (laptop; tar written 09:22).** LF worktree of 5d95274 (`entrypoint.sh` first line `#!/bin/bash\n`, no `\r`).
+Three builds as in step 2. The api build warns `UndefinedVar '$PYTHONPATH'`: harmless and not new (the Dockerfile is
+unchanged since 128c60d; the value becomes `/app/src:`). Guardrail passed, plus a freshness check: both bundles contain
+"This module is being built" (#79) and synergy contains `flex-1 min-w-0 transition-all` (#86), so neither bundle came
+from an old build cache. Tar `erp-staging-5d95274.tar.gz`, 139,280,583 bytes, sha256
+`aa8d648f65ea28a10c8cd6536831ce25cf68e795b13b0c5777f208137854e83f`.
+
+**3. On the VM (from 09:25).**
+- Read-only checks: preflight passes (MemAvailable 5729 MiB, disk 39 GiB free). The four deploy files on the VM already
+  match 5d95274 (only `RUNBOOK.md` changed since 128c60d), so **3b was skipped**. `.env` on `:128c60d`; 4 containers
+  running; `postgres:16-alpine` present.
+- 3a: snapshot `~/prod-snapshot-2026-10-13.txt`.
+- 3c: VM sha256 matches the laptop; `docker load` gave IDs 286d898ad77e / 3e361a61dfe8 / 3be260e5bb3e, the same as the
+  laptop builds' config digests.
+- 3d: `./deploy.sh stop` (no sudo); all four exited; production unchanged.
+- **3e skipped**: no new migrations, and a rerun of the seed updates grants on an existing DB (#85), so the DB volume
+  was kept.
+- 3f: `.env.bak-128c60d`, then the `sed`: three `_IMAGE` lines now `:5d95274`; `.env` still `600 user`, same size.
+- 3g: `sudo ./deploy.sh up` (owner): secrets, both bundle guardrails, preflight ok; db, api, frontend, portal
+  healthy; production unchanged. The db container is the existing one (volume kept). api log has no errors;
+  0 unapplied migrations; HTTP from the VM: API `/api/` 401, `/admin/login/` 200, synergy 200, portal 200.
+- 3h: `sudo ./seed-eval.sh` (owner): "updated role HUMAN_RESOURCES: permissions"; it recreated its sample REJECTED
+  purchase request for the staff user (Monday's hand checks had changed it); 8 logins listed, passwords rotated into
+  `credentials.txt` (not printed).
+- 3i: `preflight.sh verify ~/prod-snapshot-2026-10-13.txt`: production unchanged.
+- Rollback to Monday: `cp -p .env.bak-128c60d .env && sudo ./deploy.sh up` (the DB volume is the same).
+
+**4. Hand checks (owner, Chrome, staging): all passed.** All 8 logins sign in. Synergy as HR: Process Payroll shows
+Gross and Department (no NaN); approving their own payslip shows the server's reason; Delete only on Draft rows;
+Recruitment's department filter lists all 6 departments. Portal: procurement's Requisitions tile opens the processing
+queue.
+
+**Laptop shell notes (the owner's terminal is WSL zsh, not Git Bash):**
+- Use `/mnt/c/...` paths for Linux tools. `/c/...` does not exist in WSL, and `C:/...` is taken as a *relative*
+  path (the worktree first landed inside the repo at `ZCHPC-ERP/C:/Users/...`; removed afterwards from WSL with
+  `git worktree remove`).
+- Call the Windows OpenSSH client: `/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes erp-vm 'bash -s' <<'EOF'`
+  for multi-command read-only blocks (LF, no BOM), and `ssh.exe -t erp-vm '<one command>'` for sudo steps.
+- `scp.exe` is a Windows program: `cd` to the tar's folder and pass the bare file name (`C:` can be read as a host,
+  and `/mnt/c` is not a Windows path).
+- zsh adds a `\` before a `;` that follows a pasted URL, which breaks one-line `for ... ; do` loops; put `do` on its own
+  line.
+
+**Left on the VM after this run:** `~/erp-staging-128c60d.tar.gz`, `~/erp-staging-5d95274.tar.gz`, the unused
+`erp-staging/*:f70f026` images (to be removed with the owner's yes, by exact name, no prune); the `:128c60d` images
+(rollback), `.env.bak-128c60d`, `.env.bak-f70f026`, `~/erp-staging-files-2ec500e/`, the two prod snapshots.
