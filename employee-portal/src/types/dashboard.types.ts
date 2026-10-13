@@ -24,12 +24,12 @@ export interface UpcomingEvent {
   is_all_day: boolean;
 }
 
+/** GET /portal/dashboard/ - field names as DashboardSerializer sends them. */
 export interface DashboardSummary {
   employee_name: string;
   employee_id: string;
-  position: string | null;
-  department: string | null;
-  total_leave_balance: number;
+  position_name: string | null;
+  department_name: string | null;
   leave_balances: LeaveBalance[];
   /** The user's own pending leave requests. */
   pending_leave_requests: number;
@@ -37,8 +37,8 @@ export interface DashboardSummary {
   leave_requests_to_review: number;
   pending_expense_claims: number;
   open_tickets: number;
-  attendance_this_month: number;
-  today_status: 'clocked_in' | 'clocked_out' | 'not_clocked';
+  /** Days present this month (read as attendance_this_month before, which the API never sends). */
+  monthly_attendance_count: number;
   recent_attendance: AttendanceSummary[];
   upcoming_events: UpcomingEvent[];
   unread_notifications: number;

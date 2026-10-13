@@ -45,7 +45,7 @@ export function ProcurementDashboard({ data }: ProcurementDashboardProps) {
     },
     {
       label: 'My Attendance',
-      value: data?.attendance_this_month ?? 0,
+      value: data?.monthly_attendance_count ?? 0,
       unit: 'days this month',
       icon: TrendingUp,
       color: 'text-green-600',

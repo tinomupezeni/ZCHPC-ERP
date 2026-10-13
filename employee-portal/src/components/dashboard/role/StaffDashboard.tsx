@@ -32,7 +32,7 @@ export function StaffDashboard({ data }: StaffDashboardProps) {
     },
     {
       label: 'Days Present',
-      value: data?.attendance_this_month ?? 0,
+      value: data?.monthly_attendance_count ?? 0,
       unit: 'this month',
       icon: TrendingUp,
       color: 'text-green-600',
