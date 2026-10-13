@@ -31,7 +31,10 @@ export interface DashboardSummary {
   department: string | null;
   total_leave_balance: number;
   leave_balances: LeaveBalance[];
+  /** The user's own pending leave requests. */
   pending_leave_requests: number;
+  /** Pending requests waiting for this user's review (0 without the review capability). */
+  leave_requests_to_review: number;
   pending_expense_claims: number;
   open_tickets: number;
   attendance_this_month: number;

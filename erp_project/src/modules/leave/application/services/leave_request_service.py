@@ -350,6 +350,18 @@ class LeaveRequestService:
             for r in requests
         ]
 
+    def count_requests_to_review(self, actor: LeaveActor) -> int:
+        """
+        Size of the actor's review queue: the pending requests they may review
+        (never their own), as get_pending_requests returns them to a reviewer.
+        0 for anyone without the review capability.
+        """
+        if not self._authz.may_review_requests(actor):
+            return 0
+        return len(self._authz.filter_reviewable_requests(
+            actor, self._request_repository.get_pending_requests()
+        ))
+
     def get_pending_requests(self, actor: LeaveActor) -> Sequence[LeaveRequestDTO]:
         """
         Pending requests, scoped to the actor.
