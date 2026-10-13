@@ -117,16 +117,16 @@ describe('statusTone', () => {
 });
 
 describe('getProgressLabel', () => {
-  it('returns a step count only for the four approval-pipeline stages', () => {
-    expect(getProgressLabel('PENDING_DEPARTMENT_HEAD')).toBe('Step 1 of 4');
-    expect(getProgressLabel('PENDING_ACCOUNTS')).toBe('Step 2 of 4');
-    expect(getProgressLabel('PENDING_GM')).toBe('Step 3 of 4');
-    expect(getProgressLabel('PENDING_DIRECTOR')).toBe('Step 4 of 4');
+  it('counts all five workflow stages, ending at procurement', () => {
+    expect(getProgressLabel('PENDING_DEPARTMENT_HEAD')).toBe('Step 1 of 5');
+    expect(getProgressLabel('PENDING_ACCOUNTS')).toBe('Step 2 of 5');
+    expect(getProgressLabel('PENDING_GM')).toBe('Step 3 of 5');
+    expect(getProgressLabel('PENDING_DIRECTOR')).toBe('Step 4 of 5');
+    expect(getProgressLabel('PENDING_PROCUREMENT')).toBe('Step 5 of 5');
   });
 
-  it('returns null for every other status, including PENDING_PROCUREMENT', () => {
+  it('returns null for every other status', () => {
     expect(getProgressLabel('DRAFT')).toBeNull();
-    expect(getProgressLabel('PENDING_PROCUREMENT')).toBeNull();
     expect(getProgressLabel('PROCESSED')).toBeNull();
     expect(getProgressLabel('REJECTED')).toBeNull();
   });
