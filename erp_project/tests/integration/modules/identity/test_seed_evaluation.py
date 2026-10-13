@@ -58,6 +58,7 @@ ME_ACCESS_URL = "/api/v2/auth/users/me/access/"
 PR_URL = "/api/v2/procurement/requests/"
 PAYSLIPS_URL = "/api/v2/payroll/payslips/?period=2026-10"
 RECRUITMENT_JOBS_URL = "/api/v2/recruitment/jobs/"
+ATTENDANCE_ALL_URL = "/api/v2/attendance/all/"
 EMPLOYEES_URL = "/api/v2/hr/employees/"
 LEAVE_PENDING_URL = "/api/v2/leave/requests/pending/"
 PORTAL_DASHBOARD_URL = "/api/v2/portal/dashboard/"
@@ -221,6 +222,16 @@ class TestRoleGrants:
     @pytest.mark.parametrize("role_key", ["staff", "hod", "accountant", "gm", "director", "procurement"])
     def test_only_hr_and_admin_reach_recruitment(self, role_key):
         response = client_for(role_key).get(RECRUITMENT_JOBS_URL)
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_hr_sees_all_attendance(self):
+        # Hand checks 2026-10-12: synergy Attendance showed "0 records" for HR (403).
+        assert client_for("hr").get(ATTENDANCE_ALL_URL).status_code == status.HTTP_200_OK
+
+    @pytest.mark.parametrize("role_key", ["staff", "hod", "accountant", "gm", "director", "procurement"])
+    def test_only_hr_and_admin_see_all_attendance(self, role_key):
+        response = client_for(role_key).get(ATTENDANCE_ALL_URL)
 
         assert response.status_code == status.HTTP_403_FORBIDDEN
 

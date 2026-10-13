@@ -59,6 +59,8 @@ from modules.procurement.application.authorization import PurchaseRequestPermiss
 #   heads a department is Department.head, not the role name (INT-01 Q1, Q2)
 # - HR runs payroll and holds payroll.* (A-10, A-11)
 # - HR runs recruitment and holds recruitment.* (owner, 2026-10-12)
+# - HR sees everyone's attendance and holds attendance.* (supervisor, 2026-10-13:
+#   Attendance display fix only; the legacy role map already granted it)
 # - procurement only processes (A-1)
 # - GM and Director are real roles (A-1)
 # - staff get self-service only: the portal and raising their own requests
@@ -69,7 +71,9 @@ _SELF_SERVICE = ["portal.*", P.CREATE, P.VIEW, P.SUBMIT, P.CORRECT, P.RESUBMIT]
 
 ROLE_GRANTS: dict[str, list[str]] = {
     "ADMIN": ["*"],
-    "HUMAN_RESOURCES": [*_SELF_SERVICE, "hr.*", "leave.*", "payroll.*", "recruitment.*"],
+    "HUMAN_RESOURCES": [
+        *_SELF_SERVICE, "hr.*", "leave.*", "payroll.*", "recruitment.*", "attendance.*",
+    ],
     "DEPARTMENT_MANAGER": [*_SELF_SERVICE, P.DEPARTMENT_HEAD_APPROVE, P.REJECT],
     "ACCOUNTANT": [*_SELF_SERVICE, P.ACCOUNTS_VERIFY, P.REJECT],
     "GENERAL_MANAGER": [*_SELF_SERVICE, P.GM_RECOMMEND, P.REJECT],
