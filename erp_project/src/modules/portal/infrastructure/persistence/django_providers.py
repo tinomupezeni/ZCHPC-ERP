@@ -4,7 +4,7 @@ Django implementations of portal providers.
 These providers integrate with existing Django models from other modules.
 """
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import List, Optional
 
@@ -126,6 +126,20 @@ class DjangoEmployeeProvider(IEmployeeProvider):
         return self._to_dto(employee)
 
 
+def _attendance_datetime(day: date, value) -> Optional[datetime]:
+    """
+    AttendanceRecord.time_in/time_out are TimeFields holding UTC wall time
+    (clock_in/clock_out write datetime.now() in a UTC container). The portal
+    works in datetimes, so read a stored time as a UTC datetime on the record's
+    date; a datetime not yet saved (just clocked) is made UTC-aware.
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return datetime.combine(day, value, tzinfo=timezone.utc)
+
+
 class DjangoAttendanceProvider(IAttendanceProvider):
     """Provider for attendance data from Attendance module."""
 
@@ -134,8 +148,8 @@ class DjangoAttendanceProvider(IAttendanceProvider):
             id=record.id,
             employee_id=record.employee_id,
             date=record.date,
-            time_in=record.time_in,
-            time_out=record.time_out,
+            time_in=_attendance_datetime(record.date, record.time_in),
+            time_out=_attendance_datetime(record.date, record.time_out),
             status=record.status if hasattr(record, "status") else "Present",
         )
 
@@ -193,7 +207,10 @@ class DjangoAttendanceProvider(IAttendanceProvider):
         total_hours = 0.0
         for record in records:
             if record.time_in and record.time_out:
-                delta = record.time_out - record.time_in
+                delta = (
+                    _attendance_datetime(record.date, record.time_out)
+                    - _attendance_datetime(record.date, record.time_in)
+                )
                 total_hours += delta.total_seconds() / 3600
 
         return AttendanceSummaryDTO(
