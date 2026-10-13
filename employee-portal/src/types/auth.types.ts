@@ -12,8 +12,9 @@ export interface Employee {
   department_name: string | null;
   /** The API's field name (EmployeeProfileSerializer); was read as position_title, which it never sends. */
   position_name: string | null;
-  role_name: string | null;
-  role_display_name: string | null;
+  /** Not sent by the portal profile API; the role comes from /auth/users/me/access/. */
+  role_name?: string | null;
+  role_display_name?: string | null;
   employee_type: string;
   is_active: boolean;
   leave_days_entitled: number;
