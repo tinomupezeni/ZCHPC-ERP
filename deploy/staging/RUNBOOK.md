@@ -246,3 +246,49 @@ credentials file was not read):
 them: images `erp-staging/{api,frontend,portal}:f70f026`, `~/erp-staging-128c60d.tar.gz`, `~/erp-staging-5d95274.tar.gz`.
 **Left on the VM:** the `:5d95274` images (in use), the `:128c60d` images (rollback), `.env.bak-128c60d`,
 `.env.bak-f70f026`, `~/erp-staging-files-2ec500e/`, the two prod snapshots.
+
+## Run log: Tue 2026-10-13 (afternoon), 36e644b (Claude driving, owner's yes per VM step)
+
+`master` @ 36e644b: #90 (seed: HR gets `attendance.*`), #91 (portal Attendance display), #92 (manager "My
+Attendance", QR clock-in "Coming soon") since this morning's 5d95274. No new migrations; the seed changed.
+
+**1. Tests (laptop, LF worktree of 36e644b, Postgres, `DB_NAME=erp_db_rel`, one group at a time).** g1 4F+0E,
+1458 passed (the 4 baseline failures), 467 s; g2 51F+11E, 1105 passed, per file 24/12/8/15/3, 104 s; portal 43
+passed (38 + 5 from #91). Matches the baseline.
+
+**2. Build (laptop; tar written 11:56).** `entrypoint.sh` first line `#!/bin/bash\n`, no `\r`. Guardrail passed
+(staging origin in both bundles, no production or default origin). Tar `erp-staging-36e644b.tar.gz`, 141,149,997 bytes,
+sha256 `1064eeabe07f2b187364f80e04cc96cbb895d4aa78511a3f9e7d156654e7a29c`. Docker Desktop quit afterwards.
+
+**3. On the VM.**
+- Read-only checks: preflight passes (MemAvailable 5650 MiB, disk 39 GiB free). The four deploy files already match
+  36e644b, so **3b was skipped**. `.env` on `:5d95274`; 4 containers healthy; `postgres:16-alpine` present.
+- 3a: snapshot `~/prod-snapshot-2026-10-13b.txt`.
+- 3c: VM size and sha256 match the laptop, `gzip -t` ok; `docker load` gave IDs ffc4757f5721 / ba6a7c533f95 /
+  a2d2fe559010.
+- 3d: `./deploy.sh stop` (no sudo); all four exited; production unchanged.
+- 3e (owner said yes: the seed changed, fresh DB wanted): guards passed (label `erp-staging`, only user
+  `erp-staging-db-1|exited`), then `docker rm erp-staging-db-1` and `docker volume rm erp-staging_db_data`;
+  production unchanged.
+- 3f: `.env.bak-5d95274`, then the `sed`: three `_IMAGE` lines now `:36e644b`; `.env` still `600 user`.
+- 3g: `sudo ./deploy.sh up` (owner). New `erp-staging_db_data` created 12:05, label `erp-staging`. 4 containers healthy on
+  `:36e644b`; 0 unapplied migrations; no errors in the api log (only the migration named `add_error_messages`).
+  HTTP from the VM: API `/` 404, `/api/` 401, `/admin/login/` 200; synergy 200; portal 200; production
+  8000/3000/3001 answer as before.
+- 3h: `sudo ./seed-eval.sh` (owner). 20 users, all active, 1 superuser; EMP0001–EMP0008 have the 8 roles;
+  `HUMAN_RESOURCES` has `attendance.*`. `credentials.txt` `600 root`, rewritten 12:06 (not read).
+- 3i: `preflight.sh verify ~/prod-snapshot-2026-10-13b.txt`: production unchanged.
+- Rollback to this morning: `cp -p .env.bak-5d95274 .env && sudo ./deploy.sh up`, then reseed (the 5d95274 DB volume
+  is gone).
+
+**4. Hand checks (owner, staging): all passed.**
+
+**Cleanup (owner's yes, after the hand checks).** Tars kept on the laptop in `C:\Users\richa\erp-staging-images\`
+(128c60d, 5d95274, 36e644b; sha256 checked). On the VM, removed by exact name, no prune, after checking no container
+used them: images `erp-staging/{api,frontend,portal}:128c60d`, `~/erp-staging-36e644b.tar.gz`. Staging still healthy;
+production unchanged.
+**Left on the VM:** the `:36e644b` images (in use), the `:5d95274` images (rollback), `.env.bak-5d95274`,
+`.env.bak-128c60d`, `.env.bak-f70f026`, `~/erp-staging-files-2ec500e/`, the three prod snapshots.
+
+- Check-script gotcha: under `set -eu`, `ls ~/*.tar.gz` with nothing left to match exits 2 and stops the script.
+  Run final listings without `set -e`, or add `|| true`.
