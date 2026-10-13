@@ -36,7 +36,7 @@ export function RequesterInfoCard({ employee }: RequesterInfoCardProps) {
         <DocumentFieldGrid>
           <DocumentField label="Requested By" value={employee.full_name} />
           <DocumentField label="Employee ID" value={employee.employee_id} />
-          <DocumentField label="Designation" value={employee.position_title || 'Not set'} />
+          <DocumentField label="Designation" value={employee.position_name || 'Not set'} />
           <DocumentField
             label="Contact"
             value={employee.phone || employee.email || 'Not set'}

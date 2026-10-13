@@ -129,10 +129,10 @@ export function DashboardPage() {
                 <span className="text-sm font-medium">{banner.badge}</span>
               </div>
             )}
-            {employee?.position_title && (
+            {employee?.position_name && (
               <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur rounded-lg px-3 py-1.5">
                 <Briefcase className="h-4 w-4 text-white/70" />
-                <span className="text-sm">{employee.position_title}</span>
+                <span className="text-sm">{employee.position_name}</span>
               </div>
             )}
             {employee?.department_name && (

@@ -16,7 +16,7 @@ const employee = {
   full_name: 'Nyasha Chiweshe',
   email: 'nyasha@zchpc.test',
   department_name: 'Procurement',
-  position_title: 'Procurement Officer',
+  position_name: 'Procurement Officer',
   role_name: 'PROCUREMENT_OFFICER',
   role_display_name: 'Procurement Officer',
   is_active: true,
