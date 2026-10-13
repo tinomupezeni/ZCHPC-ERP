@@ -244,11 +244,14 @@ const APPROVAL_STEP: Partial<Record<PurchaseRequestStatus, number>> = {
   PENDING_ACCOUNTS: 2,
   PENDING_GM: 3,
   PENDING_DIRECTOR: 4,
+  PENDING_PROCUREMENT: 5,
 };
 
-const APPROVAL_STEP_COUNT = 4;
+// Procurement processing follows the director, so the workflow has five steps
+// (staging hand check: the director saw "Step 4 of 4" with a step still to come).
+const APPROVAL_STEP_COUNT = 5;
 
-/** "Step 2 of 4" for the four approval-pipeline stages; null everywhere else. */
+/** "Step 2 of 5" for the five workflow stages after submission; null everywhere else. */
 export function getProgressLabel(status: PurchaseRequestStatus): string | null {
   const step = APPROVAL_STEP[status];
   return step ? `Step ${step} of ${APPROVAL_STEP_COUNT}` : null;
