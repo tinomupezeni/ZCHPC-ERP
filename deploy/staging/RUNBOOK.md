@@ -292,3 +292,91 @@ production unchanged.
 
 - Check-script gotcha: under `set -eu`, `ls ~/*.tar.gz` with nothing left to match exits 2 and stops the script.
   Run final listings without `set -e`, or add `|| true`.
+
+## Run log: Wed 2026-10-14, 53b8826 then fb2394c (Claude driving, owner's yes per VM step)
+
+### Morning: 53b8826
+
+`master` @ 53b8826: #93 (attendance in Harare time), #94 (run log), #95–#98 (hand-check fixes from Monday), #99
+(portal dashboard field names), #100 (portal full name), #101 (A-1: one person per PR stage, admins included) since
+36e644b. No migrations, no seed change, so no DB reset and no reseed.
+
+**1. Tests (laptop, LF worktree of 53b8826, Postgres in WSL, `DB_NAME=erp_db_rel`, one group at a time).** g1 4F+0E,
+1467 passed, 528 s; g2 51F+11E, 1111 passed, 122 s; portal 44 passed. Identical test by test to the A-1 branch run
+(and g2 to 36e644b).
+
+**2. Build.** The first api build failed: Docker Hub reset the connection while fetching `python:3.12-slim` metadata.
+The retry built. `entrypoint.sh` first line `#!/bin/bash\n`, no `\r`; guardrail passed. Tar `erp-staging-53b8826.tar.gz`,
+141,189,519 bytes, sha256 `45156f8a22cd2022662138ad553538b1c0e6b60faa3013e9d9c202bb6435e74f`.
+
+**Local check first (owner).** `local-up.sh build` + `up` from the 53b8826 worktree, on the existing local DB (no
+reseed); "No migrations to apply". The owner checked it in the browser and was satisfied. The portal signs in with the
+EC number (EMP0001–EMP0008), not the email.
+
+**3. On the VM.**
+- Read-only checks: preflight passes (MemAvailable 5659 MiB, disk 38 GiB free); the four deploy files already match
+  53b8826, so **3b was skipped**; `.env` on `:36e644b`; 4 containers healthy; `postgres:16-alpine` present.
+- 3a: snapshot `~/prod-snapshot-2026-10-14.txt`.
+- 3c: size and sha256 match, `gzip -t` ok; `docker load` IDs e68355ecaae2 (api) / 2a2dd400b715 (frontend) /
+  7a188ed22f3b (portal). These are the config digests in the tar's `manifest.json`. The laptop's Docker uses the
+  containerd image store, where `docker images` shows other digests, so compare with the manifest, not with
+  `docker images` on the laptop.
+- 3d: `./deploy.sh stop`; all four exited; production unchanged.
+- 3e skipped (no migrations, no seed change; DB volume kept).
+- 3f: `.env.bak-36e644b`, then the `sed`: three `_IMAGE` lines `:53b8826`; `.env` still `600 user`.
+- 3g: `sudo ./deploy.sh up` (owner). 4 healthy on `:53b8826`; 0 unapplied migrations; HTTP from the VM: API `/` 404,
+  `/api/` 401, `/admin/login/` 200; synergy 200; portal 200; production 8000/3000/3001 as before.
+- 3h skipped (no reseed; passwords unchanged).
+- 3i: `preflight.sh verify ~/prod-snapshot-2026-10-14.txt`: production unchanged.
+
+**4. Hand checks (owner): passed, with two findings**, both fixed the same day:
+- the admin (EMP0001) must be read-only for now → #102
+- reviewers had no count on their review queues, as staff have on "Purchase Requests" → #103
+
+### Midday: fb2394c
+
+`master` @ fb2394c: #102 (`READ_ONLY_ACCOUNTS`: `RBACMiddleware` refuses the listed accounts' writes with 403
+`READ_ONLY_ACCOUNT`; the staging compose defaults it to `admin@zchpc.ac.zw`) and #103 (portal review queue badges).
+No migrations, no seed change. **`docker-compose.yml` changed, so 3b was needed.**
+
+**1. Tests.** No new run: at fb2394c the backend and the deploy files are byte-identical to 7bfaaa3 (#102's head:
+g1 4F+0E, 1480 passed; g2 51F+11E, 1111 passed; portal 44, identical to 53b8826 test by test), and both frontends to
+40a671d (#103's head: `tsc` clean, vitest 536 passed).
+
+**2. Build.** The api image from the local build was reused (it does not depend on the API origin); frontend and
+portal rebuilt for the VM origin. Guardrail passed; entrypoint LF. Tar `erp-staging-fb2394c.tar.gz`, 139,294,161
+bytes, sha256 `798beff468883db1b993d583b39361d36cdc92d4dde7b34c6bd4011eb325df4b`. The synergy image has the same
+config digest as 53b8826's (2a2dd400b715): synergy did not change and the build is reproducible.
+
+**Local check first (owner).** `local-up.sh build` + `up` from an fb2394c worktree: `READ_ONLY_ACCOUNTS` set by the
+compose default; admin GET 200, admin POST 403 `READ_ONLY_ACCOUNT`; HR unaffected. Owner satisfied.
+
+**3. On the VM.**
+- Read-only checks: preflight passes; only `docker-compose.yml` differs from fb2394c.
+- 3a: snapshot `~/prod-snapshot-2026-10-14b.txt`.
+- 3b: `cp -p docker-compose.yml docker-compose.yml.bak-53b8826`, then `scp` of fb2394c's file; all four deploy files
+  match fb2394c (compose sha256 `11a2321a…`, LF). `.env` not touched: it has no `READ_ONLY_ACCOUNTS` line, so the
+  compose default applies.
+- 3c: size and sha256 match, `gzip -t` ok; IDs 1859db880121 (api) / 2a2dd400b715 (frontend) / 0c559c99ca8f (portal).
+- 3d: `./deploy.sh stop`; production unchanged.
+- 3e skipped.
+- 3f: `.env.bak-53b8826`; three `_IMAGE` lines `:fb2394c`; `.env` still `600 user`.
+- 3g: `sudo ./deploy.sh up` (owner). 4 healthy on `:fb2394c`; 0 unapplied migrations; HTTP as in the morning;
+  `READ_ONLY_ACCOUNTS` in the api container = `admin@zchpc.ac.zw`. Admin probe from the VM (an access token made
+  inside the api container, so no password was read; empty POST body, so nothing could be created): GET
+  `/api/v2/auth/users/` 200, POST 403 `READ_ONLY_ACCOUNT`.
+- 3h skipped.
+- 3i: `preflight.sh verify ~/prod-snapshot-2026-10-14b.txt`: production unchanged.
+- Rollback to 53b8826: `cp -p .env.bak-53b8826 .env && cp -p docker-compose.yml.bak-53b8826 docker-compose.yml &&
+  sudo ./deploy.sh up` (same DB; no reseed needed).
+
+**4. Hand checks (owner, staging): all passed.**
+
+**Cleanup (owner's go-ahead, after the hand checks).** On the VM, by exact name, no prune, after checking no container
+used them: images `erp-staging/{api,frontend,portal}:36e644b` and `:5d95274`, `~/erp-staging-53b8826.tar.gz`,
+`~/erp-staging-fb2394c.tar.gz`. Snapshot `~/prod-snapshot-2026-10-14c.txt` before; production unchanged after;
+staging still healthy on `:fb2394c`. Laptop: local stack stopped (volumes kept), release worktrees removed, Docker
+Desktop quit. Tars kept in `C:\Users\richa\erp-staging-images\` (128c60d, 5d95274, 36e644b, 53b8826, fb2394c).
+**Left on the VM:** the `:fb2394c` images (in use), the `:53b8826` images (rollback), `docker-compose.yml.bak-53b8826`,
+`.env.bak-53b8826`, `.env.bak-36e644b`, `.env.bak-5d95274`, `.env.bak-128c60d`, `.env.bak-f70f026`,
+`~/erp-staging-files-2ec500e/`, the prod snapshots.
