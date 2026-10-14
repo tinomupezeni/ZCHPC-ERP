@@ -64,6 +64,9 @@ services:
       JWT_ACCESS_TOKEN_LIFETIME_MINUTES: ${JWT_ACCESS_TOKEN_LIFETIME_MINUTES:-}
       JWT_REFRESH_TOKEN_LIFETIME_DAYS: ${JWT_REFRESH_TOKEN_LIFETIME_DAYS:-}
       ZCHPC_ENV: staging
+      # Read-only logins (owner, 2026-10-14: the admin is read-only for now).
+      # Unset in .env = the admin; READ_ONLY_ACCOUNTS= (empty) in .env = none.
+      READ_ONLY_ACCOUNTS: ${READ_ONLY_ACCOUNTS-admin@zchpc.ac.zw}
     volumes:
       - api_static:/app/staticfiles
       - api_media:/app/mediafiles

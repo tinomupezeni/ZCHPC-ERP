@@ -2,6 +2,7 @@
 Authentication and authorization middleware for the Identity module.
 """
 
+from django.conf import settings
 from django.urls import resolve
 from django.http import JsonResponse
 from .route_access import (
@@ -104,8 +105,34 @@ class RBACMiddleware:
         "/api/v2/auth/logout/",  # leaving is always allowed
     ]
 
+    # All a read-only account (settings.READ_ONLY_ACCOUNTS) may change: its
+    # own session and password. Login itself is made anonymously, so it is
+    # never refused.
+    READ_ONLY_WRITABLE_PATHS = [
+        "/api/v2/auth/token/",  # login and token refresh
+        "/api/v2/auth/logout/",
+        "/api/v2/auth/password/change/",
+        "/api/v2/portal/auth/login/",
+        "/api/v2/portal/auth/logout/",
+        "/admin/login/",
+        "/admin/logout/",
+    ]
+
+    SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+
     def __init__(self, get_response):
         self.get_response = get_response
+
+    def _is_read_only_write(self, request):
+        """A change attempted by a read-only account, outside its own session."""
+        if request.method in self.SAFE_METHODS:
+            return False
+        if not getattr(request.user, "is_authenticated", False):
+            return False
+        read_only = getattr(settings, "READ_ONLY_ACCOUNTS", [])
+        if (getattr(request.user, "email", "") or "").lower() not in read_only:
+            return False
+        return not any(request.path.startswith(p) for p in self.READ_ONLY_WRITABLE_PATHS)
 
     def _is_exempt(self, path):
         for exempt_path in self.EXEMPT_PATHS:
@@ -119,6 +146,17 @@ class RBACMiddleware:
 
     def __call__(self, request):
         path = request.path
+
+        # 0. Read-only accounts: refuse every change, before any exemption or
+        # the superuser bypass, so the Django admin is covered too.
+        if self._is_read_only_write(request):
+            return JsonResponse(
+                {
+                    "detail": "This account is read-only.",
+                    "code": "READ_ONLY_ACCOUNT",
+                },
+                status=403,
+            )
 
         # 1. Allow fully public/system paths
         if self._is_exempt(path):

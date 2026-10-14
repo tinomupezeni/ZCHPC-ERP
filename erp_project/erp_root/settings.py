@@ -284,6 +284,22 @@ AUTHENTICATION_BACKENDS = [
     "modules.identity.infrastructure.authentication.EmailBackend",  # New modular location
 ]
 
+# Accounts that may read but not change anything (owner, Wed 2026-10-14: the
+# evaluation admin, EMP0001, is read-only for now). Comma-separated login
+# emails, matched case-insensitively; empty = none. RBACMiddleware refuses
+# their writes everywhere except signing in and out and changing their own
+# password.
+def emails_from_env(name):
+    """Comma-separated emails in env var `name`, lower-cased; blanks dropped."""
+    return [
+        email.strip().lower()
+        for email in os.environ.get(name, "").split(",")
+        if email.strip()
+    ]
+
+
+READ_ONLY_ACCOUNTS = emails_from_env("READ_ONLY_ACCOUNTS")
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
