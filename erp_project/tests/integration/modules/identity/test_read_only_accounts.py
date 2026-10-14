@@ -138,14 +138,10 @@ def test_no_account_is_read_only_by_default(settings):
 
 
 def test_setting_reads_comma_separated_emails(monkeypatch):
-    import importlib
-
-    from erp_root import settings as settings_module
+    from erp_root.settings import emails_from_env
 
     monkeypatch.setenv("READ_ONLY_ACCOUNTS", " Admin@ZCHPC.ac.zw , ,other@zchpc.test")
-    try:
-        reloaded = importlib.reload(settings_module)
-        assert reloaded.READ_ONLY_ACCOUNTS == ["admin@zchpc.ac.zw", "other@zchpc.test"]
-    finally:
-        monkeypatch.delenv("READ_ONLY_ACCOUNTS")
-        importlib.reload(settings_module)
+    assert emails_from_env("READ_ONLY_ACCOUNTS") == ["admin@zchpc.ac.zw", "other@zchpc.test"]
+
+    monkeypatch.delenv("READ_ONLY_ACCOUNTS")
+    assert emails_from_env("READ_ONLY_ACCOUNTS") == []

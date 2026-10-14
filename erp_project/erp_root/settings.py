@@ -289,11 +289,16 @@ AUTHENTICATION_BACKENDS = [
 # emails, matched case-insensitively; empty = none. RBACMiddleware refuses
 # their writes everywhere except signing in and out and changing their own
 # password.
-READ_ONLY_ACCOUNTS = [
-    email.strip().lower()
-    for email in os.environ.get("READ_ONLY_ACCOUNTS", "").split(",")
-    if email.strip()
-]
+def emails_from_env(name):
+    """Comma-separated emails in env var `name`, lower-cased; blanks dropped."""
+    return [
+        email.strip().lower()
+        for email in os.environ.get(name, "").split(",")
+        if email.strip()
+    ]
+
+
+READ_ONLY_ACCOUNTS = emails_from_env("READ_ONLY_ACCOUNTS")
 
 AUTH_PASSWORD_VALIDATORS = [
     {
