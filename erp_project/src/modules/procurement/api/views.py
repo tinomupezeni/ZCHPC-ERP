@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import permission_classes
 from django.utils import timezone
+from django.db.models import Q
 
 from shared.domain.exceptions import ValidationError, NotFoundError
 from modules.procurement.domain.entities import Supplier, InventoryItem, BudgetCenter
@@ -41,6 +42,7 @@ from modules.procurement.api.serializers import (
     MarkDeliveredSerializer,
     CancelOrderSerializer,
 )
+from modules.portal.api.serializers import FuelRequisitionSerializer, StoresRequisitionSerializer
 
 
 # Initialize repositories
@@ -438,6 +440,139 @@ def purchase_request_reject(request: Request, request_id: int) -> Response:
         return _handle_error(e)
 
 
+FUEL_APPROVAL_STAGES = {
+    "PENDING_DEPARTMENT": ("department", {"MANAGER", "DEPARTMENT_MANAGER", "HR_MANAGER"}),
+    "PENDING_RECIPIENT": ("recipient", set()),
+    "PENDING_FINANCE": ("finance", {"FINANCE", "ACCOUNTANT", "GENERAL_MANAGER"}),
+    "PENDING_DIRECTOR": ("director", {"DIRECTOR", "ZCHPC_DIRECTOR"}),
+    "PENDING_ADMIN": ("admin", {"ADMIN", "SYSTEM_ADMINISTRATOR"}),
+}
+
+STORES_APPROVAL_STAGES = {
+    "PENDING_DEPARTMENT": ("department", {"MANAGER", "DEPARTMENT_MANAGER", "HR_MANAGER"}),
+    "PENDING_PROCUREMENT": ("procurement", {"PROCUREMENT", "PROCUREMENT_OFFICER", "STORES", "STORES_OFFICER"}),
+    "PENDING_ACCOUNTS": ("accounts", {"ACCOUNTS", "ACCOUNTANT", "FINANCE"}),
+    "PENDING_GENERAL_MANAGER": ("general_manager", {"GENERAL_MANAGER", "MANAGER"}),
+    "PENDING_DIRECTOR": ("director", {"DIRECTOR", "ZCHPC_DIRECTOR"}),
+    "PENDING_ADMIN": ("admin", {"ADMIN", "SYSTEM_ADMINISTRATOR"}),
+}
+
+
+def _approval_actor(request: Request):
+    employee = getattr(request.user, "employee_profile", None)
+    role = (employee.role.name if employee and employee.role else "").upper()
+    is_admin = request.user.is_superuser or role in {"ADMIN", "SYSTEM_ADMINISTRATOR"}
+    return employee, role, is_admin
+
+
+def _role_matches(role: str, allowed_roles: set[str]) -> bool:
+    return role in allowed_roles or any(allowed_role in role for allowed_role in allowed_roles)
+
+
+def _recipient_matches(request: Request, employee, record) -> bool:
+    if not employee:
+        return False
+    recipient_name = f"{employee.first_name} {employee.surname}".strip().lower()
+    recipient_value = record.recipient_driver.strip().lower()
+    return recipient_value in {
+        request.user.email.lower(),
+        recipient_name,
+        employee.employee_id.lower(),
+    }
+
+
+def _can_act_on_requisition(request: Request, record, stage_name: str, allowed_roles: set[str]) -> bool:
+    employee, role, is_admin = _approval_actor(request)
+    if is_admin:
+        return True
+    if not employee or not _role_matches(role, allowed_roles):
+        if stage_name != "recipient" or not _recipient_matches(request, employee, record):
+            return False
+    if stage_name == "department" and employee.department_id != record.department_id:
+        return False
+    if stage_name == "recipient" and not _recipient_matches(request, employee, record):
+        return False
+    return True
+
+
+def _requisition_inbox(request: Request, model, stages: dict, serializer_class):
+    employee, role, is_admin = _approval_actor(request)
+    if not employee and not is_admin:
+        return Response({"error": "Employee profile not found"}, status=status.HTTP_400_BAD_REQUEST)
+
+    filters = Q(pk__in=[])
+    for pending_status, (stage_name, allowed_roles) in stages.items():
+        if is_admin:
+            filters |= Q(status=pending_status)
+            continue
+        if not is_admin and stage_name != "recipient" and not _role_matches(role, allowed_roles):
+            continue
+        stage_filter = Q(status=pending_status)
+        if stage_name == "department":
+            if not employee or not employee.department_id:
+                continue
+            stage_filter &= Q(department_id=employee.department_id)
+        elif stage_name == "recipient":
+            if not employee:
+                continue
+            recipient_name = f"{employee.first_name} {employee.surname}".strip()
+            stage_filter &= (
+                Q(recipient_driver__iexact=request.user.email)
+                | Q(recipient_driver__iexact=recipient_name)
+                | Q(recipient_driver__iexact=employee.employee_id)
+            )
+        filters |= stage_filter
+
+    relations = {field.name for field in model._meta.fields}
+    related_fields = [
+        field for field in (
+            "rejected_by", "department_approved_by", "recipient_approved_by",
+            "procurement_approved_by", "accounts_approved_by", "finance_approved_by",
+            "general_manager_approved_by", "director_approved_by", "admin_approved_by",
+        )
+        if field in relations
+    ]
+    records = model.objects.filter(filters).select_related(
+        "requester", "requester__employee_profile", "department", *related_fields
+    )
+    return Response(serializer_class(records, many=True).data)
+
+
+def _reject_requisition(request: Request, record, stages: dict):
+    pending_status = record.status
+    stage = stages.get(pending_status)
+    if stage is None:
+        return Response({"error": "This requisition is no longer awaiting approval"}, status=status.HTTP_400_BAD_REQUEST)
+    stage_name, allowed_roles = stage
+    if not _can_act_on_requisition(request, record, stage_name, allowed_roles):
+        return Response({"error": "You are not authorized for this approval stage"}, status=status.HTTP_403_FORBIDDEN)
+    if record.requester_id == request.user.id:
+        return Response({"error": "The requester cannot reject their own requisition"}, status=status.HTTP_403_FORBIDDEN)
+
+    reason = str(request.data.get("reason", "")).strip()
+    if not reason:
+        return Response({"error": "A rejection reason is required"}, status=status.HTTP_400_BAD_REQUEST)
+    record.status = "REJECTED"
+    record.rejection_reason = reason
+    record.rejected_by_id = request.user.id
+    record.rejected_at = timezone.now()
+    record.rejected_at_stage = pending_status
+    record.save(update_fields=["status", "rejection_reason", "rejected_by", "rejected_at", "rejected_at_stage", "updated_at"])
+    return Response({"id": record.id, "status": record.status, "rejection_reason": record.rejection_reason, "rejected_at_stage": record.rejected_at_stage})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def fuel_requisition_inbox(request: Request) -> Response:
+    return _requisition_inbox(request, FuelRequisition, FUEL_APPROVAL_STAGES, FuelRequisitionSerializer)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def stores_requisition_inbox(request: Request) -> Response:
+    return _requisition_inbox(request, StoresRequisition, STORES_APPROVAL_STAGES, StoresRequisitionSerializer)
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def fuel_requisition_approve(request: Request, requisition_id: int) -> Response:
@@ -447,30 +582,11 @@ def fuel_requisition_approve(request: Request, requisition_id: int) -> Response:
     except FuelRequisition.DoesNotExist:
         return Response({"error": "Fuel requisition not found"}, status=status.HTTP_404_NOT_FOUND)
 
-    employee = getattr(request.user, "employee_profile", None)
-    role = (employee.role.name if employee and employee.role else "").upper()
-    is_admin = request.user.is_superuser or role in {"ADMIN", "SYSTEM_ADMINISTRATOR"}
-    stages = {
-        "PENDING_DEPARTMENT": ("department", {"MANAGER", "DEPARTMENT_MANAGER", "HR_MANAGER"}),
-        "PENDING_RECIPIENT": ("recipient", set()),
-        "PENDING_FINANCE": ("finance", {"FINANCE", "ACCOUNTANT", "GENERAL_MANAGER"}),
-        "PENDING_DIRECTOR": ("director", {"DIRECTOR", "ZCHPC_DIRECTOR"}),
-        "PENDING_ADMIN": ("admin", {"ADMIN", "SYSTEM_ADMINISTRATOR"}),
-    }
-    stage = stages.get(record.status)
+    stage = FUEL_APPROVAL_STAGES.get(record.status)
     if stage is None:
         return Response({"error": "This requisition is no longer awaiting approval"}, status=status.HTTP_400_BAD_REQUEST)
     stage_name, roles = stage
-
-    recipient_match = False
-    if employee and stage_name == "recipient":
-        recipient_text = record.recipient_driver.strip().lower()
-        recipient_match = recipient_text in {
-            request.user.email.lower(),
-            f"{employee.first_name} {employee.surname}".strip().lower(),
-            employee.employee_id.lower(),
-        }
-    if not is_admin and not (role in roles or any(item in role for item in roles) or recipient_match):
+    if not _can_act_on_requisition(request, record, stage_name, roles):
         return Response({"error": "You are not authorized for this approval stage"}, status=status.HTTP_403_FORBIDDEN)
     if record.requester_id == request.user.id:
         return Response({"error": "The requester cannot approve their own requisition"}, status=status.HTTP_403_FORBIDDEN)
@@ -498,25 +614,12 @@ def stores_requisition_approve(request: Request, requisition_id: int) -> Respons
     except StoresRequisition.DoesNotExist:
         return Response({"error": "Stores requisition not found"}, status=status.HTTP_404_NOT_FOUND)
 
-    employee = getattr(request.user, "employee_profile", None)
-    role = (employee.role.name if employee and employee.role else "").upper()
-    is_admin = request.user.is_superuser or role in {"ADMIN", "SYSTEM_ADMINISTRATOR"}
-    stages = {
-        "PENDING_DEPARTMENT": ("department", {"MANAGER", "DEPARTMENT_MANAGER", "HR_MANAGER"}),
-        "PENDING_PROCUREMENT": ("procurement", {"PROCUREMENT", "PROCUREMENT_OFFICER", "STORES", "STORES_OFFICER"}),
-        "PENDING_ACCOUNTS": ("accounts", {"ACCOUNTS", "ACCOUNTANT", "FINANCE"}),
-        "PENDING_GENERAL_MANAGER": ("general_manager", {"GENERAL_MANAGER", "MANAGER"}),
-        "PENDING_DIRECTOR": ("director", {"DIRECTOR", "ZCHPC_DIRECTOR"}),
-        "PENDING_ADMIN": ("admin", {"ADMIN", "SYSTEM_ADMINISTRATOR"}),
-    }
-    stage = stages.get(record.status)
+    stage = STORES_APPROVAL_STAGES.get(record.status)
     if stage is None:
         return Response({"error": "This requisition is no longer awaiting approval"}, status=status.HTTP_400_BAD_REQUEST)
     stage_name, allowed_roles = stage
-    if not is_admin and not (role in allowed_roles or any(item in role for item in allowed_roles)):
+    if not _can_act_on_requisition(request, record, stage_name, allowed_roles):
         return Response({"error": "You are not authorized for this approval stage"}, status=status.HTTP_403_FORBIDDEN)
-    if stage_name == "department" and not is_admin and employee.department_id != record.department_id:
-        return Response({"error": "Only the requester's department can approve this stage"}, status=status.HTTP_403_FORBIDDEN)
     if record.requester_id == request.user.id:
         return Response({"error": "The requester cannot approve their own requisition"}, status=status.HTTP_403_FORBIDDEN)
 
@@ -533,6 +636,26 @@ def stores_requisition_approve(request: Request, requisition_id: int) -> Respons
     record.status = next_status
     record.save()
     return Response({"id": record.id, "requisition_number": record.requisition_number, "status": record.status})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def fuel_requisition_reject(request: Request, requisition_id: int) -> Response:
+    try:
+        record = FuelRequisition.objects.get(pk=requisition_id)
+    except FuelRequisition.DoesNotExist:
+        return Response({"error": "Fuel requisition not found"}, status=status.HTTP_404_NOT_FOUND)
+    return _reject_requisition(request, record, FUEL_APPROVAL_STAGES)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def stores_requisition_reject(request: Request, requisition_id: int) -> Response:
+    try:
+        record = StoresRequisition.objects.get(pk=requisition_id)
+    except StoresRequisition.DoesNotExist:
+        return Response({"error": "Stores requisition not found"}, status=status.HTTP_404_NOT_FOUND)
+    return _reject_requisition(request, record, STORES_APPROVAL_STAGES)
 
 
 @api_view(["POST"])

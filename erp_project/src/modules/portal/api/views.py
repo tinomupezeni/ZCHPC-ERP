@@ -383,7 +383,9 @@ def fuel_requisitions(request: Request) -> Response:
         return Response({"error": "Employee department is required"}, status=status.HTTP_400_BAD_REQUEST)
 
     if request.method == "GET":
-        records = FuelRequisition.objects.filter(requester=request.user).select_related("department")
+        records = FuelRequisition.objects.filter(requester=request.user).select_related(
+            "requester__employee_profile", "department"
+        )
         return Response(FuelRequisitionSerializer(records, many=True).data)
 
     serializer = CreateFuelRequisitionSerializer(data=request.data)
@@ -414,7 +416,11 @@ def stores_requisitions(request: Request) -> Response:
         return Response({"error": "Employee department is required"}, status=status.HTTP_400_BAD_REQUEST)
 
     if request.method == "GET":
-        records = StoresRequisition.objects.filter(requester=request.user).select_related("department")
+        records = StoresRequisition.objects.filter(requester=request.user).select_related(
+            "requester__employee_profile", "department", "rejected_by",
+            "department_approved_by", "procurement_approved_by", "accounts_approved_by",
+            "general_manager_approved_by", "director_approved_by", "admin_approved_by",
+        )
         return Response(StoresRequisitionSerializer(records, many=True).data)
 
     serializer = CreateStoresRequisitionSerializer(data=request.data)

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Loader2, Printer } from 'lucide-react';
 import { format } from 'date-fns';
@@ -29,11 +30,11 @@ export function LeaveRequestForm({
   const [fullNames, setFullNames] = useState('');
   const [designation, setDesignation] = useState('');
   const [department, setDepartment] = useState('IT');
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const { employee } = useAuth();
 
   useEffect(() => {
     if (employee) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setEmploymentCode(employee.employee_id || 'EMP0001');
       setFullNames(employee.full_name || `${employee.first_name} ${employee.surname}`.trim());
       setDesignation(employee.position_title || '');
@@ -42,14 +43,19 @@ export function LeaveRequestForm({
   }, [employee]);
 
   const validate = (): boolean => {
-    const newErrors: Record<string, string> = {};
-
-    if (!leaveType) newErrors.leaveType = 'Select a leave type';
-    if (!period) newErrors.period = 'Enter the leave period';
-    if (!daysApplied) newErrors.daysApplied = 'Enter the number of days';
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    if (!leaveType) {
+      toast.error('Select a leave type');
+      return false;
+    }
+    if (!period) {
+      toast.error('Enter the leave period');
+      return false;
+    }
+    if (!daysApplied) {
+      toast.error('Enter the number of days');
+      return false;
+    }
+    return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -67,7 +73,6 @@ export function LeaveRequestForm({
     // Reset form on success
     setLeaveType('');
     setPeriod(''); setDaysApplied(''); setAddress(''); setTelephone(''); setEmail(''); setSignature('');
-    setErrors({});
   };
 
   return <div className="leave-paper-wrap">

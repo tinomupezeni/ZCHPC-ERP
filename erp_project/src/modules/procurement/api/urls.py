@@ -77,14 +77,34 @@ urlpatterns = [
         name="request-reject"
     ),
     path(
+        "fuel-requisitions/inbox/",
+        views.fuel_requisition_inbox,
+        name="fuel-requisition-inbox"
+    ),
+    path(
         "fuel-requisitions/<int:requisition_id>/approve/",
         views.fuel_requisition_approve,
         name="fuel-requisition-approve"
     ),
     path(
+        "fuel-requisitions/<int:requisition_id>/reject/",
+        views.fuel_requisition_reject,
+        name="fuel-requisition-reject"
+    ),
+    path(
+        "stores-requisitions/inbox/",
+        views.stores_requisition_inbox,
+        name="stores-requisition-inbox"
+    ),
+    path(
         "stores-requisitions/<int:requisition_id>/approve/",
         views.stores_requisition_approve,
         name="stores-requisition-approve"
+    ),
+    path(
+        "stores-requisitions/<int:requisition_id>/reject/",
+        views.stores_requisition_reject,
+        name="stores-requisition-reject"
     ),
     path(
         "comparative-schedules/<int:schedule_id>/approve/",

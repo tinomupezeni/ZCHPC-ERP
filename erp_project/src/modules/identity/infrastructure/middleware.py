@@ -45,6 +45,8 @@ class RBACMiddleware:
         '/api/v2/auth/',
         '/api/v2/portal/auth/',
         '/api/v2/portal/public/',
+        '/api/v2/procurement/fuel-requisitions/',
+        '/api/v2/procurement/stores-requisitions/',
         '/admin/',
         '/__reload__/',
     ]
