@@ -218,8 +218,25 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     canRecommendAsGM,
     canApproveAsDirector,
     canProcessAsProcurement,
+    pendingCounts,
   } = usePurchaseRequestReviewerAccess();
   const purchaseRequestActionCount = usePurchaseRequestActionCount();
+
+  // Badge per nav item: the caller's own requests needing action on
+  // "Purchase Requests", and the requests waiting in each review queue
+  // (hand check, Wed 2026-10-14: reviewers get the same cue staff have).
+  const badgeCounts: Record<string, number> = {
+    [PURCHASE_REQUESTS_PATH]: purchaseRequestActionCount,
+    [DEPARTMENT_HEAD_REVIEW_ITEM.path]: pendingCounts?.departmentHead ?? 0,
+    [ACCOUNTS_VERIFICATION_ITEM.path]: pendingCounts?.accounts ?? 0,
+    [GM_RECOMMENDATION_ITEM.path]: pendingCounts?.gm ?? 0,
+    [DIRECTOR_APPROVAL_ITEM.path]: pendingCounts?.director ?? 0,
+    [PROCUREMENT_PROCESSING_ITEM.path]: pendingCounts?.procurement ?? 0,
+  };
+  const badgeLabel = (path: string, n: number) =>
+    path === PURCHASE_REQUESTS_PATH
+      ? `${n} request${n === 1 ? '' : 's'} need${n === 1 ? 's' : ''} your attention`
+      : `${n} request${n === 1 ? '' : 's'} waiting for you`;
 
   const baseNavItems = NAV_ITEMS[roleGroup] ?? NAV_ITEMS.staff;
   const reviewerItems: NavItem[] = [];
@@ -328,15 +345,15 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                           Coming soon
                         </span>
                       )}
-                      {item.path === PURCHASE_REQUESTS_PATH && purchaseRequestActionCount > 0 && (
+                      {(badgeCounts[item.path] ?? 0) > 0 && (
                         <span
                           className={cn(
                             'inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full text-[10px] font-semibold flex-shrink-0',
                             isActive ? 'bg-white text-blue-700' : 'bg-amber-500 text-white'
                           )}
-                          aria-label={`${purchaseRequestActionCount} request${purchaseRequestActionCount === 1 ? '' : 's'} need${purchaseRequestActionCount === 1 ? 's' : ''} your attention`}
+                          aria-label={badgeLabel(item.path, badgeCounts[item.path])}
                         >
-                          {purchaseRequestActionCount}
+                          {badgeCounts[item.path]}
                         </span>
                       )}
                     </span>

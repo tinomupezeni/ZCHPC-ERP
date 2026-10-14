@@ -201,6 +201,48 @@ describe('usePurchaseRequestReviewerAccess', () => {
     await waitFor(() => expect(result.current.canProcessAsProcurement).toBe(true));
   });
 
+  it('counts the requests waiting in each reachable queue, 0 for an unreachable one', async () => {
+    const rows = (n: number) => Array.from({ length: n }, (_, i) => ({ id: i + 1 })) as never[];
+    vi.mocked(purchaseRequestService.getPendingDepartmentHeadRequests).mockResolvedValue(rows(2));
+    vi.mocked(purchaseRequestService.getPendingAccountsRequests).mockResolvedValue(rows(0));
+    vi.mocked(purchaseRequestService.getPendingGMRequests).mockResolvedValue(rows(1));
+    vi.mocked(purchaseRequestService.getPendingDirectorRequests).mockResolvedValue(rows(3));
+    reject403(vi.mocked(purchaseRequestService.getPendingProcurementRequests));
+
+    const { result } = renderHook(() => usePurchaseRequestReviewerAccess());
+
+    await waitFor(() => expect(result.current.canProcessAsProcurement).toBe(false));
+    await waitFor(() =>
+      expect(result.current.pendingCounts).toEqual({
+        departmentHead: 2,
+        accounts: 0,
+        gm: 1,
+        director: 3,
+        procurement: 0,
+      })
+    );
+  });
+
+  it('reports no pending requests while the queues are still loading', () => {
+    vi.mocked(purchaseRequestService.getPendingDepartmentHeadRequests).mockReturnValue(
+      new Promise(() => {})
+    );
+    vi.mocked(purchaseRequestService.getPendingAccountsRequests).mockReturnValue(
+      new Promise(() => {})
+    );
+    vi.mocked(purchaseRequestService.getPendingGMRequests).mockReturnValue(new Promise(() => {}));
+    vi.mocked(purchaseRequestService.getPendingDirectorRequests).mockReturnValue(
+      new Promise(() => {})
+    );
+    vi.mocked(purchaseRequestService.getPendingProcurementRequests).mockReturnValue(
+      new Promise(() => {})
+    );
+
+    const { result } = renderHook(() => usePurchaseRequestReviewerAccess());
+
+    expect(Object.values(result.current.pendingCounts)).toEqual([0, 0, 0, 0, 0]);
+  });
+
   it('fails safely to false (not true) on a non-403 error, same as usePurchaseRequestActionCount', async () => {
     const networkError = new Error('Network Error');
     vi.mocked(purchaseRequestService.getPendingDepartmentHeadRequests).mockRejectedValue(

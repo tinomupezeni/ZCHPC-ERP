@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { Sidebar } from '../Sidebar';
@@ -26,6 +26,8 @@ let mockCanVerifyAsAccounts: boolean | null = false;
 let mockCanRecommendAsGM: boolean | null = false;
 let mockCanApproveAsDirector: boolean | null = false;
 let mockCanProcessAsProcurement: boolean | null = false;
+const NO_PENDING = { departmentHead: 0, accounts: 0, gm: 0, director: 0, procurement: 0 };
+let mockPendingCounts = { ...NO_PENDING };
 vi.mock('@/hooks/usePurchaseRequestReviewerAccess', () => ({
   usePurchaseRequestReviewerAccess: () => ({
     canReviewAsDepartmentHead: mockCanReviewAsDepartmentHead,
@@ -33,6 +35,7 @@ vi.mock('@/hooks/usePurchaseRequestReviewerAccess', () => ({
     canRecommendAsGM: mockCanRecommendAsGM,
     canApproveAsDirector: mockCanApproveAsDirector,
     canProcessAsProcurement: mockCanProcessAsProcurement,
+    pendingCounts: mockPendingCounts,
   }),
 }));
 
@@ -451,6 +454,70 @@ describe('Sidebar - Purchase Requests action badge', () => {
 
     const leaveLink = screen.getByRole('link', { name: /leave/i });
     expect(leaveLink).not.toHaveTextContent('3');
+  });
+});
+
+/**
+ * Hand check (Wed 2026-10-14): reviewers get the same small count staff have
+ * on "Purchase Requests", on each review queue link, counting the requests
+ * waiting there.
+ */
+describe('Sidebar - review queue badges', () => {
+  const QUEUES = [
+    ['department head review', 'departmentHead'],
+    ['accounts verification', 'accounts'],
+    ['gm recommendation', 'gm'],
+    ['director approval', 'director'],
+    ['procurement processing', 'procurement'],
+  ] as const;
+
+  afterEach(() => {
+    mockPendingCounts = { ...NO_PENDING };
+  });
+
+  function asEveryReviewer(counts: typeof NO_PENDING) {
+    mockRoleGroup = 'staff';
+    mockUseActionCount.mockReturnValue(0);
+    mockCanReviewAsDepartmentHead = true;
+    mockCanVerifyAsAccounts = true;
+    mockCanRecommendAsGM = true;
+    mockCanApproveAsDirector = true;
+    mockCanProcessAsProcurement = true;
+    mockPendingCounts = counts;
+  }
+
+  it.each(QUEUES)('shows the waiting count on %s', (label, key) => {
+    asEveryReviewer({ ...NO_PENDING, [key]: 4 });
+    renderSidebar();
+
+    const link = screen.getByRole('link', { name: new RegExp(label, 'i') });
+    expect(link).toHaveTextContent('4');
+    expect(screen.getByLabelText('4 requests waiting for you')).toBeInTheDocument();
+    for (const [other] of QUEUES.filter(([, k]) => k !== key)) {
+      expect(screen.getByRole('link', { name: new RegExp(other, 'i') })).not.toHaveTextContent(
+        /\d/
+      );
+    }
+  });
+
+  it('shows no badge on an empty queue', () => {
+    asEveryReviewer({ ...NO_PENDING });
+    renderSidebar();
+
+    for (const [label] of QUEUES) {
+      expect(screen.getByRole('link', { name: new RegExp(label, 'i') })).not.toHaveTextContent(
+        /\d/
+      );
+    }
+  });
+
+  it('keeps the own-requests badge on "Purchase Requests" separate from the queues', () => {
+    asEveryReviewer({ ...NO_PENDING, director: 2 });
+    mockUseActionCount.mockReturnValue(1);
+    renderSidebar();
+
+    expect(screen.getByRole('link', { name: /^purchase requests/i })).toHaveTextContent('1');
+    expect(screen.getByRole('link', { name: /director approval/i })).toHaveTextContent('2');
   });
 });
 
