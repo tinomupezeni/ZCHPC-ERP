@@ -371,3 +371,12 @@ compose default; admin GET 200, admin POST 403 `READ_ONLY_ACCOUNT`; HR unaffecte
   sudo ./deploy.sh up` (same DB; no reseed needed).
 
 **4. Hand checks (owner, staging): all passed.**
+
+**Cleanup (owner's go-ahead, after the hand checks).** On the VM, by exact name, no prune, after checking no container
+used them: images `erp-staging/{api,frontend,portal}:36e644b` and `:5d95274`, `~/erp-staging-53b8826.tar.gz`,
+`~/erp-staging-fb2394c.tar.gz`. Snapshot `~/prod-snapshot-2026-10-14c.txt` before; production unchanged after;
+staging still healthy on `:fb2394c`. Laptop: local stack stopped (volumes kept), release worktrees removed, Docker
+Desktop quit. Tars kept in `C:\Users\richa\erp-staging-images\` (128c60d, 5d95274, 36e644b, 53b8826, fb2394c).
+**Left on the VM:** the `:fb2394c` images (in use), the `:53b8826` images (rollback), `docker-compose.yml.bak-53b8826`,
+`.env.bak-53b8826`, `.env.bak-36e644b`, `.env.bak-5d95274`, `.env.bak-128c60d`, `.env.bak-f70f026`,
+`~/erp-staging-files-2ec500e/`, the prod snapshots.
