@@ -13,7 +13,29 @@ export interface PurchaseRequestReviewerAccess {
   canApproveAsDirector: boolean | null;
   /** F23: whether the caller can reach the Procurement processing queue. */
   canProcessAsProcurement: boolean | null;
+  /**
+   * Requests waiting in each queue the caller can reach, for the sidebar
+   * badges (hand check, Wed 2026-10-14). 0 while loading and for a queue
+   * the caller cannot reach.
+   */
+  pendingCounts: PendingQueueCounts;
 }
+
+export interface PendingQueueCounts {
+  departmentHead: number;
+  accounts: number;
+  gm: number;
+  director: number;
+  procurement: number;
+}
+
+const NO_PENDING: PendingQueueCounts = {
+  departmentHead: 0,
+  accounts: 0,
+  gm: 0,
+  director: 0,
+  procurement: 0,
+};
 
 /**
  * Whether the current employee can reach the Department Head review queue,
@@ -59,14 +81,17 @@ export function usePurchaseRequestReviewerAccess(): PurchaseRequestReviewerAcces
   const [canRecommendAsGM, setCanRecommendAsGM] = useState<boolean | null>(null);
   const [canApproveAsDirector, setCanApproveAsDirector] = useState<boolean | null>(null);
   const [canProcessAsProcurement, setCanProcessAsProcurement] = useState<boolean | null>(null);
+  const [pendingCounts, setPendingCounts] = useState<PendingQueueCounts>(NO_PENDING);
 
   useEffect(() => {
     let cancelled = false;
 
     purchaseRequestService
       .getPendingDepartmentHeadRequests()
-      .then(() => {
-        if (!cancelled) setCanReviewAsDepartmentHead(true);
+      .then((requests) => {
+        if (cancelled) return;
+        setCanReviewAsDepartmentHead(true);
+        setPendingCounts((counts) => ({ ...counts, departmentHead: requests.length }));
       })
       .catch(() => {
         if (!cancelled) setCanReviewAsDepartmentHead(false);
@@ -74,8 +99,10 @@ export function usePurchaseRequestReviewerAccess(): PurchaseRequestReviewerAcces
 
     purchaseRequestService
       .getPendingAccountsRequests()
-      .then(() => {
-        if (!cancelled) setCanVerifyAsAccounts(true);
+      .then((requests) => {
+        if (cancelled) return;
+        setCanVerifyAsAccounts(true);
+        setPendingCounts((counts) => ({ ...counts, accounts: requests.length }));
       })
       .catch(() => {
         if (!cancelled) setCanVerifyAsAccounts(false);
@@ -83,8 +110,10 @@ export function usePurchaseRequestReviewerAccess(): PurchaseRequestReviewerAcces
 
     purchaseRequestService
       .getPendingGMRequests()
-      .then(() => {
-        if (!cancelled) setCanRecommendAsGM(true);
+      .then((requests) => {
+        if (cancelled) return;
+        setCanRecommendAsGM(true);
+        setPendingCounts((counts) => ({ ...counts, gm: requests.length }));
       })
       .catch(() => {
         if (!cancelled) setCanRecommendAsGM(false);
@@ -92,8 +121,10 @@ export function usePurchaseRequestReviewerAccess(): PurchaseRequestReviewerAcces
 
     purchaseRequestService
       .getPendingDirectorRequests()
-      .then(() => {
-        if (!cancelled) setCanApproveAsDirector(true);
+      .then((requests) => {
+        if (cancelled) return;
+        setCanApproveAsDirector(true);
+        setPendingCounts((counts) => ({ ...counts, director: requests.length }));
       })
       .catch(() => {
         if (!cancelled) setCanApproveAsDirector(false);
@@ -101,8 +132,10 @@ export function usePurchaseRequestReviewerAccess(): PurchaseRequestReviewerAcces
 
     purchaseRequestService
       .getPendingProcurementRequests()
-      .then(() => {
-        if (!cancelled) setCanProcessAsProcurement(true);
+      .then((requests) => {
+        if (cancelled) return;
+        setCanProcessAsProcurement(true);
+        setPendingCounts((counts) => ({ ...counts, procurement: requests.length }));
       })
       .catch(() => {
         if (!cancelled) setCanProcessAsProcurement(false);
@@ -119,6 +152,7 @@ export function usePurchaseRequestReviewerAccess(): PurchaseRequestReviewerAcces
     canRecommendAsGM,
     canApproveAsDirector,
     canProcessAsProcurement,
+    pendingCounts,
   };
 }
 
