@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { homePathFor } from '@/layout/navConfig';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -11,9 +12,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children, 
   requiredPermission 
 }) => {
-  const { user, isLoading, checkPermission } = useAuth(); // This now works!
+  const { user, access, isLoading, checkPermission } = useAuth(); // This now works!
   const navigate = useNavigate();
   const location = useLocation();
+  const allowed = !requiredPermission || checkPermission(requiredPermission);
+  // Undefined when the user has no ERP module; MainLayout then shows
+  // "Your work is in the Employee Portal" on whatever page they are on.
+  const homePath = homePathFor(checkPermission, access?.active_modules ?? []);
 
   useEffect(() => {
     if (isLoading) return; // Wait for the context's auth check
@@ -34,12 +39,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       return;
     }
 
-    // If permission is required but user doesn't have it
-    if (requiredPermission && !checkPermission(requiredPermission)) {
-      // FIXED: Redirect to a single, safe default page
-      navigate("/dashboard", { replace: true }); 
+    // Without the permission, go to the user's own landing page. Never to
+    // /dashboard by default: it is the Administrator's page, and its data
+    // call is refused for every other role ("Failed to Load Dashboard").
+    if (!allowed && homePath && homePath !== location.pathname) {
+      navigate(homePath, { replace: true });
     }
-  }, [isLoading, user, requiredPermission, navigate, location.pathname, checkPermission]);
+  }, [isLoading, user, allowed, homePath, navigate, location.pathname]);
   // Render a isLoading spinner while the auth status is being determined
   if (isLoading) {
     return (
@@ -71,8 +77,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
+  // Not even mounted while a redirect is pending: the page's own data calls
+  // would be refused. With no landing page (no ERP module) the children
+  // render, and MainLayout replaces the page with the Portal pointer.
+  if (user && !allowed && homePath) return null;
+
   // If authenticated and has permission (or no permission is required), render children
-  // The useEffect handles all redirect cases, so we only need to return the children here
   return <>{children}</>;
 };
 
