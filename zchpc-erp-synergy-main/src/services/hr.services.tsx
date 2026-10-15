@@ -42,6 +42,11 @@ export const deactivateUser = async (id) => {
   return await apiClient.patch(`/auth/users/${id}/`, { is_active: false });
 };
 
+// The reverse; the response carries a one-time temporary_password (REM-07).
+export const reactivateUser = async (id) => {
+  return await apiClient.patch(`/auth/users/${id}/`, { is_active: true });
+};
+
 // --- Dashboard & Analytics ---
 export const hrDashboard = () => {
   return apiClient.get(`/hr/dashboard/`);

@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { getEmployeeById, updateEmployee } from "@/services/employees.services";
+import {
+  deactivateEmployee,
+  getEmployeeById,
+  reactivateEmployee,
+  updateEmployee,
+} from "@/services/employees.services";
 import { isAtLeastAge, MIN_EMPLOYEE_AGE } from "@/lib/dateOfBirth";
 import { getDepartment, getPositions } from "@/services/hr.services";
 import { Employee, DropdownOption } from "../types/employee";
@@ -70,6 +75,16 @@ const SAVE_REFUSALS: Record<string, string> = {
   EMPLOYEE_ARCHIVED: "This employee has been archived, so their record can't be changed.",
 };
 
+// The same, for deactivating and reactivating.
+const STATUS_REFUSALS: Record<string, string> = {
+  EMPLOYEE_DEACTIVATE_NOT_AUTHORIZED: "You don't have permission to deactivate employees.",
+  EMPLOYEE_REACTIVATE_NOT_AUTHORIZED: "You don't have permission to reactivate employees.",
+  EMPLOYEE_TARGET_EXCEEDS_ACTOR_AUTHORITY: "You don't have permission to change this employee's status.",
+  EMPLOYEE_SELF_DEACTIVATION: "You can't deactivate your own account.",
+  EMPLOYEE_SELF_REACTIVATION: "You can't reactivate your own account.",
+  EMPLOYEE_ARCHIVED: "This employee has been archived, so their status can't be changed.",
+};
+
 const FIELD_LABELS: Record<string, string> = {
   first_name: "First name",
   surname: "Surname",
@@ -108,6 +123,10 @@ export const useEmployeeDetail = (initialEmployee: Employee, onUpdate: () => voi
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false); // one save at a time, even within one render
   const [activeTab, setActiveTab] = useState("overview");
+  const [changingStatus, setChangingStatus] = useState(false);
+  const changingStatusRef = useRef(false); // one deactivate/reactivate at a time
+  // Shown once after a reactivation, then gone (REM-07).
+  const [issuedPassword, setIssuedPassword] = useState<string | null>(null);
 
   const [departments, setDepartments] = useState<DropdownOption[]>([]);
   const [positions, setPositions] = useState<DropdownOption[]>([]);
@@ -208,6 +227,48 @@ export const useEmployeeDetail = (initialEmployee: Employee, onUpdate: () => voi
     }
   };
 
+  // Deactivate / reactivate (AUD-02). The backend decides who may do it;
+  // a reactivated login comes back with a one-time temporary password.
+  const handleSetActive = async (active: boolean) => {
+    if (changingStatusRef.current) return;
+    const name = `${employee.first_name ?? ""} ${employee.surname ?? ""}`.trim();
+    if (
+      !active &&
+      !confirm(`Deactivate ${name}? They will no longer be able to sign in to the ERP or the Employee Portal. They can be reactivated later.`)
+    ) {
+      return;
+    }
+
+    changingStatusRef.current = true;
+    setChangingStatus(true);
+    try {
+      if (active) {
+        const response = await reactivateEmployee(employee.id);
+        setIssuedPassword(response.data?.temporary_password ?? null);
+        toast.success(`${name} has been reactivated.`);
+      } else {
+        await deactivateEmployee(employee.id);
+        toast.success(`${name} has been deactivated.`);
+      }
+      const updated = await getEmployeeById(employee.id);
+      setEmployee(updated.data);
+      setFormData(updated.data);
+      onUpdate();
+    } catch (error) {
+      const { status, code } = readApiError(error);
+      toast.error(
+        code && STATUS_REFUSALS[code]
+          ? STATUS_REFUSALS[code]
+          : status === 403
+            ? NO_PERMISSION
+            : `We couldn't ${active ? "reactivate" : "deactivate"} ${name}. Please refresh the page and try again.`
+      );
+    } finally {
+      changingStatusRef.current = false;
+      setChangingStatus(false);
+    }
+  };
+
   return {
     employee,
     formData,
@@ -221,5 +282,9 @@ export const useEmployeeDetail = (initialEmployee: Employee, onUpdate: () => voi
     positions,
     handleChange,
     handleSave,
+    changingStatus,
+    handleSetActive,
+    issuedPassword,
+    clearIssuedPassword: () => setIssuedPassword(null),
   };
 };

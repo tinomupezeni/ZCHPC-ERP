@@ -17,10 +17,10 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { UserPlus, Search, Edit, UserX, Unlock, User as UserIcon } from "lucide-react";
+import { UserPlus, Search, Edit, UserX, UserCheck, Unlock, User as UserIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { deactivateUser } from '@/services/hr.services'
+import { deactivateUser, reactivateUser } from '@/services/hr.services'
 import { unlockUser } from '@/services/auth.services'
 import { NO_PERMISSION, readApiError } from '@/lib/apiErrors'
 
@@ -29,6 +29,13 @@ const DEACTIVATE_REFUSALS: Record<string, string> = {
   EMPLOYEE_DEACTIVATE_NOT_AUTHORIZED: "You don't have permission to deactivate user accounts.",
   EMPLOYEE_TARGET_EXCEEDS_ACTOR_AUTHORITY: "You don't have permission to deactivate this user.",
   EMPLOYEE_SELF_DEACTIVATION: "You can't deactivate your own account.",
+  EMPLOYEE_ARCHIVED: "This employee has been archived, so their account can't be changed.",
+};
+
+const REACTIVATE_REFUSALS: Record<string, string> = {
+  EMPLOYEE_REACTIVATE_NOT_AUTHORIZED: "You don't have permission to reactivate user accounts.",
+  EMPLOYEE_TARGET_EXCEEDS_ACTOR_AUTHORITY: "You don't have permission to reactivate this user.",
+  EMPLOYEE_SELF_REACTIVATION: "You can't reactivate your own account.",
   EMPLOYEE_ARCHIVED: "This employee has been archived, so their account can't be changed.",
 };
 
@@ -42,6 +49,8 @@ export default function Users({ setAddUser, users, onUsersChanged, onEditUser })
   const [deactivatingId, setDeactivatingId] = useState(null);
   const deactivating = useRef(false);
   const [unlockingId, setUnlockingId] = useState(null);
+  // After a reactivation: { name, temporaryPassword }, shown once.
+  const [issuedCredential, setIssuedCredential] = useState(null);
 
   // 1. Fixed Status Logic (Handle 'is_active')
   const getStatusBadge = (isActive) => {
@@ -112,6 +121,38 @@ export default function Users({ setAddUser, users, onUsersChanged, onEditUser })
     }
   };
 
+  // The reverse of deactivating: the login comes back with a one-time
+  // temporary password (REM-07), shown once below the header.
+  const handleReactivate = async (user) => {
+    if (deactivating.current) return;
+    const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.email;
+
+    deactivating.current = true;
+    setDeactivatingId(user.id);
+    try {
+      const response = await reactivateUser(user.id);
+      const temporaryPassword = response?.data?.temporary_password;
+      if (temporaryPassword) setIssuedCredential({ name, temporaryPassword });
+      toast.success(`${name} has been reactivated.`);
+      onUsersChanged?.();
+    } catch (error) {
+      const { status, code } = readApiError(error);
+      if (status === 404) {
+        toast.error(`${name}'s account no longer exists. The list has been refreshed.`);
+        onUsersChanged?.();
+      } else if (code && REACTIVATE_REFUSALS[code]) {
+        toast.error(REACTIVATE_REFUSALS[code]);
+      } else if (status === 403) {
+        toast.error(NO_PERMISSION);
+      } else {
+        toast.error(`We couldn't reactivate ${name}. Please try again.`);
+      }
+    } finally {
+      deactivating.current = false;
+      setDeactivatingId(null);
+    }
+  };
+
   // Filter logic updated to check first_name, last_name and email
   const filteredUsers = users.filter(user => 
     user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -142,6 +183,25 @@ export default function Users({ setAddUser, users, onUsersChanged, onEditUser })
           </div>
         </CardHeader>
         <CardContent>
+          {issuedCredential && (
+            <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm">
+              <p className="text-amber-900">
+                {issuedCredential.name} can sign in again with this temporary password. It is
+                shown only now: give it to them; they must set a new one at first sign-in.
+              </p>
+              <p className="mt-2 font-mono text-base text-gray-900 select-all">
+                {issuedCredential.temporaryPassword}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => setIssuedCredential(null)}
+              >
+                Done
+              </Button>
+            </div>
+          )}
           <div className="rounded-md border">
             <Table>
               <TableHeader>
@@ -233,7 +293,7 @@ export default function Users({ setAddUser, users, onUsersChanged, onEditUser })
                               {unlockingId === user.id ? "Unlocking..." : "Unlock"}
                             </Button>
                           )}
-                          {user.is_active && (
+                          {user.is_active ? (
                             <Button
                               variant="ghost"
                               size="sm"
@@ -243,6 +303,17 @@ export default function Users({ setAddUser, users, onUsersChanged, onEditUser })
                             >
                               <UserX className="mr-1 h-4 w-4" />
                               {deactivatingId === user.id ? "Deactivating..." : "Deactivate"}
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Reactivate"
+                              disabled={deactivatingId !== null}
+                              onClick={() => handleReactivate(user)}
+                            >
+                              <UserCheck className="mr-1 h-4 w-4" />
+                              {deactivatingId === user.id ? "Reactivating..." : "Reactivate"}
                             </Button>
                           )}
                         </div>
