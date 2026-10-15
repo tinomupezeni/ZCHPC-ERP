@@ -58,7 +58,9 @@ export const updateUser = (id, payload: { first_name: string; last_name: string 
 // Lifts a lockout from failed logins (needs hr.employee.reactivate).
 export const unlockUser = (id) => apiClient.post(`/auth/users/${id}/unlock/`);
 
+// Settings → Users: disabled logins stay listed (Inactive) so they can be
+// reactivated; archived employees' logins do not.
 export const getUsers = () => {
-    return apiClient.get("/auth/users/")
+    return apiClient.get("/auth/users/", { params: { include_inactive: "true" } })
 }
 

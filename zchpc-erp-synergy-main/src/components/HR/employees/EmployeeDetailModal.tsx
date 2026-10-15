@@ -14,6 +14,8 @@ import {
   Building,
   CreditCard,
   ShieldCheck,
+  UserCheck,
+  UserX,
   LucideIcon,
 } from "lucide-react";
 import { differenceInYears, differenceInMonths } from "date-fns";
@@ -134,6 +136,10 @@ export default function EmployeeDetailModal({
     positions,
     handleChange,
     handleSave,
+    changingStatus,
+    handleSetActive,
+    issuedPassword,
+    clearIssuedPassword,
   } = useEmployeeDetail(initialEmployee, onUpdate);
 
   const getTenure = () => {
@@ -217,12 +223,32 @@ export default function EmployeeDetailModal({
 
                 <div className="flex gap-2">
                   {!isEditing ? (
-                    <button
-                      onClick={() => setIsEditing(true)}
-                      className="p-2 hover:bg-white/10 rounded-lg text-blue-200 hover:text-white"
-                    >
-                      <Edit2 className="h-5 w-5" />
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleSetActive(!employee.is_active)}
+                        disabled={changingStatus}
+                        className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg disabled:opacity-60 ${
+                          employee.is_active
+                            ? "bg-red-500/20 text-red-200 hover:bg-red-500/30"
+                            : "bg-green-500/20 text-green-200 hover:bg-green-500/30"
+                        }`}
+                      >
+                        {changingStatus ? (
+                          <Loader className="h-4 w-4 animate-spin" />
+                        ) : employee.is_active ? (
+                          <UserX className="h-4 w-4" />
+                        ) : (
+                          <UserCheck className="h-4 w-4" />
+                        )}
+                        {employee.is_active ? "Deactivate" : "Reactivate"}
+                      </button>
+                      <button
+                        onClick={() => setIsEditing(true)}
+                        className="p-2 hover:bg-white/10 rounded-lg text-blue-200 hover:text-white"
+                      >
+                        <Edit2 className="h-5 w-5" />
+                      </button>
+                    </>
                   ) : (
                     <>
                       <button
@@ -253,6 +279,22 @@ export default function EmployeeDetailModal({
                   </button>
                 </div>
               </div>
+
+              {issuedPassword && (
+                <div className="mt-6 rounded-lg bg-white/10 border border-white/20 p-4">
+                  <p className="text-sm text-blue-100">
+                    Their sign-in is back on with a temporary password. It is shown only
+                    now: give it to them; they must set a new one at first sign-in.
+                  </p>
+                  <p className="mt-2 font-mono text-lg text-white select-all">{issuedPassword}</p>
+                  <button
+                    onClick={clearIssuedPassword}
+                    className="mt-3 px-3 py-1.5 text-sm bg-white/10 hover:bg-white/20 rounded-lg"
+                  >
+                    Done
+                  </button>
+                </div>
+              )}
 
               {/* Stats Row */}
               <div className="flex gap-8 mt-8 pt-6 border-t border-white/10">

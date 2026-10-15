@@ -25,7 +25,8 @@ const Employees = () => {
   const fetchEmployees = () => {
     setLoading(true);
     setLoadError(null);
-    getEmployees()
+    // Deactivated employees stay listed (marked Inactive) so they can be reactivated.
+    getEmployees({ includeInactive: true })
       .then((response) => {
         setAllEmployees(response.data);
         setFilteredEmployees(response.data);
@@ -72,7 +73,7 @@ const Employees = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Employee Management</h1>
-          <p className="text-sm text-gray-500">{filteredEmployees.length} active records</p>
+          <p className="text-sm text-gray-500">{filteredEmployees.length} records</p>
         </div>
         <div className="flex gap-3">
           <button className="flex items-center gap-2 px-4 py-2 border bg-white rounded-lg text-gray-700 hover:bg-gray-50">
