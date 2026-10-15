@@ -41,7 +41,8 @@ const App = () => {
             <Route
               path="/dashboard"
               element={
-                <ProtectedRoute>
+                // The Administrator's page; other roles are sent to their own.
+                <ProtectedRoute requiredPermission={["admin"]}>
                   <MainLayout setOpenTab={setOpenTab}>
                     <Dashboard />
                   </MainLayout>

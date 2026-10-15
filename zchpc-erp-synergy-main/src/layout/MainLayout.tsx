@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { useLocation } from "react-router-dom";
-import { availabilityFor, navItems } from "./navConfig";
+import { availabilityFor, navItems, visibleNavItems } from "./navConfig";
 import { SidebarItem } from "./SidebarItem";
 import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,29 +23,7 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
   const filteredNavItems = useMemo(() => {
     // If loading, show nothing (or we will show the skeleton below)
     if (isLoading || !user) return [];
-    const activeModules = access?.active_modules ?? [];
-
-    const filterItems = (items: typeof navItems): typeof navItems => {
-      return items
-        .filter((item) => {
-          // Check role permission
-          if (!checkPermission(item.permission)) return false;
-
-          // Check if module is active (if it's a modular item)
-          if (item.moduleIdentifier && !activeModules.includes(item.moduleIdentifier)) {
-            return false;
-          }
-
-          if (availabilityFor(item.path) === "hidden") return false;
-
-          return true;
-        })
-        .map((item) => ({
-          ...item,
-          subItems: item.subItems ? filterItems(item.subItems) : undefined,
-        }));
-    };
-    return filterItems(navItems);
+    return visibleNavItems(navItems, checkPermission, access?.active_modules ?? []);
   }, [user, access, isLoading, checkPermission]);
 
   // Loaded, but no module to show: point the user at the portal instead of

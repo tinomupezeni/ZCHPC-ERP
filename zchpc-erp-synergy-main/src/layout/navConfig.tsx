@@ -58,6 +58,38 @@ export const availabilityFor = (key: string): Availability | undefined => {
   return prefix ? EVALUATION_AVAILABILITY[prefix] : undefined;
 };
 
+/**
+ * The menu items this user sees: the role holds the item's permission, its
+ * module is installed, and the evaluation does not hide it. The sidebar and
+ * the user's home page (homePathFor) both come from here.
+ */
+export const visibleNavItems = (
+  items: SidebarItemConfig[],
+  checkPermission: (requiredModules: string[]) => boolean,
+  activeModules: string[]
+): SidebarItemConfig[] =>
+  items
+    .filter(
+      (item) =>
+        checkPermission(item.permission) &&
+        (!item.moduleIdentifier || activeModules.includes(item.moduleIdentifier)) &&
+        availabilityFor(item.path) !== "hidden"
+    )
+    .map((item) => ({
+      ...item,
+      subItems: item.subItems
+        ? visibleNavItems(item.subItems, checkPermission, activeModules)
+        : undefined,
+    }));
+
+/**
+ * The user's own landing page: the first item of their sidebar. Undefined
+ * when they have no ERP module (their work is in the Employee Portal).
+ */
+export const homePathFor = (
+  checkPermission: (requiredModules: string[]) => boolean,
+  activeModules: string[]
+): string | undefined => visibleNavItems(navItems, checkPermission, activeModules)[0]?.path;
 
 
 export const navItems: SidebarItemConfig[] = [
